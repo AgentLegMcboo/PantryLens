@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PantryLens - Sign In</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#b85d40",
+                    "on-surface": "#211a16",
+                    "on-background": "#211a16",
+                    "cat-snack": "#8E6FC4",
+                    "on-secondary-container": "#4c6d31",
+                    "on-primary-fixed-variant": "#7e2c12",
+                    "on-error-container": "#93000a",
+                    "surface-container-highest": "#ede0d9",
+                    "surface-variant": "#ede0d9",
+                    "cat-veg": "#5B9C4E",
+                    "primary-container": "#bc5a3c",
+                    "status-critical": "#C0392B",
+                    "surface-container-lowest": "#ffffff",
+                    "error": "#ba1a1a",
+                    "on-tertiary-fixed": "#3a0a00",
+                    "card-surface": "#FEFBF6",
+                    "outline-variant": "#dcc1b9",
+                    "surface-dim": "#e5d7d1",
+                    "secondary-container": "#c7efa4",
+                    "outline": "#89726c",
+                    "text-muted": "#6B6259",
+                    "secondary-fixed": "#c7efa4",
+                    "cat-grain": "#C9A227",
+                    "on-tertiary-container": "#110100",
+                    "background": "#fff8f5",
+                    "surface-container-high": "#f3e5df",
+                    "on-primary-fixed": "#3a0a00",
+                    "cat-unknown": "#8A8880",
+                    "inverse-primary": "#ffb59f",
+                    "primary": "#9c4226",
+                    "tertiary": "#99452b",
+                    "surface-container-low": "#fff1ea",
+                    "on-surface-variant": "#56423d",
+                    "on-error": "#ffffff",
+                    "inverse-surface": "#362f2b",
+                    "on-primary-container": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-secondary-fixed": "#0c2000",
+                    "inverse-on-surface": "#fceee7",
+                    "surface-container": "#f9ebe5",
+                    "cat-breakfast": "#D98A2B",
+                    "status-warning": "#E39A3B",
+                    "secondary-fixed-dim": "#acd28a",
+                    "on-tertiary-fixed-variant": "#7a2f16",
+                    "on-secondary-fixed-variant": "#304f16",
+                    "primary-fixed": "#ffdbd1",
+                    "tertiary-fixed": "#ffdbd0",
+                    "secondary": "#47672c",
+                    "primary-fixed-dim": "#ffb59f",
+                    "on-primary": "#ffffff",
+                    "cat-baby": "#D46A9F",
+                    "cat-protein": "#A6432B",
+                    "on-tertiary": "#ffffff",
+                    "status-good": "#5B8C51",
+                    "surface-tint": "#9d4327",
+                    "surface-bright": "#fff8f5",
+                    "surface": "#fff8f5",
+                    "border-soft": "#E5DBCB",
+                    "tertiary-fixed-dim": "#ffb59e",
+                    "cat-hygiene": "#3AA0A0",
+                    "on-secondary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "space-sm": "8px",
+                    "space-md": "16px",
+                    "unit": "4px",
+                    "space-lg": "24px",
+                    "space-xl": "32px",
+                    "space-xs": "4px",
+                    "space-touch": "48px",
+                    "container-margin": "20px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "label-md": ["Plus Jakarta Sans", "sans-serif"],
+                    "headline-lg": ["Plus Jakarta Sans", "sans-serif"],
+                    "body-md": ["Plus Jakarta Sans", "sans-serif"],
+                    "headline-md": ["Plus Jakarta Sans", "sans-serif"],
+                    "body-lg": ["Plus Jakarta Sans", "sans-serif"],
+                    "label-lg": ["Plus Jakarta Sans", "sans-serif"],
+                    "headline-lg-mobile": ["Plus Jakarta Sans", "sans-serif"],
+                    "display-lg": ["Plus Jakarta Sans", "sans-serif"]
+            },
+            "fontSize": {
+                    "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "600" }],
+                    "headline-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                    "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                    "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                    "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "400" }],
+                    "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                    "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                    "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&display=swap');
+    </style>
+</head>
+<body class="bg-background min-h-screen flex items-center justify-center p-container-margin antialiased">
+<!-- Main Form Container -->
+<main class="w-full max-w-[400px] flex flex-col items-center">
+<!-- Hero/Branding Area -->
+<div class="mb-space-xl flex flex-col items-center w-full">
+<div class="w-24 h-24 mb-space-md rounded-full overflow-hidden border-4 border-surface-container shadow-sm flex-shrink-0">
+<img alt="Warm Pantry" class="w-full h-full object-cover" data-alt="A macro photography shot of fresh, warmly lit oranges and rustic bread in a woven basket sitting on a wooden table, emphasizing community, warmth, and nourishment in a bright, modern, and inviting setting." src="https://lh3.googleusercontent.com/aida-public/AB6AXuCPlbZFMuFhVn3CU7wnbrS_mbQ1ElW_zyHG2oj1__xLKIafQpTfXhYO6GGw0k33FFPFwZuHNEdqNHZywUjkoRFqoQmHtwFD01nVNkc2fLswB-qa-jZQP0DKY3Nu3buSJuTTQ3ObO5gsli49DuYZOLp6NKNDf67QnuLrgWrMnnTpj8zqwCu2Fu7IA-YiuLZ1rIO9zigQfSXxjBGCwcAXhvclUMRd_VJddLdUrgX1fHd6ov8RRDzchD0DWw"/>
+</div>
+<h1 class="font-display-lg text-display-lg text-primary text-center tracking-tight mb-space-xs">
+                PantryLens
+            </h1>
+<p class="font-body-md text-body-md text-on-surface-variant text-center max-w-[280px]">
+                Empowering volunteers to sort, inventory, and build with care.
+            </p>
+</div>
+<!-- Login Card -->
+<div class="w-full bg-card-surface border border-border-soft rounded-xl shadow-sm p-space-lg flex flex-col gap-space-lg relative overflow-hidden">
+<!-- Subtle decorative top bar -->
+<div class="absolute top-0 left-0 w-full h-[4px] bg-primary-container"></div>
+<form class="flex flex-col gap-space-lg w-full mt-space-sm" onsubmit="event.preventDefault();">
+<!-- Pantry ID Input Group -->
+<div class="flex flex-col gap-space-xs">
+<label class="font-label-md text-label-md text-on-surface" for="pantry-id">Pantry Login ID</label>
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-space-md top-1/2 -translate-y-1/2 text-outline">
+                            badge
+                        </span>
+<input class="w-full h-space-touch rounded-lg border border-outline-variant bg-surface-container-lowest pl-12 pr-space-md font-body-md text-body-md text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" id="pantry-id" placeholder="e.g. WP-1024" type="text"/>
+</div>
+</div>
+<!-- Access Code Input Group -->
+<div class="flex flex-col gap-space-xs">
+<div class="flex justify-between items-center w-full">
+<label class="font-label-md text-label-md text-on-surface" for="access-code">Access Code</label>
+</div>
+<div class="relative w-full">
+<span class="material-symbols-outlined absolute left-space-md top-1/2 -translate-y-1/2 text-outline">
+                            lock
+                        </span>
+<input class="w-full h-space-touch rounded-lg border border-outline-variant bg-surface-container-lowest pl-12 pr-space-md font-body-md text-body-md text-on-surface placeholder:text-outline focus:border-primary focus:ring-1 focus:ring-primary outline-none transition-all" id="access-code" placeholder="Enter your 6-digit pin" type="password"/>
+</div>
+</div>
+<!-- Submit Button -->
+<button class="w-full h-space-touch bg-primary hover:bg-tertiary-container text-on-primary rounded-lg font-label-lg text-label-lg flex items-center justify-center gap-space-sm shadow-sm active:translate-y-[1px] transition-all mt-space-xs" type="submit">
+                    Enter
+                    <span class="material-symbols-outlined text-[20px]">arrow_forward</span>
+</button>
+</form>
+</div>
+<!-- Footer Actions -->
+<div class="mt-space-lg flex flex-col items-center gap-space-sm">
+<button class="font-body-md text-body-md text-primary font-semibold hover:underline bg-transparent border-none cursor-pointer">
+                Scan Location QR Code
+            </button>
+</div>
+</main>
+</body></html>

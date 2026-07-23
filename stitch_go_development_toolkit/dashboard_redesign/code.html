@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>PantryLens Dashboard</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "status-good": "#5B8C51",
+                      "text-muted": "#6B6259",
+                      "on-secondary-fixed": "#0c2000",
+                      "cat-unknown": "#8A8880",
+                      "surface-container-highest": "#ede0d9",
+                      "on-background": "#211a16",
+                      "on-error": "#ffffff",
+                      "background": "#fff8f5",
+                      "cat-hygiene": "#3AA0A0",
+                      "secondary-fixed-dim": "#acd28a",
+                      "secondary": "#47672c",
+                      "cat-veg": "#5B9C4E",
+                      "cat-breakfast": "#D98A2B",
+                      "cat-baby": "#D46A9F",
+                      "inverse-surface": "#362f2b",
+                      "on-surface-variant": "#56423d",
+                      "surface-bright": "#fff8f5",
+                      "surface-variant": "#ede0d9",
+                      "on-tertiary": "#ffffff",
+                      "on-tertiary-fixed": "#3a0a00",
+                      "surface-container-low": "#fff1ea",
+                      "on-secondary-container": "#4c6d31",
+                      "secondary-fixed": "#c7efa4",
+                      "primary-fixed": "#ffdbd1",
+                      "surface-container-lowest": "#ffffff",
+                      "tertiary-container": "#b85d40",
+                      "primary-fixed-dim": "#ffb59f",
+                      "on-primary": "#ffffff",
+                      "surface-container-high": "#f3e5df",
+                      "on-secondary-fixed-variant": "#304f16",
+                      "secondary-container": "#c7efa4",
+                      "cat-protein": "#A6432B",
+                      "status-warning": "#E39A3B",
+                      "error": "#ba1a1a",
+                      "tertiary": "#99452b",
+                      "tertiary-fixed-dim": "#ffb59e",
+                      "on-secondary": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "surface-tint": "#9d4327",
+                      "primary": "#9c4226",
+                      "status-critical": "#C0392B",
+                      "primary-container": "#bc5a3c",
+                      "surface-dim": "#e5d7d1",
+                      "surface": "#fff8f5",
+                      "on-tertiary-fixed-variant": "#7a2f16",
+                      "inverse-primary": "#ffb59f",
+                      "border-soft": "#E5DBCB",
+                      "outline-variant": "#dcc1b9",
+                      "surface-container": "#f9ebe5",
+                      "outline": "#89726c",
+                      "inverse-on-surface": "#fceee7",
+                      "card-surface": "#FEFBF6",
+                      "on-primary-container": "#ffffff",
+                      "on-surface": "#211a16",
+                      "cat-grain": "#C9A227",
+                      "on-tertiary-container": "#110100",
+                      "cat-snack": "#8E6FC4",
+                      "tertiary-fixed": "#ffdbd0",
+                      "on-primary-fixed": "#3a0a00",
+                      "on-primary-fixed-variant": "#7e2c12",
+                      "on-error-container": "#93000a"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "2xl": "1rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "space-xl": "32px",
+                      "space-md": "16px",
+                      "space-xs": "4px",
+                      "gutter": "16px",
+                      "space-touch": "48px",
+                      "space-lg": "24px",
+                      "container-margin": "20px",
+                      "space-sm": "8px",
+                      "unit": "4px"
+              },
+              "fontFamily": {
+                      "headline-lg-mobile": ["Plus Jakarta Sans"],
+                      "body-lg": ["Plus Jakarta Sans"],
+                      "headline-md": ["Plus Jakarta Sans"],
+                      "headline-lg": ["Plus Jakarta Sans"],
+                      "label-md": ["Plus Jakarta Sans"],
+                      "label-lg": ["Plus Jakarta Sans"],
+                      "display-lg": ["Plus Jakarta Sans"],
+                      "body-md": ["Plus Jakarta Sans"]
+              },
+              "fontSize": {
+                      "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                      "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "400"}],
+                      "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                      "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                      "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                      "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                      "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}],
+                      "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}]
+              }
+      },
+          },
+        }
+      </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        .material-symbols-outlined.filled {
+            font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+        body {
+          min-height: max(884px, 100dvh);
+        }
+      </style>
+</head>
+<body class="bg-surface text-on-background min-h-screen pb-32 font-body-md">
+<!-- TopAppBar -->
+<header class="w-full top-0 sticky z-40 bg-surface/90 backdrop-blur-md border-b border-border-soft flex items-center justify-between px-container-margin py-space-sm">
+<div class="flex items-center gap-space-sm">
+<button aria-label="Menu" class="flex items-center justify-center p-2 rounded-full hover:bg-surface-container-low transition-colors text-primary">
+<span class="material-symbols-outlined">menu</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary">Warm Pantry</h1>
+</div>
+<div class="flex items-center">
+<button aria-label="Volunteer Profile" class="flex items-center justify-center w-10 h-10 rounded-full bg-surface-container overflow-hidden hover:bg-surface-container-low transition-colors text-primary">
+<span class="material-symbols-outlined">person</span>
+</button>
+</div>
+</header>
+<main class="px-container-margin pt-space-lg pb-space-xl flex flex-col gap-space-xl max-w-3xl mx-auto">
+<!-- Status Section -->
+<section class="flex flex-col gap-space-sm">
+<h2 class="font-headline-md text-headline-md text-on-background px-1">Current Status</h2>
+<div class="bg-surface-container-lowest border-l-4 border-status-critical rounded-2xl p-space-md shadow-sm flex items-start gap-space-md">
+<div class="bg-error-container rounded-full p-2 flex items-center justify-center shrink-0">
+<span class="material-symbols-outlined filled text-status-critical text-xl">warning</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md text-on-background">Action Needed</h3>
+<p class="font-body-md text-body-md text-text-muted mt-1">Protein is running low. Only 12 cans of tuna and 5 jars of peanut butter remaining.</p>
+</div>
+</div>
+</section>
+<!-- Actions Section -->
+<section class="flex flex-col gap-space-md">
+<!-- Primary Action Hero -->
+<button class="w-full bg-primary text-on-primary rounded-2xl p-space-xl shadow-md flex flex-col items-center justify-center gap-space-sm hover:opacity-90 transition-opacity active:scale-[0.98]">
+<span class="material-symbols-outlined text-4xl">add_circle</span>
+<span class="font-headline-md text-headline-md tracking-wide">Log Donation</span>
+</button>
+<!-- Secondary Tactical Actions -->
+<div class="grid grid-cols-2 gap-space-md">
+<button class="flex flex-col items-center justify-center bg-surface-container-lowest border border-border-soft text-on-background rounded-2xl p-space-md shadow-sm hover:bg-surface-container-low transition-colors h-28 active:scale-[0.98]">
+<div class="bg-surface-container rounded-full p-2 mb-2">
+<span class="material-symbols-outlined text-secondary">fact_check</span>
+</div>
+<span class="font-label-lg text-label-lg tracking-wide">Audit Shelf</span>
+</button>
+<button class="flex flex-col items-center justify-center bg-surface-container-lowest border border-border-soft text-on-background rounded-2xl p-space-md shadow-sm hover:bg-surface-container-low transition-colors h-28 active:scale-[0.98]">
+<div class="bg-surface-container rounded-full p-2 mb-2">
+<span class="material-symbols-outlined text-cat-veg">inventory_2</span>
+</div>
+<span class="font-label-lg text-label-lg tracking-wide">Build Boxes</span>
+</button>
+</div>
+</section>
+<!-- Metric Cards -->
+<section class="grid grid-cols-2 gap-space-md">
+<!-- Total Items -->
+<div class="bg-surface-container-lowest border border-border-soft rounded-2xl p-space-md shadow-sm flex flex-col justify-between h-32">
+<div class="flex items-center gap-space-sm text-text-muted">
+<span class="material-symbols-outlined text-lg">inventory</span>
+<h3 class="font-label-md text-label-md uppercase tracking-wider">Total Items</h3>
+</div>
+<div class="font-display-lg text-display-lg text-on-background mt-2">
+                1,432
+            </div>
+</div>
+<!-- Expiring Soon -->
+<div class="bg-surface-container-lowest border border-border-soft rounded-2xl p-space-md shadow-sm flex flex-col justify-between h-32">
+<div class="flex items-center gap-space-sm text-text-muted">
+<span class="material-symbols-outlined text-lg">event_busy</span>
+<h3 class="font-label-md text-label-md uppercase tracking-wider">Expiring (30d)</h3>
+</div>
+<div class="flex items-baseline gap-space-xs mt-2">
+<span class="font-display-lg text-display-lg text-status-warning">18</span>
+<span class="font-body-md text-body-md text-text-muted">items</span>
+</div>
+</div>
+<!-- Balanced Boxes -->
+<div class="bg-surface-container-lowest border border-border-soft rounded-2xl p-space-md shadow-sm flex flex-col justify-between h-auto col-span-2">
+<div class="flex items-center gap-space-sm text-text-muted mb-2">
+<span class="material-symbols-outlined text-lg">package_2</span>
+<h3 class="font-label-md text-label-md uppercase tracking-wider">Balanced Boxes Achievable</h3>
+</div>
+<div class="flex items-center justify-between flex-wrap gap-2 mt-2">
+<span class="font-display-lg text-display-lg text-on-background">24</span>
+<span class="inline-flex items-center px-3 py-1.5 rounded-full bg-error-container text-on-error-container font-label-md text-label-md gap-1.5 border border-status-warning/20">
+<span class="w-2 h-2 rounded-full bg-status-warning shadow-sm"></span> Limited by Protein
+                </span>
+</div>
+</div>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="fixed bottom-0 w-full z-50 rounded-t-xl bg-surface-container shadow-[0_-4px_12px_rgba(217,138,43,0.08)] flex justify-around items-center h-space-touch px-space-md pb-safe border-t-0">
+<a aria-label="Home" class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 active:scale-95 transition-transform duration-200 group" href="#">
+<span class="material-symbols-outlined filled font-headline-md text-headline-md">home</span>
+<span class="font-label-md text-label-md mt-1">Home</span>
+</a>
+<a aria-label="Inventory" class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-xl px-2 py-1 transition-colors group" href="#">
+<span class="material-symbols-outlined text-primary font-headline-md text-headline-md group-hover:text-tertiary transition-colors">inventory_2</span>
+<span class="font-label-md text-label-md mt-1 group-hover:text-on-background transition-colors">Inventory</span>
+</a>
+<a aria-label="Build" class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-xl px-2 py-1 transition-colors group" href="#">
+<span class="material-symbols-outlined text-primary font-headline-md text-headline-md group-hover:text-tertiary transition-colors">inventory</span>
+<span class="font-label-md text-label-md mt-1 group-hover:text-on-background transition-colors">Build</span>
+</a>
+<a aria-label="Needs" class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-xl px-2 py-1 transition-colors group relative" href="#">
+<span class="absolute top-0 right-2 w-2 h-2 bg-status-critical rounded-full border border-surface-container"></span>
+<span class="material-symbols-outlined text-primary font-headline-md text-headline-md group-hover:text-tertiary transition-colors">priority_high</span>
+<span class="font-label-md text-label-md mt-1 group-hover:text-on-background transition-colors">Needs</span>
+</a>
+<a aria-label="Settings" class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 rounded-xl px-2 py-1 transition-colors group" href="#">
+<span class="material-symbols-outlined text-primary font-headline-md text-headline-md group-hover:text-tertiary transition-colors">settings</span>
+<span class="font-label-md text-label-md mt-1 group-hover:text-on-background transition-colors">Settings</span>
+</a>
+</nav>
+</body></html>

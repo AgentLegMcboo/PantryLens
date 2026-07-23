@@ -1,0 +1,363 @@
+<!DOCTYPE html>
+
+<html class="h-full" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Warm Pantry - Settings</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+          darkMode: "class",
+          theme: {
+            extend: {
+              "colors": {
+                      "tertiary-container": "#b85d40",
+                      "on-surface": "#211a16",
+                      "on-background": "#211a16",
+                      "cat-snack": "#8E6FC4",
+                      "on-secondary-container": "#4c6d31",
+                      "on-primary-fixed-variant": "#7e2c12",
+                      "on-error-container": "#93000a",
+                      "surface-container-highest": "#ede0d9",
+                      "surface-variant": "#ede0d9",
+                      "cat-veg": "#5B9C4E",
+                      "primary-container": "#bc5a3c",
+                      "status-critical": "#C0392B",
+                      "surface-container-lowest": "#ffffff",
+                      "error": "#ba1a1a",
+                      "on-tertiary-fixed": "#3a0a00",
+                      "card-surface": "#FEFBF6",
+                      "outline-variant": "#dcc1b9",
+                      "surface-dim": "#e5d7d1",
+                      "secondary-container": "#c7efa4",
+                      "outline": "#89726c",
+                      "text-muted": "#6B6259",
+                      "secondary-fixed": "#c7efa4",
+                      "cat-grain": "#C9A227",
+                      "on-tertiary-container": "#110100",
+                      "background": "#fff8f5",
+                      "surface-container-high": "#f3e5df",
+                      "on-primary-fixed": "#3a0a00",
+                      "cat-unknown": "#8A8880",
+                      "inverse-primary": "#ffb59f",
+                      "primary": "#9c4226",
+                      "tertiary": "#99452b",
+                      "surface-container-low": "#fff1ea",
+                      "on-surface-variant": "#56423d",
+                      "on-error": "#ffffff",
+                      "inverse-surface": "#362f2b",
+                      "on-primary-container": "#ffffff",
+                      "error-container": "#ffdad6",
+                      "on-secondary-fixed": "#0c2000",
+                      "inverse-on-surface": "#fceee7",
+                      "surface-container": "#f9ebe5",
+                      "cat-breakfast": "#D98A2B",
+                      "status-warning": "#E39A3B",
+                      "secondary-fixed-dim": "#acd28a",
+                      "on-tertiary-fixed-variant": "#7a2f16",
+                      "on-secondary-fixed-variant": "#304f16",
+                      "primary-fixed": "#ffdbd1",
+                      "tertiary-fixed": "#ffdbd0",
+                      "secondary": "#47672c",
+                      "primary-fixed-dim": "#ffb59f",
+                      "on-primary": "#ffffff",
+                      "cat-baby": "#D46A9F",
+                      "cat-protein": "#A6432B",
+                      "on-tertiary": "#ffffff",
+                      "status-good": "#5B8C51",
+                      "surface-tint": "#9d4327",
+                      "surface-bright": "#fff8f5",
+                      "surface": "#fff8f5",
+                      "border-soft": "#E5DBCB",
+                      "tertiary-fixed-dim": "#ffb59e",
+                      "cat-hygiene": "#3AA0A0",
+                      "on-secondary": "#ffffff"
+              },
+              "borderRadius": {
+                      "DEFAULT": "0.25rem",
+                      "lg": "0.5rem",
+                      "xl": "0.75rem",
+                      "full": "9999px"
+              },
+              "spacing": {
+                      "space-sm": "8px",
+                      "space-md": "16px",
+                      "unit": "4px",
+                      "space-lg": "24px",
+                      "space-xl": "32px",
+                      "space-xs": "4px",
+                      "space-touch": "48px",
+                      "container-margin": "20px",
+                      "gutter": "16px"
+              },
+              "fontFamily": {
+                      "label-md": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "headline-lg": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "body-md": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "headline-md": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "body-lg": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "label-lg": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "headline-lg-mobile": [
+                              "Plus Jakarta Sans"
+                      ],
+                      "display-lg": [
+                              "Plus Jakarta Sans"
+                      ]
+              },
+              "fontSize": {
+                      "label-md": [
+                              "12px",
+                              {
+                                      "lineHeight": "16px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "headline-lg": [
+                              "28px",
+                              {
+                                      "lineHeight": "36px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "body-md": [
+                              "16px",
+                              {
+                                      "lineHeight": "24px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "headline-md": [
+                              "20px",
+                              {
+                                      "lineHeight": "28px",
+                                      "fontWeight": "600"
+                              }
+                      ],
+                      "body-lg": [
+                              "18px",
+                              {
+                                      "lineHeight": "26px",
+                                      "fontWeight": "400"
+                              }
+                      ],
+                      "label-lg": [
+                              "14px",
+                              {
+                                      "lineHeight": "20px",
+                                      "letterSpacing": "0.05em",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "headline-lg-mobile": [
+                              "24px",
+                              {
+                                      "lineHeight": "32px",
+                                      "fontWeight": "700"
+                              }
+                      ],
+                      "display-lg": [
+                              "40px",
+                              {
+                                      "lineHeight": "48px",
+                                      "letterSpacing": "-0.02em",
+                                      "fontWeight": "700"
+                              }
+                      ]
+              }
+      },
+          },
+        }
+    </script>
+<style type="text/tailwindcss">
+        @layer utilities {
+            .pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+        }
+    </style>
+</head>
+<body class="bg-background text-on-background h-full flex flex-col font-body-md overflow-x-hidden">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background w-full top-0 sticky border-b border-border-soft dark:border-outline-variant z-40">
+<div class="flex items-center justify-between px-container-margin py-space-sm w-full h-16">
+<button aria-label="Menu" class="text-primary dark:text-inverse-primary hover:bg-surface-container-low transition-colors rounded-full p-2">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">menu</span>
+</button>
+<h1 class="font-display-lg text-display-lg text-primary dark:text-inverse-primary">Warm Pantry</h1>
+<div class="w-10 h-10 rounded-full bg-surface-container-high overflow-hidden border border-border-soft flex items-center justify-center">
+<span class="material-symbols-outlined text-on-surface-variant">person</span>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="flex-1 overflow-y-auto px-container-margin py-space-lg pb-32 max-w-3xl mx-auto w-full">
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile mb-space-lg text-on-surface">Pantry Settings</h2>
+<!-- Bento Grid Layout for Settings -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-space-lg">
+<!-- Box Rules (qtys per category) -->
+<section class="bg-card-surface border border-border-soft rounded-xl p-space-md shadow-sm col-span-1 md:col-span-2">
+<div class="flex items-center gap-2 mb-space-md">
+<span class="material-symbols-outlined text-cat-protein">box</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">Box Build Rules</h3>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">Target quantities per family box.</p>
+<div class="grid grid-cols-2 sm:grid-cols-4 gap-space-sm">
+<!-- Protein -->
+<div class="flex flex-col items-center bg-background rounded-lg p-space-sm border border-border-soft">
+<span class="font-label-md text-label-md text-cat-protein mb-1">Protein</span>
+<div class="flex items-center justify-between w-full mt-2">
+<button class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="font-headline-md text-headline-md">4</span>
+<button class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+<!-- Veg -->
+<div class="flex flex-col items-center bg-background rounded-lg p-space-sm border border-border-soft">
+<span class="font-label-md text-label-md text-cat-veg mb-1">Vegetables</span>
+<div class="flex items-center justify-between w-full mt-2">
+<button class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="font-headline-md text-headline-md">6</span>
+<button class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+<!-- Grains -->
+<div class="flex flex-col items-center bg-background rounded-lg p-space-sm border border-border-soft">
+<span class="font-label-md text-label-md text-cat-grain mb-1">Grains</span>
+<div class="flex items-center justify-between w-full mt-2">
+<button class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="font-headline-md text-headline-md">3</span>
+<button class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+<!-- Breakfast -->
+<div class="flex flex-col items-center bg-background rounded-lg p-space-sm border border-border-soft">
+<span class="font-label-md text-label-md text-cat-breakfast mb-1">Breakfast</span>
+<div class="flex items-center justify-between w-full mt-2">
+<button class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">remove</span>
+</button>
+<span class="font-headline-md text-headline-md">2</span>
+<button class="w-8 h-8 rounded bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined text-sm">add</span>
+</button>
+</div>
+</div>
+</div>
+</section>
+<!-- Low-Stock Thresholds -->
+<section class="bg-card-surface border border-border-soft rounded-xl p-space-md shadow-sm">
+<div class="flex items-center gap-2 mb-space-md">
+<span class="material-symbols-outlined text-status-warning">warning</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">Low Stock Alert</h3>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">Trigger warning when total inventory drops below:</p>
+<div class="flex items-center justify-between bg-background rounded-lg p-space-md border border-border-soft">
+<span class="font-body-lg text-body-lg text-on-surface">Global Threshold</span>
+<div class="flex items-center gap-3">
+<button class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined">remove</span>
+</button>
+<span class="font-headline-lg-mobile text-headline-lg-mobile w-12 text-center">50</span>
+<button class="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-on-surface-variant hover:bg-surface-container-high">
+<span class="material-symbols-outlined">add</span>
+</button>
+</div>
+</div>
+</section>
+<!-- Expiration Window -->
+<section class="bg-card-surface border border-border-soft rounded-xl p-space-md shadow-sm">
+<div class="flex items-center gap-2 mb-space-md">
+<span class="material-symbols-outlined text-status-critical">event_busy</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">Expiration Window</h3>
+</div>
+<p class="font-body-md text-body-md text-text-muted mb-space-md">Flag items nearing expiration within:</p>
+<div class="flex flex-col gap-space-sm">
+<label class="flex items-center justify-between p-space-sm rounded-lg border border-border-soft bg-background cursor-pointer hover:bg-surface-container-low transition-colors min-h-[48px]">
+<span class="font-body-md text-body-md">14 Days</span>
+<input class="text-primary focus:ring-primary w-5 h-5" name="exp_window" type="radio"/>
+</label>
+<label class="flex items-center justify-between p-space-sm rounded-lg border border-primary bg-primary-container/10 cursor-pointer min-h-[48px]">
+<span class="font-body-md text-body-md font-semibold text-primary">21 Days (Default)</span>
+<input checked="" class="text-primary focus:ring-primary w-5 h-5" name="exp_window" type="radio"/>
+</label>
+<label class="flex items-center justify-between p-space-sm rounded-lg border border-border-soft bg-background cursor-pointer hover:bg-surface-container-low transition-colors min-h-[48px]">
+<span class="font-body-md text-body-md">30 Days</span>
+<input class="text-primary focus:ring-primary w-5 h-5" name="exp_window" type="radio"/>
+</label>
+</div>
+</section>
+<!-- Pantry Profile -->
+<section class="bg-card-surface border border-border-soft rounded-xl p-space-md shadow-sm col-span-1 md:col-span-2">
+<div class="flex items-center gap-2 mb-space-md">
+<span class="material-symbols-outlined text-primary">storefront</span>
+<h3 class="font-headline-md text-headline-md text-on-surface">Pantry Profile</h3>
+</div>
+<form class="flex flex-col gap-space-md">
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-1" for="pantryName">Pantry Name</label>
+<input class="w-full h-space-touch px-space-md rounded-lg border-border-soft bg-background text-body-md focus:border-primary focus:ring-1 focus:ring-primary" id="pantryName" type="text" value="Warm Pantry HQ"/>
+</div>
+<div>
+<label class="block font-label-md text-label-md text-on-surface-variant mb-1" for="contactEmail">Contact Email</label>
+<input class="w-full h-space-touch px-space-md rounded-lg border-border-soft bg-background text-body-md focus:border-primary focus:ring-1 focus:ring-primary" id="contactEmail" type="email" value="coordinator@warmpantry.org"/>
+</div>
+<button class="mt-space-sm bg-primary text-on-primary font-label-lg text-label-lg h-space-touch rounded-lg flex items-center justify-center gap-2 hover:bg-tertiary transition-colors" type="button">
+<span class="material-symbols-outlined text-sm">save</span>
+                        Save Profile Changes
+                    </button>
+</form>
+</section>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container dark:bg-surface-container-highest fixed bottom-0 w-full z-50 rounded-t-xl shadow-lg border-t-0">
+<div class="flex justify-around items-center w-full h-space-touch px-space-md pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined">home</span>
+<span class="font-label-md text-label-md mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined">inventory_2</span>
+<span class="font-label-md text-label-md mt-1">Inventory</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined">inventory</span>
+<span class="font-label-md text-label-md mt-1">Build</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined">priority_high</span>
+<span class="font-label-md text-label-md mt-1">Needs</span>
+</a>
+<!-- Active State for Settings -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 hover:bg-surface-variant/50 Active: scale-95 transition-transform duration-200 h-[80%]" href="#">
+<span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 1;">settings</span>
+<span class="font-label-md text-label-md mt-0.5">Settings</span>
+</a>
+</div>
+</nav>
+</body></html>

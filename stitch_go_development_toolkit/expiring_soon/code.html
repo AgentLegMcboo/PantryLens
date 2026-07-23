@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Expiring Soon - Warm Pantry</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            "colors": {
+                    "tertiary-container": "#b85d40",
+                    "on-surface": "#211a16",
+                    "on-background": "#211a16",
+                    "cat-snack": "#8E6FC4",
+                    "on-secondary-container": "#4c6d31",
+                    "on-primary-fixed-variant": "#7e2c12",
+                    "on-error-container": "#93000a",
+                    "surface-container-highest": "#ede0d9",
+                    "surface-variant": "#ede0d9",
+                    "cat-veg": "#5B9C4E",
+                    "primary-container": "#bc5a3c",
+                    "status-critical": "#C0392B",
+                    "surface-container-lowest": "#ffffff",
+                    "error": "#ba1a1a",
+                    "on-tertiary-fixed": "#3a0a00",
+                    "card-surface": "#FEFBF6",
+                    "outline-variant": "#dcc1b9",
+                    "surface-dim": "#e5d7d1",
+                    "secondary-container": "#c7efa4",
+                    "outline": "#89726c",
+                    "text-muted": "#6B6259",
+                    "secondary-fixed": "#c7efa4",
+                    "cat-grain": "#C9A227",
+                    "on-tertiary-container": "#110100",
+                    "background": "#fff8f5",
+                    "surface-container-high": "#f3e5df",
+                    "on-primary-fixed": "#3a0a00",
+                    "cat-unknown": "#8A8880",
+                    "inverse-primary": "#ffb59f",
+                    "primary": "#9c4226",
+                    "tertiary": "#99452b",
+                    "surface-container-low": "#fff1ea",
+                    "on-surface-variant": "#56423d",
+                    "on-error": "#ffffff",
+                    "inverse-surface": "#362f2b",
+                    "on-primary-container": "#ffffff",
+                    "error-container": "#ffdad6",
+                    "on-secondary-fixed": "#0c2000",
+                    "inverse-on-surface": "#fceee7",
+                    "surface-container": "#f9ebe5",
+                    "cat-breakfast": "#D98A2B",
+                    "status-warning": "#E39A3B",
+                    "secondary-fixed-dim": "#acd28a",
+                    "on-tertiary-fixed-variant": "#7a2f16",
+                    "on-secondary-fixed-variant": "#304f16",
+                    "primary-fixed": "#ffdbd1",
+                    "tertiary-fixed": "#ffdbd0",
+                    "secondary": "#47672c",
+                    "primary-fixed-dim": "#ffb59f",
+                    "on-primary": "#ffffff",
+                    "cat-baby": "#D46A9F",
+                    "cat-protein": "#A6432B",
+                    "on-tertiary": "#ffffff",
+                    "status-good": "#5B8C51",
+                    "surface-tint": "#9d4327",
+                    "surface-bright": "#fff8f5",
+                    "surface": "#fff8f5",
+                    "border-soft": "#E5DBCB",
+                    "tertiary-fixed-dim": "#ffb59e",
+                    "cat-hygiene": "#3AA0A0",
+                    "on-secondary": "#ffffff"
+            },
+            "borderRadius": {
+                    "DEFAULT": "0.25rem",
+                    "lg": "0.5rem",
+                    "xl": "0.75rem",
+                    "full": "9999px"
+            },
+            "spacing": {
+                    "space-sm": "8px",
+                    "space-md": "16px",
+                    "unit": "4px",
+                    "space-lg": "24px",
+                    "space-xl": "32px",
+                    "space-xs": "4px",
+                    "space-touch": "48px",
+                    "container-margin": "20px",
+                    "gutter": "16px"
+            },
+            "fontFamily": {
+                    "label-md": ["Plus Jakarta Sans"],
+                    "headline-lg": ["Plus Jakarta Sans"],
+                    "body-md": ["Plus Jakarta Sans"],
+                    "headline-md": ["Plus Jakarta Sans"],
+                    "body-lg": ["Plus Jakarta Sans"],
+                    "label-lg": ["Plus Jakarta Sans"],
+                    "headline-lg-mobile": ["Plus Jakarta Sans"],
+                    "display-lg": ["Plus Jakarta Sans"]
+            },
+            "fontSize": {
+                    "label-md": ["12px", {"lineHeight": "16px", "fontWeight": "600"}],
+                    "headline-lg": ["28px", {"lineHeight": "36px", "fontWeight": "700"}],
+                    "body-md": ["16px", {"lineHeight": "24px", "fontWeight": "400"}],
+                    "headline-md": ["20px", {"lineHeight": "28px", "fontWeight": "600"}],
+                    "body-lg": ["18px", {"lineHeight": "26px", "fontWeight": "400"}],
+                    "label-lg": ["14px", {"lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "700"}],
+                    "headline-lg-mobile": ["24px", {"lineHeight": "32px", "fontWeight": "700"}],
+                    "display-lg": ["40px", {"lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700"}]
+            }
+          }
+        }
+      }
+    </script>
+<style>
+        body { background-color: theme('colors.background'); color: theme('colors.on-background'); }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0; }
+        .material-symbols-outlined.filled { font-variation-settings: 'FILL' 1; }
+    </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="font-body-md antialiased pb-[100px] md:pb-0">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background text-primary dark:text-inverse-primary w-full top-0 sticky border-b border-border-soft dark:border-outline-variant z-40 hidden md:flex">
+<div class="flex items-center justify-between px-container-margin py-space-sm w-full">
+<button class="text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full p-2 h-space-touch w-space-touch flex items-center justify-center">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-display-lg text-display-lg text-primary dark:text-inverse-primary">Warm Pantry</h1>
+<button class="text-on-surface-variant hover:bg-surface-container-low transition-colors rounded-full p-2 h-space-touch w-space-touch flex items-center justify-center">
+<div class="w-8 h-8 rounded-full bg-surface-container-highest overflow-hidden">
+<img class="w-full h-full object-cover" data-alt="A smiling volunteer in a warm, inviting pantry setting, lit by soft natural light. The mood is friendly and community-focused. 50-100 words. Utilitarian Empathy aesthetic." src="https://lh3.googleusercontent.com/aida-public/AB6AXuB2AG4iuoto2acMsg4ZSJa7x1NMFG2cPpqBthHD257-Oa9xbBGDGQMz1eLdAVOXcdtfKwOMQv2pgY7mkwTB4eYXbQelBRd8AoocgkmYMuMOpLHxdKqH7ztLE5A-QPpAwAKgOnPO9vYRX7EDDT6GkXHwL9tVddO2R42TDNX4I2R0jkchPRzu1Ov_Jc7f5UwkjQIGPYQfwrEeGFfU41AYjqMPTcW0_jN3aYdxp98PZdpOzPo_cAGnKW8Ayw"/>
+</div>
+</button>
+</div>
+</header>
+<!-- Mobile Header -->
+<header class="md:hidden bg-background top-0 sticky border-b border-border-soft z-40 flex items-center px-container-margin py-space-sm w-full justify-between">
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile text-primary">Expiring Soon</h1>
+</header>
+<main class="max-w-3xl mx-auto px-container-margin py-space-lg">
+<!-- Action Area -->
+<div class="mb-space-lg flex flex-col md:flex-row gap-space-md justify-between items-start md:items-center">
+<div>
+<h2 class="font-headline-md text-headline-md mb-unit hidden md:block">Expiring Soon</h2>
+<p class="text-on-surface-variant">Items needing immediate use within 30 days.</p>
+</div>
+<button class="bg-primary text-on-primary rounded-full px-space-lg h-space-touch flex items-center justify-center gap-space-sm font-label-lg shadow-sm hover:opacity-90 transition-opacity w-full md:w-auto active:scale-95 duration-100">
+<span class="material-symbols-outlined" data-icon="barcode_scanner">barcode_scanner</span>
+                Scan to Build Box
+            </button>
+</div>
+<!-- Inventory List -->
+<div class="flex flex-col gap-space-sm">
+<!-- Item Card: Critical (Next 7 days) -->
+<div class="bg-card-surface border border-border-soft rounded-lg p-space-md flex flex-col md:flex-row justify-between md:items-center gap-space-md hover:shadow-sm transition-shadow">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-md bg-surface-container-high flex items-center justify-center overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="A clear, utilitarian photo of a carton of whole milk. High contrast against a subtle cream background. Modern tactile style, no clutter. 50-100 words." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAg_Us72jVv-8IR7z9KcthfItdSYRziiIY2mROhspbx7Ehgi6VYwsCPMWF6QLWLPR8TnEqQCaj8t3S57tdsyiNDh2i1aLtaF78d1geFnzf_4h6gT20KAJe7i_SDQJa-b4nO56EyrYbaJK5Yj2d3jZm4zOANAPRY4PtIw1FznptNDC3xmFpdEIqUEkm9k5onDTxrmcmSJhGGi7cDlWP7-NuG0TgP3RuCMQpfiL0B6IDnfS0ZpgmB_zLjgg"/>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md">Whole Milk (Gallon)</h3>
+<p class="text-text-muted font-body-md">Qty: 12 • Added Oct 1</p>
+</div>
+</div>
+<div class="flex items-center gap-space-md md:justify-end">
+<div class="bg-[#FFF3CD] text-[#856404] px-3 py-1 rounded-full flex items-center gap-unit font-label-md border border-[#FFEEBA]">
+<span class="material-symbols-outlined text-[16px] filled text-status-critical" data-icon="warning">warning</span>
+                         Use by Oct 28 (3 Days)
+                    </div>
+<button class="bg-surface-container text-primary p-2 rounded-full h-10 w-10 flex items-center justify-center border border-border-soft hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</div>
+</div>
+<!-- Item Card: Warning (Next 14 days) -->
+<div class="bg-card-surface border border-border-soft rounded-lg p-space-md flex flex-col md:flex-row justify-between md:items-center gap-space-md hover:shadow-sm transition-shadow">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-md bg-surface-container-high flex items-center justify-center overflow-hidden shrink-0">
+<img class="w-full h-full object-cover" data-alt="A clear, utilitarian photo of a loaf of whole wheat bread. High contrast against a subtle cream background. Modern tactile style, no clutter. 50-100 words." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDpUQtJQrtohVdY_IenRLnTTijGXjIr9W7gTVED7U5IBpqR6vDHRFTDuTf_zIv6UgCeP1WA1jPnghFGssmXkMeZAnGHycaqsbyZtEMqc7T7on_kP1Qcfqi7Ppkt6scmzMuulA9gWNcWhVGVcoohfSugNysu_P5jAZNRXzkc9a5LlK7YTkryrZ4mTMIfTnc4wdUOHXBWPdnCzuvN7rY8EgVGw8eZMS_buod0WjJ9CP4I8mLaqPAcjs8ctQ"/>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md">Whole Wheat Bread</h3>
+<p class="text-text-muted font-body-md">Qty: 24 • Added Oct 10</p>
+</div>
+</div>
+<div class="flex items-center gap-space-md md:justify-end">
+<div class="bg-[#FFF3CD] text-[#856404] px-3 py-1 rounded-full flex items-center gap-unit font-label-md border border-[#FFEEBA]">
+<span class="material-symbols-outlined text-[16px] filled text-status-warning" data-icon="warning">warning</span>
+                         Use by Nov 4 (10 Days)
+                    </div>
+<button class="bg-surface-container text-primary p-2 rounded-full h-10 w-10 flex items-center justify-center border border-border-soft hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</div>
+</div>
+<!-- Item Card: Warning (Next 21 days) -->
+<div class="bg-card-surface border border-border-soft rounded-lg p-space-md flex flex-col md:flex-row justify-between md:items-center gap-space-md hover:shadow-sm transition-shadow">
+<div class="flex items-center gap-space-md">
+<div class="w-12 h-12 rounded-md bg-surface-container-high flex items-center justify-center overflow-hidden shrink-0">
+<span class="material-symbols-outlined text-cat-protein" data-icon="egg">egg</span>
+</div>
+<div>
+<h3 class="font-headline-md text-headline-md">Eggs (Dozen)</h3>
+<p class="text-text-muted font-body-md">Qty: 30 • Added Oct 15</p>
+</div>
+</div>
+<div class="flex items-center gap-space-md md:justify-end">
+<div class="bg-surface-container-low text-on-surface-variant px-3 py-1 rounded-full flex items-center gap-unit font-label-md border border-border-soft">
+<span class="material-symbols-outlined text-[16px]" data-icon="schedule">schedule</span>
+                         Use by Nov 12 (18 Days)
+                    </div>
+<button class="bg-surface-container text-primary p-2 rounded-full h-10 w-10 flex items-center justify-center border border-border-soft hover:bg-surface-container-low transition-colors">
+<span class="material-symbols-outlined" data-icon="add">add</span>
+</button>
+</div>
+</div>
+</div>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container dark:bg-surface-container-highest fixed bottom-0 w-full z-50 rounded-t-xl shadow-[0_-4px_12px_rgba(217,138,43,0.08)] md:hidden">
+<div class="flex justify-around items-center w-full h-space-touch px-space-md pb-safe">
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-label-md text-label-md mt-1">Home</span>
+</a>
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 h-12 w-20 active:scale-95 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined filled" data-icon="inventory_2">inventory_2</span>
+<span class="font-label-md text-label-md mt-1">Inventory</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="inventory">inventory</span>
+<span class="font-label-md text-label-md mt-1">Build</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="priority_high">priority_high</span>
+<span class="font-label-md text-label-md mt-1">Needs</span>
+</a>
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md mt-1">Settings</span>
+</a>
+</div>
+</nav>
+</body></html>

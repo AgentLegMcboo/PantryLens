@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Warm Pantry - Shelf Audit</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet"/>
+<script id="tailwind-config">
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    "colors": {
+                        "tertiary-container": "#b85d40",
+                        "on-surface": "#211a16",
+                        "on-background": "#211a16",
+                        "cat-snack": "#8E6FC4",
+                        "on-secondary-container": "#4c6d31",
+                        "on-primary-fixed-variant": "#7e2c12",
+                        "on-error-container": "#93000a",
+                        "surface-container-highest": "#ede0d9",
+                        "surface-variant": "#ede0d9",
+                        "cat-veg": "#5B9C4E",
+                        "primary-container": "#bc5a3c",
+                        "status-critical": "#C0392B",
+                        "surface-container-lowest": "#ffffff",
+                        "error": "#ba1a1a",
+                        "on-tertiary-fixed": "#3a0a00",
+                        "card-surface": "#FEFBF6",
+                        "outline-variant": "#dcc1b9",
+                        "surface-dim": "#e5d7d1",
+                        "secondary-container": "#c7efa4",
+                        "outline": "#89726c",
+                        "text-muted": "#6B6259",
+                        "secondary-fixed": "#c7efa4",
+                        "cat-grain": "#C9A227",
+                        "on-tertiary-container": "#110100",
+                        "background": "#fff8f5",
+                        "surface-container-high": "#f3e5df",
+                        "on-primary-fixed": "#3a0a00",
+                        "cat-unknown": "#8A8880",
+                        "inverse-primary": "#ffb59f",
+                        "primary": "#9c4226",
+                        "tertiary": "#99452b",
+                        "surface-container-low": "#fff1ea",
+                        "on-surface-variant": "#56423d",
+                        "on-error": "#ffffff",
+                        "inverse-surface": "#362f2b",
+                        "on-primary-container": "#ffffff",
+                        "error-container": "#ffdad6",
+                        "on-secondary-fixed": "#0c2000",
+                        "inverse-on-surface": "#fceee7",
+                        "surface-container": "#f9ebe5",
+                        "cat-breakfast": "#D98A2B",
+                        "status-warning": "#E39A3B",
+                        "secondary-fixed-dim": "#acd28a",
+                        "on-tertiary-fixed-variant": "#7a2f16",
+                        "on-secondary-fixed-variant": "#304f16",
+                        "primary-fixed": "#ffdbd1",
+                        "tertiary-fixed": "#ffdbd0",
+                        "secondary": "#47672c",
+                        "primary-fixed-dim": "#ffb59f",
+                        "on-primary": "#ffffff",
+                        "cat-baby": "#D46A9F",
+                        "cat-protein": "#A6432B",
+                        "on-tertiary": "#ffffff",
+                        "status-good": "#5B8C51",
+                        "surface-tint": "#9d4327",
+                        "surface-bright": "#fff8f5",
+                        "surface": "#fff8f5",
+                        "border-soft": "#E5DBCB",
+                        "tertiary-fixed-dim": "#ffb59e",
+                        "cat-hygiene": "#3AA0A0",
+                        "on-secondary": "#ffffff"
+                    },
+                    "borderRadius": {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                    "spacing": {
+                        "space-sm": "8px",
+                        "space-md": "16px",
+                        "unit": "4px",
+                        "space-lg": "24px",
+                        "space-xl": "32px",
+                        "space-xs": "4px",
+                        "space-touch": "48px",
+                        "container-margin": "20px",
+                        "gutter": "16px"
+                    },
+                    "fontFamily": {
+                        "label-md": ["Plus Jakarta Sans"],
+                        "headline-lg": ["Plus Jakarta Sans"],
+                        "body-md": ["Plus Jakarta Sans"],
+                        "headline-md": ["Plus Jakarta Sans"],
+                        "body-lg": ["Plus Jakarta Sans"],
+                        "label-lg": ["Plus Jakarta Sans"],
+                        "headline-lg-mobile": ["Plus Jakarta Sans"],
+                        "display-lg": ["Plus Jakarta Sans"]
+                    },
+                    "fontSize": {
+                        "label-md": ["12px", { "lineHeight": "16px", "fontWeight": "600" }],
+                        "headline-lg": ["28px", { "lineHeight": "36px", "fontWeight": "700" }],
+                        "body-md": ["16px", { "lineHeight": "24px", "fontWeight": "400" }],
+                        "headline-md": ["20px", { "lineHeight": "28px", "fontWeight": "600" }],
+                        "body-lg": ["18px", { "lineHeight": "26px", "fontWeight": "400" }],
+                        "label-lg": ["14px", { "lineHeight": "20px", "letterSpacing": "0.05em", "fontWeight": "700" }],
+                        "headline-lg-mobile": ["24px", { "lineHeight": "32px", "fontWeight": "700" }],
+                        "display-lg": ["40px", { "lineHeight": "48px", "letterSpacing": "-0.02em", "fontWeight": "700" }]
+                    }
+                }
+            }
+        }
+    </script>
+<style>
+        body { background-color: #FBF6EE; color: #211a16; -webkit-tap-highlight-color: transparent; }
+        .material-symbols-outlined { font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+        .pb-safe { padding-bottom: env(safe-area-inset-bottom, 20px); }
+    </style>
+</head>
+<body class="font-body-md text-body-md antialiased pb-[100px] md:pb-0">
+<!-- TopAppBar -->
+<header class="bg-background dark:bg-background w-full top-0 sticky border-b border-border-soft dark:border-outline-variant flex items-center justify-between px-container-margin py-space-sm w-full z-40">
+<button aria-label="Menu" class="w-space-touch h-space-touch flex items-center justify-center text-primary dark:text-inverse-primary hover:bg-surface-container-low transition-colors rounded-full">
+<span class="material-symbols-outlined" data-icon="menu">menu</span>
+</button>
+<h1 class="font-headline-lg-mobile text-headline-lg-mobile font-display-lg text-display-lg text-primary dark:text-inverse-primary">Warm Pantry</h1>
+<div aria-label="Volunteer Profile" class="w-space-touch h-space-touch flex items-center justify-center rounded-full bg-surface-variant overflow-hidden">
+<img alt="Volunteer Profile" class="w-full h-full object-cover" data-alt="A close up, smiling portrait of a middle aged female volunteer in a warm, well lit community pantry. The lighting is soft and inviting, emphasizing a trustworthy and helpful mood. The background is slightly blurred showing neatly organized shelves of canned goods. The aesthetic is tactile and modern, focusing on human empathy." src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZ_ZlOmeE5oK8k4da2UrW9o8rHPb1vj5z4sNmL7QlHpOqQGzwpCYG_SQNHbZJcgfIdryGNQneJ_DNCBUpZj8XPDVn48eZY4Bq_AZ09b9lGpL6oUBTbLwEhSMp8OnECVTEvpFlRkzO4-Ax5y38vMlVC6Z2sH3-1iT1daJpwRQBZACCT6OPN8Ythl3LVotJ3skL5ONhRN4ddTQrl4-QFsjC3U_3twCTazh-T26M2_DcVizhbV-_juukjXg"/>
+</div>
+</header>
+<!-- Main Content -->
+<main class="px-container-margin py-space-lg max-w-2xl mx-auto flex flex-col gap-space-lg">
+<!-- Header Section -->
+<section class="text-center md:text-left flex flex-col gap-space-sm">
+<div class="flex items-center justify-center md:justify-start gap-2 text-primary">
+<span class="material-symbols-outlined" data-icon="inventory_2" data-weight="fill" style="font-variation-settings: 'FILL' 1;">inventory_2</span>
+<span class="font-label-lg text-label-lg uppercase tracking-wider">Inventory Check</span>
+</div>
+<h2 class="font-headline-lg-mobile text-headline-lg-mobile md:font-headline-lg md:text-headline-lg text-on-surface">Shelf Audit</h2>
+<p class="font-body-lg text-body-lg text-on-surface-variant mt-2">Let's get an accurate count of what's currently in stock. Take three clear photos of the section to help our system process the inventory.</p>
+</section>
+<!-- Instructions Card -->
+<div class="bg-card-surface border border-border-soft rounded-xl p-space-md shadow-sm">
+<h3 class="font-headline-md text-headline-md text-on-surface mb-space-sm flex items-center gap-2">
+<span class="material-symbols-outlined text-tertiary">photo_camera</span>
+                Capture the Shelf
+            </h3>
+<ol class="list-decimal list-inside space-y-space-sm text-on-surface-variant font-body-md text-body-md pl-2">
+<li>Stand about 3 feet back from the shelf.</li>
+<li>Take a photo of the <strong>Left</strong> side.</li>
+<li>Take a photo of the <strong>Middle</strong> section.</li>
+<li>Take a photo of the <strong>Right</strong> side.</li>
+</ol>
+</div>
+<!-- Photo Capture Grid -->
+<section class="grid grid-cols-1 md:grid-cols-3 gap-space-md">
+<!-- Left Image -->
+<div class="flex flex-col gap-2">
+<span class="font-label-lg text-label-lg text-on-surface text-center md:text-left">Left Side</span>
+<button class="relative w-full aspect-video md:aspect-square rounded-xl border-2 border-dashed border-outline-variant bg-surface-container-low hover:bg-surface-container transition-colors flex flex-col items-center justify-center gap-2 text-on-surface-variant group overflow-hidden">
+<img alt="Captured Left Side" class="absolute inset-0 w-full h-full object-cover opacity-80" data-alt="A clear, eye-level photograph of the left side of a pantry shelf stocked with canned vegetables. The lighting is bright and even, casting soft shadows. The cans are neatly arranged but some are slightly askew, showing recent activity. The image has a warm, tactile feel typical of a busy community food bank." src="https://lh3.googleusercontent.com/aida-public/AB6AXuDIEPnD0jsvlpB7KGnvUXReNcaEo-ZzjKirVisj5ixFhNSaDCUdAXEqer_8kWKepu9sA9C9U3oYfOhElkJ2Kk4Ie_sm0B6fsWQAN5V41O12D5uzhKF_GeBn_v3XyXfVVOhvavMCT87yHrVxwa5UvszRVeovl795SOxneqPwp-Sgmxe0YucqbtqqPv6zaoUbrACVZyLCIPmmWZmoG0PC2htjp_A4s3yRES_dj23bL5MdNMqjjW15hTA06A"/>
+<div class="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors"></div>
+<div class="relative z-10 flex flex-col items-center bg-card-surface/80 p-2 rounded-lg backdrop-blur-sm">
+<span class="material-symbols-outlined text-primary" data-icon="check_circle" data-weight="fill" style="font-variation-settings: 'FILL' 1;">check_circle</span>
+<span class="font-label-md text-label-md mt-1">Retake</span>
+</div>
+</button>
+</div>
+<!-- Middle Image -->
+<div class="flex flex-col gap-2">
+<span class="font-label-lg text-label-lg text-on-surface text-center md:text-left">Middle Section</span>
+<button class="relative w-full aspect-video md:aspect-square rounded-xl border-2 border-dashed border-outline-variant bg-surface-container-low hover:bg-surface-container transition-colors flex flex-col items-center justify-center gap-2 text-on-surface-variant group">
+<span class="material-symbols-outlined text-primary text-3xl group-hover:scale-110 transition-transform" data-icon="add_a_photo">add_a_photo</span>
+<span class="font-label-md text-label-md">Tap to Capture</span>
+</button>
+</div>
+<!-- Right Image -->
+<div class="flex flex-col gap-2">
+<span class="font-label-lg text-label-lg text-on-surface text-center md:text-left">Right Side</span>
+<button class="relative w-full aspect-video md:aspect-square rounded-xl border-2 border-dashed border-outline-variant bg-surface-container-low hover:bg-surface-container transition-colors flex flex-col items-center justify-center gap-2 text-on-surface-variant group opacity-50 cursor-not-allowed">
+<span class="material-symbols-outlined text-outline text-3xl" data-icon="photo_camera">photo_camera</span>
+<span class="font-label-md text-label-md">Capture Middle First</span>
+</button>
+</div>
+</section>
+<!-- Actions -->
+<section class="mt-space-md flex flex-col gap-space-sm md:flex-row-reverse md:justify-start">
+<button class="w-full md:w-auto min-h-[48px] bg-primary text-on-primary rounded-lg px-space-xl font-label-lg text-label-lg flex items-center justify-center gap-2 hover:opacity-90 transition-opacity shadow-sm disabled:opacity-50 disabled:cursor-not-allowed" disabled="">
+<span class="material-symbols-outlined" data-icon="memory">memory</span>
+                Process Audit
+            </button>
+<button class="w-full md:w-auto min-h-[48px] bg-surface-container-low border border-border-soft text-on-surface-variant rounded-lg px-space-xl font-label-lg text-label-lg flex items-center justify-center hover:bg-surface-container transition-colors">
+                Cancel
+            </button>
+</section>
+</main>
+<!-- BottomNavBar -->
+<nav class="bg-surface-container dark:bg-surface-container-highest fixed bottom-0 w-full z-50 rounded-t-xl shadow-lg bg-surface-container shadow-[0_-4px_12px_rgba(217,138,43,0.08)] flex justify-around items-center w-full h-space-touch px-space-md pb-safe md:hidden">
+<!-- Inactive: Home -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="home">home</span>
+<span class="font-label-md text-label-md mt-1">Home</span>
+</a>
+<!-- Active: Inventory -->
+<a class="flex flex-col items-center justify-center bg-primary-container text-on-primary-container rounded-full px-4 py-1 hover:bg-surface-variant/50 transition-colors scale-95 transition-transform duration-200" href="#">
+<span class="material-symbols-outlined" data-icon="inventory_2" data-weight="fill" style="font-variation-settings: 'FILL' 1;">inventory_2</span>
+<span class="font-label-md text-label-md mt-1">Inventory</span>
+</a>
+<!-- Inactive: Build -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="inventory">inventory</span>
+<span class="font-label-md text-label-md mt-1">Build</span>
+</a>
+<!-- Inactive: Needs -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="priority_high">priority_high</span>
+<span class="font-label-md text-label-md mt-1">Needs</span>
+</a>
+<!-- Inactive: Settings -->
+<a class="flex flex-col items-center justify-center text-on-surface-variant hover:bg-surface-variant/50 w-16 h-full transition-colors rounded-lg" href="#">
+<span class="material-symbols-outlined" data-icon="settings">settings</span>
+<span class="font-label-md text-label-md mt-1">Settings</span>
+</a>
+</nav>
+</body></html>
