@@ -381,7 +381,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.xl,
+    paddingBottom: 100,
   },
   itemCard: {
     backgroundColor: COLORS.cardSurface,

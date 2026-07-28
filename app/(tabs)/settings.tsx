@@ -13,7 +13,7 @@ import { COLORS, RADII, SPACING } from '../../constants/theme';
 import { BoxRules, usePantryStore } from '../../lib/store';
 
 export default function SettingsScreen() {
-  const { settings, boxRules, thresholds, updateSettings, updateBoxRules, updateThresholds, resetToDefaults } = usePantryStore();
+  const { settings, boxRules, thresholds, updateSettings, updateBoxRules, updateThresholds } = usePantryStore();
 
   const [pantryName, setPantryName] = useState(settings.pantryName);
 
@@ -22,24 +22,6 @@ export default function SettingsScreen() {
     Alert.alert('Saved!', 'Pantry name updated successfully.');
   };
 
-  const handleResetData = () => {
-    Alert.alert(
-      'Reset Demo Data?',
-      'This will restore sample inventory, box rules, and settings to original defaults.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reset',
-          style: 'destructive',
-          onPress: async () => {
-            await resetToDefaults();
-            setPantryName('Grace Community Food Pantry');
-            Alert.alert('Reset Complete', 'Store has been reloaded with initial demo data.');
-          }
-        }
-      ]
-    );
-  };
 
   const categories = Object.keys(boxRules) as (keyof BoxRules)[];
 
@@ -141,11 +123,7 @@ export default function SettingsScreen() {
         </View>
       </View>
 
-      {/* Reset Data */}
-      <TouchableOpacity style={styles.resetBtn} onPress={handleResetData}>
-        <MaterialCommunityIcons name="refresh" size={20} color={COLORS.statusCritical} />
-        <Text style={styles.resetBtnText}>Reset All Demo Data to Defaults</Text>
-      </TouchableOpacity>
+
     </ScrollView>
   );
 }
@@ -157,7 +135,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING.md,
-    paddingBottom: SPACING.xl,
+    paddingBottom: 100,
   },
   card: {
     backgroundColor: COLORS.cardSurface,

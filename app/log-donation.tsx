@@ -11,26 +11,31 @@ import {
   View
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
-import { SAMPLE_PRESETS, processImageScan } from '../lib/ai_vision';
+import { processImageScan } from '../lib/ai_vision';
 import { usePantryStore } from '../lib/store';
 
 export default function LogDonationScreen() {
   const router = useRouter();
   const setDraft = usePantryStore(state => state.setDraft);
 
-  const [selectedPreset, setSelectedPreset] = useState<string>(SAMPLE_PRESETS[0].id);
   const [photoCount, setPhotoCount] = useState<number>(2);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
 
-  const handleDetectItems = () => {
+  const handleDetectItems = async () => {
     setIsAnalyzing(true);
-
-    setTimeout(() => {
-      const candidates = processImageScan(selectedPreset);
+    
+    try {
+      // In a real app, this would be the base64 string from the camera/image picker.
+      // For now, we pass a dummy string which the backend handles.
+      const candidates = await processImageScan("dummy_base64_image_data");
       setDraft(candidates as any);
-      setIsAnalyzing(false);
       router.push('/review-verify');
-    }, 1200);
+    } catch (err) {
+      console.error(err);
+      // Fallback or error handling
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
   return (
@@ -54,22 +59,6 @@ export default function LogDonationScreen() {
         <Text style={styles.addPhotoBtnText}>Take Another Photo (Label / Close-up)</Text>
       </TouchableOpacity>
 
-      <Text style={styles.sectionTitle}>Select Sample Donation Scenario</Text>
-      {SAMPLE_PRESETS.map(preset => (
-        <TouchableOpacity
-          key={preset.id}
-          style={[styles.presetCard, selectedPreset === preset.id && styles.presetCardActive]}
-          onPress={() => setSelectedPreset(preset.id)}
-        >
-          <View style={styles.presetHeader}>
-            <Text style={styles.presetTitle}>{preset.name}</Text>
-            {selectedPreset === preset.id && (
-              <MaterialCommunityIcons name="check-circle" size={20} color={COLORS.primaryLight} />
-            )}
-          </View>
-          <Text style={styles.presetDesc}>{preset.description}</Text>
-        </TouchableOpacity>
-      ))}
 
       <TouchableOpacity
         style={styles.detectBtn}

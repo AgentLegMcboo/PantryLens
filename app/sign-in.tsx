@@ -1,27 +1,90 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useRouter, Link } from 'expo-router';
+import React, { useState, useEffect } from 'react';
 import {
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
-  View
+  View,
+  ActivityIndicator,
+  Alert
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
-import { usePantryStore } from '../lib/store';
+import { supabase } from '../lib/supabase';
+import * as WebBrowser from 'expo-web-browser';
+import * as Linking from 'expo-linking';
+import { makeRedirectUri } from 'expo-auth-session';
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function SignInScreen() {
   const router = useRouter();
-  const updateSettings = usePantryStore(state => state.updateSettings);
 
-  const [pantryCode, setPantryCode] = useState('GRACE-PANTRY-782');
-  const [password, setPassword] = useState('••••••••');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
 
-  const handleSignIn = () => {
-    updateSettings({ isSignedIn: true });
-    router.replace('/(tabs)');
+  const handleSignIn = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password.');
+      return;
+    }
+    
+    setLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+    setLoading(false);
+    
+    if (error) {
+      Alert.alert('Sign In Failed', error.message);
+    }
+  };
+
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      const redirectUrl = makeRedirectUri({
+        path: '/(tabs)',
+      });
+
+      const { data, error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: {
+          redirectTo: redirectUrl,
+          skipBrowserRedirect: true,
+        },
+      });
+
+      if (error) throw error;
+      if (!data.url) throw new Error('No url returned');
+
+      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
+
+      if (result.type === 'success' && result.url) {
+        // Parse the URL to extract the access and refresh tokens
+        const urlParams = new URL(result.url).hash.substring(1);
+        const params = new URLSearchParams(urlParams);
+        const access_token = params.get('access_token');
+        const refresh_token = params.get('refresh_token');
+
+        if (access_token && refresh_token) {
+          const { error: sessionError } = await supabase.auth.setSession({
+            access_token,
+            refresh_token,
+          });
+          if (sessionError) throw sessionError;
+        }
+      }
+    } catch (error: any) {
+      Alert.alert('Google Sign In Failed', error.message);
+    } finally {
+      setGoogleLoading(false);
+    }
   };
 
   return (
@@ -35,16 +98,34 @@ export default function SignInScreen() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Pantry Volunteer Sign In</Text>
-        <Text style={styles.cardSub}>
-          Use your pantry's shared code to access live inventory.
-        </Text>
+        <Text style={styles.cardTitle}>Sign In</Text>
+        <Text style={styles.cardSub}>Welcome back to PantryLens.</Text>
 
-        <Text style={styles.label}>Pantry Access Code</Text>
+        <TouchableOpacity style={styles.googleBtn} onPress={handleGoogleSignIn} disabled={googleLoading || loading}>
+          {googleLoading ? (
+            <ActivityIndicator color={COLORS.textPrimary} />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="google" size={20} color={COLORS.textPrimary} />
+              <Text style={styles.googleBtnText}>Continue with Google</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.dividerBox}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.divider} />
+        </View>
+
+        <Text style={styles.label}>Email Address</Text>
         <TextInput
           style={styles.input}
-          value={pantryCode}
-          onChangeText={setPantryCode}
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          placeholder="volunteer@pantry.org"
         />
 
         <Text style={styles.label}>Password</Text>
@@ -53,12 +134,28 @@ export default function SignInScreen() {
           secureTextEntry
           value={password}
           onChangeText={setPassword}
+          placeholder="••••••••"
         />
 
-        <TouchableOpacity style={styles.signInBtn} onPress={handleSignIn}>
-          <Text style={styles.signInBtnText}>Enter Pantry Account</Text>
-          <MaterialCommunityIcons name="arrow-right" size={20} color={COLORS.textOnPrimary} />
+        <TouchableOpacity style={styles.signInBtn} onPress={handleSignIn} disabled={loading || googleLoading}>
+          {loading ? (
+            <ActivityIndicator color={COLORS.textOnPrimary} />
+          ) : (
+            <>
+              <Text style={styles.signInBtnText}>Sign In</Text>
+              <MaterialCommunityIcons name="arrow-right" size={20} color={COLORS.textOnPrimary} />
+            </>
+          )}
         </TouchableOpacity>
+
+        <View style={styles.footer}>
+          <Text style={styles.footerText}>Don't have an account?</Text>
+          <Link href="/sign-up" asChild>
+            <TouchableOpacity>
+              <Text style={styles.footerLink}> Sign Up</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
       </View>
     </ScrollView>
   );
@@ -116,6 +213,38 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.md,
     marginTop: 2,
   },
+  googleBtn: {
+    backgroundColor: COLORS.background,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    borderRadius: RADII.md,
+    padding: SPACING.md,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: SPACING.sm,
+  },
+  googleBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: COLORS.textPrimary,
+    marginLeft: SPACING.sm,
+  },
+  dividerBox: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: SPACING.lg,
+  },
+  divider: {
+    flex: 1,
+    height: 1,
+    backgroundColor: COLORS.borderSoft,
+  },
+  dividerText: {
+    marginHorizontal: SPACING.md,
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
   label: {
     fontSize: 13,
     fontWeight: '600',
@@ -149,4 +278,18 @@ const styles = StyleSheet.create({
     color: COLORS.textOnPrimary,
     marginRight: SPACING.xs,
   },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    marginTop: SPACING.lg,
+  },
+  footerText: {
+    color: COLORS.textSecondary,
+    fontSize: 14,
+  },
+  footerLink: {
+    color: COLORS.primaryLight,
+    fontSize: 14,
+    fontWeight: '600',
+  }
 });

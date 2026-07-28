@@ -168,6 +168,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING.md,
+    paddingBottom: 100,
   },
   alertBanner: {
     backgroundColor: '#FDF3F2',

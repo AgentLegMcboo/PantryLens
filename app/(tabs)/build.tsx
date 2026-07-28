@@ -174,7 +174,7 @@ const styles = StyleSheet.create({
   },
   content: {
     padding: SPACING.md,
-    paddingBottom: SPACING.xl,
+    paddingBottom: 100,
   },
   card: {
     backgroundColor: COLORS.cardSurface,
