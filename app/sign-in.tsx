@@ -13,11 +13,7 @@ import {
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
 import { supabase } from '../lib/supabase';
-import * as WebBrowser from 'expo-web-browser';
-import * as Linking from 'expo-linking';
-import { makeRedirectUri } from 'expo-auth-session';
-
-WebBrowser.maybeCompleteAuthSession();
+import { OAuthCancelled, oauthRedirectUri, signInWithGoogle } from '../lib/auth';
 
 export default function SignInScreen() {
   const router = useRouter();
@@ -48,40 +44,13 @@ export default function SignInScreen() {
   const handleGoogleSignIn = async () => {
     setGoogleLoading(true);
     try {
-      const redirectUrl = makeRedirectUri({
-        path: '/(tabs)',
-      });
-
-      const { data, error } = await supabase.auth.signInWithOAuth({
-        provider: 'google',
-        options: {
-          redirectTo: redirectUrl,
-          skipBrowserRedirect: true,
-        },
-      });
-
-      if (error) throw error;
-      if (!data.url) throw new Error('No url returned');
-
-      const result = await WebBrowser.openAuthSessionAsync(data.url, redirectUrl);
-
-      if (result.type === 'success' && result.url) {
-        // Parse the URL to extract the access and refresh tokens
-        const urlParams = new URL(result.url).hash.substring(1);
-        const params = new URLSearchParams(urlParams);
-        const access_token = params.get('access_token');
-        const refresh_token = params.get('refresh_token');
-
-        if (access_token && refresh_token) {
-          const { error: sessionError } = await supabase.auth.setSession({
-            access_token,
-            refresh_token,
-          });
-          if (sessionError) throw sessionError;
-        }
-      }
+      // The auth listener in the store picks the session up and routes onward.
+      await signInWithGoogle();
     } catch (error: any) {
-      Alert.alert('Google Sign In Failed', error.message);
+      // Backing out of the browser sheet is not a failure worth alerting about.
+      if (!(error instanceof OAuthCancelled)) {
+        Alert.alert('Google Sign In Failed', error.message);
+      }
     } finally {
       setGoogleLoading(false);
     }
@@ -111,6 +80,14 @@ export default function SignInScreen() {
             </>
           )}
         </TouchableOpacity>
+
+        {/* Dev only: the Expo Go redirect host changes with the network, and it
+            must be allow-listed in Supabase or sign-in falls back to Site URL. */}
+        {__DEV__ && (
+          <Text style={styles.redirectHint} selectable>
+            Redirect URI: {oauthRedirectUri}
+          </Text>
+        )}
 
         <View style={styles.dividerBox}>
           <View style={styles.divider} />
@@ -229,6 +206,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: COLORS.textPrimary,
     marginLeft: SPACING.sm,
+  },
+  redirectHint: {
+    fontSize: 11,
+    color: COLORS.textSecondary,
+    textAlign: 'center',
+    marginTop: SPACING.sm,
   },
   dividerBox: {
     flexDirection: 'row',

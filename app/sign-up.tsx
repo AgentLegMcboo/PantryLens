@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
 import { supabase } from '../lib/supabase';
+import { OAuthCancelled, signInWithGoogle } from '../lib/auth';
 
 export default function SignUpScreen() {
   const router = useRouter();
@@ -20,6 +21,22 @@ export default function SignUpScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+
+  // With Google there is no separate "sign up" — the first sign-in creates the
+  // account, so this is the same call as on the sign-in screen.
+  const handleGoogleSignIn = async () => {
+    setGoogleLoading(true);
+    try {
+      await signInWithGoogle();
+    } catch (error: any) {
+      if (!(error instanceof OAuthCancelled)) {
+        Alert.alert('Google Sign In Failed', error.message);
+      }
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
 
   const handleSignUp = async () => {
     if (!email || !password) {
@@ -49,6 +66,27 @@ export default function SignUpScreen() {
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Create Account</Text>
+
+        <TouchableOpacity
+          style={styles.googleBtn}
+          onPress={handleGoogleSignIn}
+          disabled={googleLoading || loading}
+        >
+          {googleLoading ? (
+            <ActivityIndicator color={COLORS.textPrimary} />
+          ) : (
+            <>
+              <MaterialCommunityIcons name="google" size={20} color={COLORS.textPrimary} />
+              <Text style={styles.googleBtnText}>Continue with Google</Text>
+            </>
+          )}
+        </TouchableOpacity>
+
+        <View style={styles.dividerBox}>
+          <View style={styles.divider} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.divider} />
+        </View>
 
         <Text style={styles.label}>Email Address</Text>
         <TextInput
@@ -95,6 +133,11 @@ const styles = StyleSheet.create({
   brandTitle: { fontSize: 28, fontWeight: '700', color: COLORS.textPrimary },
   card: { backgroundColor: COLORS.cardSurface, borderRadius: RADII.lg, borderWidth: 1, borderColor: COLORS.borderSoft, padding: SPACING.lg },
   cardTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginBottom: SPACING.md },
+  googleBtn: { backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.borderSoft, borderRadius: RADII.md, padding: SPACING.md, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', minHeight: SPACING.touch },
+  googleBtnText: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary, marginLeft: SPACING.sm },
+  dividerBox: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACING.lg },
+  divider: { flex: 1, height: 1, backgroundColor: COLORS.borderSoft },
+  dividerText: { marginHorizontal: SPACING.md, color: COLORS.textSecondary, fontSize: 14 },
   label: { fontSize: 13, fontWeight: '600', color: COLORS.textPrimary, marginTop: SPACING.sm, marginBottom: 4 },
   input: { backgroundColor: COLORS.background, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.borderSoft, paddingHorizontal: SPACING.sm, height: 48, fontSize: 15, color: COLORS.textPrimary },
   signInBtn: { backgroundColor: COLORS.primaryLight, borderRadius: RADII.md, padding: SPACING.md, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: SPACING.lg, minHeight: SPACING.touch },

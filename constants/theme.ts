@@ -6,15 +6,15 @@ export const COLORS = {
   secondary: '#6B8E4E',
   
   // Surfaces
-  background: '#F9FAFB',
-  cardSurface: '#FFFFFF',
-  surfaceContainer: '#F3F4F6',
-  surfaceVariant: '#E5E7EB',
-  borderSoft: '#E5E7EB',
+  background: '#FBF6EE',
+  cardSurface: '#FEFBF6',
+  surfaceContainer: '#F9EBE5',
+  surfaceVariant: '#EDE0D9',
+  borderSoft: '#E5DBCB',
   
   // Typography
-  textPrimary: '#111827',
-  textSecondary: '#4B5563',
+  textPrimary: '#2B2420',
+  textSecondary: '#6B6259',
   textOnPrimary: '#FFFFFF',
   
   // Status Colors (Sacred)

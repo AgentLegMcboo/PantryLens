@@ -156,11 +156,22 @@ max_indexes = 5
 enabled = true
 # The base URL of your website. Used as an allow-list for redirects and for constructing URLs used
 # in emails.
-site_url = "http://127.0.0.1:3000"
+# PantryLens is a mobile app with no website, so the app's own scheme is the
+# landing point. If a redirect isn't allow-listed below, Supabase silently falls
+# back to site_url — which is exactly how Google sign-in ended up on localhost.
+site_url = "pantrylens://auth/callback"
 # The public URL that Auth serves on. Defaults to the API external URL with `/auth/v1` appended.
 # external_url = ""
 # A list of *exact* URLs that auth providers are permitted to redirect to post authentication.
-additional_redirect_urls = ["https://127.0.0.1:3000"]
+additional_redirect_urls = [
+  # Standalone / dev builds.
+  "pantrylens://auth/callback",
+  # Expo Go serves over exp:// and the LAN host changes per network, so this
+  # has to be a wildcard. Dev only — drop it once the team is on dev builds.
+  "exp://*/--/auth/callback",
+  # `npm run web`.
+  "http://localhost:8081/auth/callback",
+]
 # How long tokens are valid for, in seconds. Defaults to 3600 (1 hour), maximum 604,800 (1 week).
 jwt_expiry = 3600
 # JWT issuer URL. If not set, defaults to auth.external_url.
@@ -333,6 +344,17 @@ url = ""
 skip_nonce_check = false
 # If enabled, it will allow the user to successfully authenticate when the provider does not return an email address.
 email_optional = false
+
+[auth.external.google]
+enabled = true
+# From Google Cloud console → APIs & Services → Credentials → OAuth 2.0 Client ID
+# (type: Web application). Set these in .env.local, never commit them.
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GOOGLE_SECRET)"
+redirect_uri = ""
+url = ""
+# Required for Google sign-in against a local Supabase stack.
+skip_nonce_check = true
 
 # Allow Solana wallet holders to sign in to your project via the Sign in with Solana (SIWS, EIP-4361) standard.
 # You can configure "web3" rate limit in the [auth.rate_limit] section and set up [auth.captcha] if self-hosting.
