@@ -50,3 +50,16 @@ export const RADII = {
   lg: 16,
   full: 9999
 };
+/**
+ * Typography.
+ *
+ * Newsreader is a transitional serif — used sparingly for the wordmark and the
+ * headings that carry weight, so those moments feel considered while the working
+ * UI (counts, labels, buttons) stays in the system sans for legibility at a
+ * glance. Loaded in app/_layout.tsx; the names below are the loaded keys.
+ */
+export const FONTS = {
+  serif: 'Newsreader_500Medium',
+  serifSemi: 'Newsreader_600SemiBold',
+  serifItalic: 'Newsreader_500Medium_Italic',
+} as const;

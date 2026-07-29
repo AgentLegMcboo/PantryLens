@@ -19,8 +19,8 @@ export default function PackingChecklistScreen() {
   const targetBoxes = parseInt(params.targetBoxes as string, 10) || 12;
   const familySize = parseInt(params.familySize as string, 10) || 4;
 
-  const { inventory, boxRules, deductItems } = usePantryStore();
-  const plan = computeAllocation(inventory, boxRules, targetBoxes, familySize);
+  const { inventory, bulkLots, boxRules, deductItems } = usePantryStore();
+  const plan = computeAllocation(inventory, boxRules, targetBoxes, familySize, bulkLots);
 
   // Local state for checked off items
   const [checkedIds, setCheckedIds] = useState<Record<string, boolean>>({});

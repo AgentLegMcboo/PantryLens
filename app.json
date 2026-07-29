@@ -9,13 +9,14 @@
     "ios": {
       "supportsTablet": true
     },
-    "android": {
-    },
+    "android": {},
     "web": {
       "bundler": "metro"
     },
     "plugins": [
-      "expo-router"
+      "expo-router",
+      "expo-audio",
+      "expo-asset"
     ]
   }
 }

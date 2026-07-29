@@ -1,17 +1,82 @@
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 
+export type Category = 'grain' | 'vegetable' | 'protein' | 'breakfast' | 'snack' | 'hygiene' | 'baby' | 'unknown';
+
+/**
+ * Result of the manual inspection every item gets before shelving. Anything
+ * other than 'ok' is held out of box building until a human clears it.
+ */
+export type Condition = 'ok' | 'dented' | 'rusted' | 'seal_broken' | 'expired';
+
+/** Who the food came from. Grocery rescue is the most common at MESA. */
+export type SourceOrg = 'grocery' | 'food_bank' | 'drive' | 'individual' | 'other';
+
+export const CONDITION_LABELS: Record<Condition, string> = {
+  ok: 'Good',
+  dented: 'Dented',
+  rusted: 'Rusted',
+  seal_broken: 'Seal broken',
+  expired: 'Expired',
+};
+
+export const SOURCE_ORG_LABELS: Record<SourceOrg, string> = {
+  grocery: 'Grocery rescue',
+  food_bank: 'Food bank',
+  drive: 'Food drive',
+  individual: 'Individual',
+  other: 'Other',
+};
+
+export const isUsableCondition = (c: Condition | undefined) => (c ?? 'ok') === 'ok';
+
 export interface InventoryItem {
   id: string;
   name: string;
-  category: 'grain' | 'vegetable' | 'protein' | 'breakfast' | 'snack' | 'hygiene' | 'baby' | 'unknown';
+  category: Category;
   count: number;
   expiration: string | null;
+  /** When the pantry received it. This is the FIFO basis. */
   date_added: string;
   source: 'donation' | 'shelf_audit' | 'manual';
   confidence?: number;
+  condition?: Condition;
+  source_org?: SourceOrg | null;
+  source_name?: string | null;
+  bulk_lot_id?: string | null;
 }
+
+/**
+ * A weighed bulk donation. Pantries weigh big grocery/food-bank drops and record
+ * the weight — they do not count cans. Weight is the recorded truth; est_units
+ * is a derived estimate so the load still counts toward box building.
+ */
+export interface BulkLot {
+  id: string;
+  category: Category;
+  weight_lbs: number;
+  est_units: number;
+  expiration: string | null;
+  date_added: string;
+  source_org?: SourceOrg | null;
+  source_name?: string | null;
+  notes?: string | null;
+}
+
+export type LbsPerUnit = Record<Category, number>;
+
+export const DEFAULT_LBS_PER_UNIT: LbsPerUnit = {
+  grain: 1.2,
+  vegetable: 1.0,
+  protein: 1.0,
+  breakfast: 1.5,
+  snack: 0.5,
+  hygiene: 1.0,
+  baby: 0.8,
+  unknown: 1.0,
+};
 
 export interface BoxRules {
   grain: number;
@@ -51,9 +116,16 @@ export interface Activity {
 const DEFAULT_BOX_RULES: BoxRules = { grain: 2, vegetable: 2, protein: 2, breakfast: 1, snack: 1, hygiene: 1, baby: 0 };
 const DEFAULT_THRESHOLDS: CategoryThresholds = { grain: 15, vegetable: 15, protein: 15, breakfast: 10, snack: 10, hygiene: 8, baby: 5 };
 
+/** Whether the intro has been completed. Persisted so it only ever shows once. */
+export const ONBOARDING_KEY = 'pantrylens.onboarded';
+
 interface AppState {
   session: Session | null;
+  /** null while still being read from storage — routing must wait on it. */
+  onboarded: boolean | null;
   inventory: InventoryItem[];
+  bulkLots: BulkLot[];
+  lbsPerUnit: LbsPerUnit;
   boxRules: BoxRules;
   thresholds: CategoryThresholds;
   settings: Settings;
@@ -65,8 +137,13 @@ interface AppState {
   initialize: () => Promise<void>;
   fetchData: () => Promise<void>;
   signOut: () => Promise<void>;
+  completeOnboarding: () => Promise<void>;
   setActivePantry: (pantryId: string, pantryName: string, role: string) => void;
-  
+
+  addBulkLot: (lot: Omit<BulkLot, 'id'>) => Promise<void>;
+  deleteBulkLot: (id: string) => Promise<void>;
+  updateLbsPerUnit: (updates: Partial<LbsPerUnit>) => Promise<void>;
+
   addItems: (items: Partial<InventoryItem>[], source?: 'donation' | 'shelf_audit' | 'manual') => Promise<void>;
   updateItem: (id: string, updates: Partial<InventoryItem>) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
@@ -83,7 +160,10 @@ interface AppState {
 
 export const usePantryStore = create<AppState>((set, get) => ({
   session: null,
+  onboarded: null,
   inventory: [],
+  bulkLots: [],
+  lbsPerUnit: DEFAULT_LBS_PER_UNIT,
   boxRules: DEFAULT_BOX_RULES,
   thresholds: DEFAULT_THRESHOLDS,
   settings: {
@@ -98,6 +178,20 @@ export const usePantryStore = create<AppState>((set, get) => ({
   currentDraft: [],
 
   initialize: async () => {
+    if (__DEV__) {
+      // In development the intro replays on every launch while signed out, so it
+      // can be iterated on without wiping app data. It still completes normally
+      // within a session — completeOnboarding() flips this in memory — so the
+      // Get Started button routes onward exactly as it does in production.
+      set({ onboarded: false });
+    } else {
+      // Read before any routing decision, so a returning volunteer is never
+      // flashed the intro.
+      AsyncStorage.getItem(ONBOARDING_KEY)
+        .then(v => set({ onboarded: v === '1' }))
+        .catch(() => set({ onboarded: true }));
+    }
+
     supabase.auth.getSession().then(({ data: { session } }) => {
       set({ session });
       if (session) get().fetchData();
@@ -114,7 +208,10 @@ export const usePantryStore = create<AppState>((set, get) => ({
           inventory: [],
           activities: [],
           settings: { ...get().settings, pantryId: null, pantryName: '' },
-          isLoaded: true
+          isLoaded: true,
+          // Signing out in development drops you back at the intro too, so it is
+          // reachable without relaunching.
+          ...(__DEV__ ? { onboarded: false } : null)
         });
       }
     });
@@ -128,7 +225,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
       // 1. Get user's pantry
       const { data: members } = await supabase
         .from('pantry_members')
-        .select('pantry_id, role, pantries(name, box_rules, thresholds)')
+        .select('pantry_id, role, pantries(name, box_rules, thresholds, lbs_per_unit)')
         .eq('user_id', session.user.id)
         .limit(1)
         .single();
@@ -136,14 +233,14 @@ export const usePantryStore = create<AppState>((set, get) => ({
       if (members && members.pantries) {
         const pantryId = members.pantry_id;
         const pantries = members.pantries as any;
-        const pantryName = Array.isArray(pantries) ? pantries[0].name : pantries.name;
-        const boxRules = Array.isArray(pantries) ? pantries[0].box_rules : pantries.box_rules;
-        const thresholds = Array.isArray(pantries) ? pantries[0].thresholds : pantries.thresholds;
-        
+        const pantry = Array.isArray(pantries) ? pantries[0] : pantries;
+
         set(state => ({
-          settings: { ...state.settings, pantryId, pantryName, userRole: members.role },
-          boxRules: boxRules as BoxRules || DEFAULT_BOX_RULES,
-          thresholds: thresholds as CategoryThresholds || DEFAULT_THRESHOLDS
+          settings: { ...state.settings, pantryId, pantryName: pantry.name, userRole: members.role },
+          boxRules: (pantry.box_rules as BoxRules) || DEFAULT_BOX_RULES,
+          thresholds: (pantry.thresholds as CategoryThresholds) || DEFAULT_THRESHOLDS,
+          // Merged so a category missing from the stored JSON still has a value.
+          lbsPerUnit: { ...DEFAULT_LBS_PER_UNIT, ...(pantry.lbs_per_unit || {}) }
         }));
 
         // 2. Fetch Inventory
@@ -153,7 +250,14 @@ export const usePantryStore = create<AppState>((set, get) => ({
           .eq('pantry_id', pantryId)
           .order('created_at', { ascending: false });
 
-        // 3. Fetch Activities
+        // 3. Fetch weighed bulk lots
+        const { data: lotData } = await supabase
+          .from('bulk_lots')
+          .select('*')
+          .eq('pantry_id', pantryId)
+          .order('date_added', { ascending: false });
+
+        // 4. Fetch Activities
         const { data: actData } = await supabase
           .from('activities')
           .select('*')
@@ -163,6 +267,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
         set({
           inventory: (invData as InventoryItem[]) || [],
+          bulkLots: (lotData as BulkLot[]) || [],
           activities: (actData as Activity[]) || [],
           isLoaded: true
         });
@@ -186,6 +291,40 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
   signOut: async () => {
     await supabase.auth.signOut();
+  },
+
+  // Storage alone is not enough — the router reads this from state, so both
+  // have to move together or the gate bounces the user back to the intro.
+  completeOnboarding: async () => {
+    set({ onboarded: true });
+    await AsyncStorage.setItem(ONBOARDING_KEY, '1').catch(() => {});
+  },
+
+  addBulkLot: async (lot: Omit<BulkLot, 'id'>) => {
+    const { settings } = get();
+    if (!settings.pantryId) return;
+
+    const { error } = await supabase.from('bulk_lots').insert({ ...lot, pantry_id: settings.pantryId });
+    if (error) throw error;
+
+    await get().addActivity(
+      `Logged ${lot.weight_lbs} lb bulk ${lot.category} (~${lot.est_units} units est.)`,
+      'scale-balance'
+    );
+    await get().fetchData();
+  },
+
+  deleteBulkLot: async (id: string) => {
+    await supabase.from('bulk_lots').delete().eq('id', id);
+    await get().fetchData();
+  },
+
+  updateLbsPerUnit: async (updates: Partial<LbsPerUnit>) => {
+    const { settings, lbsPerUnit } = get();
+    if (!settings.pantryId) return;
+    const next = { ...lbsPerUnit, ...updates };
+    set({ lbsPerUnit: next });
+    await supabase.from('pantries').update({ lbs_per_unit: next }).eq('id', settings.pantryId);
   },
 
   setActivePantry: (pantryId: string, pantryName: string, role: string) => {

@@ -3,7 +3,6 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,6 +10,7 @@ import {
   View
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
+import { KeyboardScreen } from '../components/keyboard-screen';
 import { usePantryStore } from '../lib/store';
 
 export default function ItemDetailScreen() {
@@ -62,7 +62,7 @@ export default function ItemDetailScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.card}>
         <Text style={styles.label}>Item Name</Text>
         <TextInput
@@ -125,7 +125,7 @@ export default function ItemDetailScreen() {
           <Text style={styles.deleteBtnText}>Delete Item</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 

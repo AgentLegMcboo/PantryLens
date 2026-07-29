@@ -2,17 +2,27 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  Switch,
   TouchableOpacity,
   View
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../../constants/theme';
+import { KeyboardScreen } from '../../components/keyboard-screen';
+import {
+  getFeedbackPrefs,
+  setHapticsEnabled,
+  setSoundEnabled,
+} from '../../lib/feedback';
 import { BoxRules, usePantryStore } from '../../lib/store';
 
 export default function SettingsScreen() {
+  const initialPrefs = getFeedbackPrefs();
+  const [haptics, setHaptics] = useState(initialPrefs.hapticsEnabled);
+  const [sound, setSound] = useState(initialPrefs.soundEnabled);
+
   const { settings, boxRules, thresholds, updateSettings, updateBoxRules, updateThresholds } = usePantryStore();
 
   const [pantryName, setPantryName] = useState(settings.pantryName);
@@ -26,7 +36,7 @@ export default function SettingsScreen() {
   const categories = Object.keys(boxRules) as (keyof BoxRules)[];
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
       {/* Pantry Profile */}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Pantry Profile</Text>
@@ -44,6 +54,37 @@ export default function SettingsScreen() {
       </View>
 
       {/* Box Rules Configuration */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Feel & Sound</Text>
+        <Text style={styles.cardSub}>
+          Sound is off by default — a pantry back room is loud and the phone is often shared.
+        </Text>
+
+        <View style={styles.feedbackRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ruleLabel}>Haptic feedback</Text>
+            <Text style={styles.feedbackHint}>A light tick when you tap or confirm.</Text>
+          </View>
+          <Switch
+            value={haptics}
+            onValueChange={v => { setHaptics(v); setHapticsEnabled(v); }}
+            trackColor={{ true: COLORS.secondary, false: COLORS.borderSoft }}
+          />
+        </View>
+
+        <View style={styles.feedbackRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.ruleLabel}>Sound effects</Text>
+            <Text style={styles.feedbackHint}>Soft confirmation tones when something is saved.</Text>
+          </View>
+          <Switch
+            value={sound}
+            onValueChange={v => { setSound(v); setSoundEnabled(v); }}
+            trackColor={{ true: COLORS.secondary, false: COLORS.borderSoft }}
+          />
+        </View>
+      </View>
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Standard Box Target Rules</Text>
         <Text style={styles.cardSub}>Number of items per category required for 1 standard family box (4 people):</Text>
@@ -124,7 +165,7 @@ export default function SettingsScreen() {
       </View>
 
 
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 
@@ -190,6 +231,15 @@ const styles = StyleSheet.create({
     color: COLORS.textOnPrimary,
     fontWeight: '700',
   },
+  feedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SPACING.sm,
+    paddingVertical: SPACING.sm,
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.borderSoft,
+  },
+  feedbackHint: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
   ruleRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

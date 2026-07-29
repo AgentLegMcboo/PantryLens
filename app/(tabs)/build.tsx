@@ -14,12 +14,12 @@ import { BoxRules, usePantryStore } from '../../lib/store';
 
 export default function BuildBoxesScreen() {
   const router = useRouter();
-  const { inventory, boxRules, settings } = usePantryStore();
+  const { inventory, bulkLots, boxRules, settings } = usePantryStore();
 
   const [requestedBoxes, setRequestedBoxes] = useState<number>(12);
   const [familySize, setFamilySize] = useState<number>(settings.defaultFamilySize || 4);
 
-  const plan = computeAllocation(inventory, boxRules, requestedBoxes, familySize);
+  const plan = computeAllocation(inventory, boxRules, requestedBoxes, familySize, bulkLots);
 
   const categories = Object.keys(boxRules) as (keyof BoxRules)[];
 

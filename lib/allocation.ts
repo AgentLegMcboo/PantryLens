@@ -1,4 +1,39 @@
-import { BoxRules, InventoryItem } from './store';
+import { BoxRules, BulkLot, InventoryItem, isUsableCondition } from './store';
+
+/**
+ * Turns everything the pantry holds into one pool the allocator can draw from.
+ *
+ * Two things happen here, and both matter for correctness:
+ *
+ *  - Items that failed inspection (dented, rusted, broken seal, expired) are
+ *    dropped. A dented can is physically present but must not be promised to a
+ *    family until someone clears it.
+ *  - Weighed bulk lots enter as synthetic items carrying their estimated unit
+ *    count, so a 60 lb protein drop actually counts toward boxes instead of
+ *    being invisible to the engine.
+ */
+export function buildStockUnits(inventory: InventoryItem[], bulkLots: BulkLot[] = []): InventoryItem[] {
+  const usableItems = inventory.filter(i => isUsableCondition(i.condition) && i.count > 0);
+
+  const bulkAsItems: InventoryItem[] = bulkLots
+    .filter(lot => lot.est_units > 0)
+    .map(lot => ({
+      id: lot.id,
+      name: `Bulk ${lot.category} (${lot.weight_lbs} lb lot)`,
+      category: lot.category,
+      count: lot.est_units,
+      expiration: lot.expiration,
+      date_added: lot.date_added,
+      source: 'donation' as const,
+      condition: 'ok' as const,
+      bulk_lot_id: lot.id,
+    }));
+
+  return [...usableItems, ...bulkAsItems];
+}
+
+/** True when this allocated row came from a weighed lot, so the UI can say "estimated". */
+export const isBulkUnit = (item: InventoryItem) => !!item.bulk_lot_id;
 
 export interface AllocationPlan {
   requestedBoxes: number;
@@ -30,11 +65,15 @@ export interface AllocationPlan {
 }
 
 export function computeAllocation(
-  inventory: InventoryItem[],
+  rawInventory: InventoryItem[],
   boxRules: BoxRules,
   requestedBoxes: number,
-  familySize: number = 4
+  familySize: number = 4,
+  bulkLots: BulkLot[] = []
 ): AllocationPlan {
+  // Damaged stock is excluded and weighed lots are folded in before any maths.
+  const inventory = buildStockUnits(rawInventory, bulkLots);
+
   // Scale box template by family size factor (standard family size = 4)
   const familyScale = familySize / 4;
   const categories = Object.keys(boxRules) as (keyof BoxRules)[];

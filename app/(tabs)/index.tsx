@@ -4,14 +4,15 @@ import React from 'react';
 import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { COLORS, RADII, SPACING } from '../../constants/theme';
 import { computeAllocation } from '../../lib/allocation';
+import { AnimatedCounter, FadeInUp, PressableScale, Pulse } from '../../components/motion';
 import { InventoryItem, usePantryStore } from '../../lib/store';
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { inventory, boxRules, settings, activities, thresholds } = usePantryStore();
+  const { inventory, bulkLots, boxRules, settings, activities, thresholds } = usePantryStore();
 
   // Compute allocation metrics
-  const plan = computeAllocation(inventory, boxRules, 12, settings.defaultFamilySize);
+  const plan = computeAllocation(inventory, boxRules, 12, settings.defaultFamilySize, bulkLots);
 
   // Compute expiring items
   const now = new Date();
@@ -34,9 +35,12 @@ export default function DashboardScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Limiting Category Alert Banner */}
+      <FadeInUp index={0}>
       <View style={styles.alertBanner}>
         <View style={styles.alertHeader}>
-          <MaterialCommunityIcons name="alert-circle-outline" size={24} color={COLORS.statusCritical} />
+          <Pulse active={plan.achievableBoxes === 0}>
+            <MaterialCommunityIcons name="alert-circle-outline" size={24} color={COLORS.statusCritical} />
+          </Pulse>
           <Text style={styles.alertTitle}>Limiting Category Alert</Text>
         </View>
         <Text style={styles.alertText}>
@@ -46,44 +50,53 @@ export default function DashboardScreen() {
           </Text>{' '}
           is holding you back by {plan.shortfallPerCategory[plan.limitingCategory]} units.
         </Text>
-        <TouchableOpacity
+        <PressableScale
           style={styles.alertButton}
+          cue="press"
           onPress={() => router.push('/(tabs)/build')}
         >
           <Text style={styles.alertButtonText}>Optimize Box Allocations</Text>
           <MaterialCommunityIcons name="arrow-right" size={16} color={COLORS.textOnPrimary} />
-        </TouchableOpacity>
+        </PressableScale>
       </View>
+      </FadeInUp>
 
       {/* Metrics Row */}
       <View style={styles.metricsGrid}>
-        <View style={[styles.metricCard, { borderLeftColor: COLORS.primaryLight, borderLeftWidth: 4 }]}>
-          <Text style={styles.metricLabel}>Total Items</Text>
-          <Text style={styles.metricValue}>{totalStockCount}</Text>
-          <Text style={styles.metricSub}>Across {inventory.length} SKUs</Text>
-        </View>
+        <FadeInUp index={1} style={styles.metricFlex}>
+          <View style={[styles.metricCard, { borderLeftColor: COLORS.primaryLight, borderLeftWidth: 4 }]}>
+            <Text style={styles.metricLabel}>Total Items</Text>
+            <AnimatedCounter value={totalStockCount} style={styles.metricValue} />
+            <Text style={styles.metricSub}>Across {inventory.length} SKUs</Text>
+          </View>
+        </FadeInUp>
 
-        <View style={[styles.metricCard, { borderLeftColor: COLORS.statusGood, borderLeftWidth: 4 }]}>
-          <Text style={styles.metricLabel}>Box Capacity</Text>
-          <Text style={[styles.metricValue, { color: COLORS.statusGood }]}>{plan.achievableBoxes}</Text>
-          <Text style={styles.metricSub}>Family of {settings.defaultFamilySize}</Text>
-        </View>
+        <FadeInUp index={2} style={styles.metricFlex}>
+          <View style={[styles.metricCard, { borderLeftColor: COLORS.statusGood, borderLeftWidth: 4 }]}>
+            <Text style={styles.metricLabel}>Box Capacity</Text>
+            <AnimatedCounter value={plan.achievableBoxes} style={[styles.metricValue, { color: COLORS.statusGood }]} />
+            <Text style={styles.metricSub}>Family of {settings.defaultFamilySize}</Text>
+          </View>
+        </FadeInUp>
 
-        <TouchableOpacity
-          style={[styles.metricCard, { borderLeftColor: COLORS.statusWarning, borderLeftWidth: 4 }]}
-          onPress={() => router.push('/expiring-soon')}
-        >
-          <Text style={styles.metricLabel}>Expiring Soon</Text>
-          <Text style={[styles.metricValue, { color: COLORS.statusWarning }]}>{expiringCount}</Text>
-          <Text style={styles.metricSub}>Use First items</Text>
-        </TouchableOpacity>
+        <FadeInUp index={3} style={styles.metricFlex}>
+          <PressableScale
+            style={[styles.metricCard, { borderLeftColor: COLORS.statusWarning, borderLeftWidth: 4 }]}
+            onPress={() => router.push('/expiring-soon')}
+          >
+            <Text style={styles.metricLabel}>Expiring Soon</Text>
+            <AnimatedCounter value={expiringCount} style={[styles.metricValue, { color: COLORS.statusWarning }]} />
+            <Text style={styles.metricSub}>Use First items</Text>
+          </PressableScale>
+        </FadeInUp>
       </View>
 
       {/* Primary Action Buttons */}
       <Text style={styles.sectionHeader}>Quick Actions</Text>
 
-      <TouchableOpacity
+      <PressableScale
         style={styles.primaryActionButton}
+        cue="press"
         onPress={() => router.push('/log-donation')}
       >
         <View style={styles.actionIconContainer}>
@@ -94,9 +107,18 @@ export default function DashboardScreen() {
           <Text style={styles.primaryActionSub}>Photograph bags or boxes for AI auto-intake</Text>
         </View>
         <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.textOnPrimary} />
-      </TouchableOpacity>
+      </PressableScale>
 
       <View style={styles.actionGrid}>
+        <TouchableOpacity
+          style={[styles.secondaryActionButton, { backgroundColor: COLORS.cardSurface }]}
+          onPress={() => router.push('/bulk-intake')}
+        >
+          <MaterialCommunityIcons name="scale-balance" size={24} color={COLORS.secondary} />
+          <Text style={styles.secondaryActionTitle}>Bulk Donation</Text>
+          <Text style={styles.secondaryActionSub}>Log by weight</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
           style={[styles.secondaryActionButton, { backgroundColor: COLORS.cardSurface }]}
           onPress={() => router.push('/shelf-audit')}
@@ -215,6 +237,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginBottom: SPACING.md,
   },
+  metricFlex: { flex: 1 },
   metricCard: {
     flex: 1,
     backgroundColor: COLORS.cardSurface,

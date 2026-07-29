@@ -11,7 +11,15 @@ import {
   View
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../../constants/theme';
-import { InventoryItem, usePantryStore } from '../../lib/store';
+import { CONDITION_LABELS, InventoryItem, isUsableCondition, usePantryStore } from '../../lib/store';
+import { KeyboardAvoidingView, Platform } from 'react-native';
+
+/** Whole days since the pantry received this item — the FIFO signal. */
+function daysOnShelf(dateAdded: string): number {
+  const then = new Date(`${dateAdded}T00:00:00`).getTime();
+  if (Number.isNaN(then)) return 0;
+  return Math.max(0, Math.round((Date.now() - then) / 86400000));
+}
 
 export default function InventoryScreen() {
   const router = useRouter();
@@ -19,7 +27,7 @@ export default function InventoryScreen() {
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'expiration' | 'count' | 'name'>('expiration');
+  const [sortBy, setSortBy] = useState<'expiration' | 'oldest' | 'count' | 'name'>('expiration');
 
   // Manual Add Modal State
   const [modalVisible, setModalVisible] = useState(false);
@@ -53,6 +61,8 @@ export default function InventoryScreen() {
     .sort((a, b) => {
       if (sortBy === 'name') return a.name.localeCompare(b.name);
       if (sortBy === 'count') return b.count - a.count;
+      // FIFO: what has been sitting on the shelf longest goes out first.
+      if (sortBy === 'oldest') return (a.date_added || '').localeCompare(b.date_added || '');
       // Default: Expiration order (items with dates first, soonest first)
       if (!a.expiration) return 1;
       if (!b.expiration) return -1;
@@ -102,6 +112,14 @@ export default function InventoryScreen() {
                   <Text style={styles.expiringBadgeText}>EXPIRING SOON</Text>
                 </View>
               )}
+              {!isUsableCondition(item.condition) && (
+                <View style={styles.damagedBadge}>
+                  <MaterialCommunityIcons name="close-octagon-outline" size={12} color={COLORS.textOnPrimary} />
+                  <Text style={styles.expiringBadgeText}>
+                    {CONDITION_LABELS[item.condition || 'ok'].toUpperCase()}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
 
@@ -132,7 +150,9 @@ export default function InventoryScreen() {
           <Text style={styles.expirationText}>
             {item.expiration ? `Exp: ${item.expiration}` : 'No exp date recorded'}
           </Text>
-          <Text style={styles.sourceText}>Source: {item.source}</Text>
+          <Text style={styles.sourceText}>
+            {item.date_added ? `On shelf ${daysOnShelf(item.date_added)}d` : `Source: ${item.source}`}
+          </Text>
         </View>
       </TouchableOpacity>
     );
@@ -168,6 +188,8 @@ export default function InventoryScreen() {
 
       {/* Category Pills */}
       <FlatList
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         horizontal
         data={categories}
         keyExtractor={item => item.id}
@@ -195,6 +217,10 @@ export default function InventoryScreen() {
             <Text style={[styles.sortLink, sortBy === 'expiration' && styles.sortLinkActive]}>Expiration</Text>
           </TouchableOpacity>
           <Text style={styles.sortDivider}>|</Text>
+          <TouchableOpacity onPress={() => setSortBy('oldest')}>
+            <Text style={[styles.sortLink, sortBy === 'oldest' && styles.sortLinkActive]}>Oldest (FIFO)</Text>
+          </TouchableOpacity>
+          <Text style={styles.sortDivider}>·</Text>
           <TouchableOpacity onPress={() => setSortBy('count')}>
             <Text style={[styles.sortLink, sortBy === 'count' && styles.sortLinkActive]}>Count</Text>
           </TouchableOpacity>
@@ -207,6 +233,8 @@ export default function InventoryScreen() {
 
       {/* Inventory Items List */}
       <FlatList
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         data={filteredItems}
         keyExtractor={item => item.id}
         renderItem={renderItemRow}
@@ -222,6 +250,12 @@ export default function InventoryScreen() {
 
       {/* Manual Add Modal */}
       <Modal visible={modalVisible} animationType="slide" transparent>
+        {/* The manual-add fields sit low on the sheet; without this the keyboard
+            covers them and there is no way to scroll them into view. */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        >
         <View style={styles.modalOverlay}>
           <View style={styles.modalCard}>
             <View style={styles.modalHeader}>
@@ -282,6 +316,7 @@ export default function InventoryScreen() {
             </TouchableOpacity>
           </View>
         </View>
+        </KeyboardAvoidingView>
       </Modal>
     </View>
   );
@@ -421,6 +456,15 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '700',
     color: COLORS.textOnPrimary,
+  },
+  damagedBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    backgroundColor: COLORS.statusCritical,
+    paddingHorizontal: SPACING.xs,
+    paddingVertical: 2,
+    borderRadius: RADII.sm,
   },
   expiringBadge: {
     backgroundColor: COLORS.statusWarning,

@@ -1,31 +1,38 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter, Link } from 'expo-router';
+import { Link } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  ScrollView,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View,
-  ActivityIndicator,
-  Alert
-} from 'react-native';
-import { COLORS, RADII, SPACING } from '../constants/theme';
-import { supabase } from '../lib/supabase';
+import { ActivityIndicator, Alert, Text, TextInput, TouchableOpacity } from 'react-native';
+import { AuthLayout, authStyles as s } from '../components/auth-layout';
+import { COLORS } from '../constants/theme';
 import { OAuthCancelled, signInWithGoogle } from '../lib/auth';
+import { supabase } from '../lib/supabase';
 
 export default function SignUpScreen() {
-  const router = useRouter();
-
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
-  // With Google there is no separate "sign up" — the first sign-in creates the
-  // account, so this is the same call as on the sign-in screen.
-  const handleGoogleSignIn = async () => {
+  const handleSignUp = async () => {
+    if (!email || !password) {
+      Alert.alert('Error', 'Please enter both email and password.');
+      return;
+    }
+
+    setLoading(true);
+    const { error } = await supabase.auth.signUp({ email, password });
+    setLoading(false);
+
+    if (error) {
+      Alert.alert('Sign Up Failed', error.message);
+    } else {
+      Alert.alert('Success', 'Account created! Check your email to verify if required, or log in.');
+    }
+  };
+
+  // With Google there is no separate sign-up — the first login creates the
+  // account, so this is the same call as on the login screen.
+  const handleGoogle = async () => {
     setGoogleLoading(true);
     try {
       await signInWithGoogle();
@@ -38,111 +45,66 @@ export default function SignUpScreen() {
     }
   };
 
-  const handleSignUp = async () => {
-    if (!email || !password) {
-      Alert.alert('Error', 'Please enter both email and password.');
-      return;
-    }
-
-    setLoading(true);
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-    });
-    setLoading(false);
-    
-    if (error) {
-      Alert.alert('Sign Up Failed', error.message);
-    } else {
-      Alert.alert('Success', 'Account created! Check your email to verify if required, or sign in.');
-    }
-  };
-
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.brandBox}>
-        <Text style={styles.brandTitle}>Join PantryLens</Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Create Account</Text>
-
-        <TouchableOpacity
-          style={styles.googleBtn}
-          onPress={handleGoogleSignIn}
-          disabled={googleLoading || loading}
-        >
-          {googleLoading ? (
-            <ActivityIndicator color={COLORS.textPrimary} />
-          ) : (
-            <>
-              <MaterialCommunityIcons name="google" size={20} color={COLORS.textPrimary} />
-              <Text style={styles.googleBtnText}>Continue with Google</Text>
-            </>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.dividerBox}>
-          <View style={styles.divider} />
-          <Text style={styles.dividerText}>or</Text>
-          <View style={styles.divider} />
-        </View>
-
-        <Text style={styles.label}>Email Address</Text>
-        <TextInput
-          style={styles.input}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-
-        <Text style={styles.label}>Password</Text>
-        <TextInput
-          style={styles.input}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-
-        <TouchableOpacity style={styles.signInBtn} onPress={handleSignUp} disabled={loading}>
-          {loading ? (
-            <ActivityIndicator color={COLORS.textOnPrimary} />
-          ) : (
-            <Text style={styles.signInBtnText}>Create Account</Text>
-          )}
-        </TouchableOpacity>
-
-        <View style={styles.footer}>
-          <Text style={styles.footerText}>Already have an account?</Text>
-          <Link href="/sign-in" asChild>
+    <AuthLayout
+      title="PantryLens"
+      subtitle="AI Donation Intake & Box Allocation Engine"
+      cardTitle="Create Account"
+      cardSubtitle="Start tracking your pantry in minutes."
+      onGooglePress={handleGoogle}
+      googleLoading={googleLoading}
+      disabled={loading}
+      footer={
+        <>
+          <Text style={s.footerText}>Already have an account?</Text>
+          <Link href="/login" asChild>
             <TouchableOpacity>
-              <Text style={styles.footerLink}> Sign In</Text>
+              <Text style={s.footerLink}> Log In</Text>
             </TouchableOpacity>
           </Link>
-        </View>
-      </View>
-    </ScrollView>
+        </>
+      }
+    >
+      <Text style={s.label}>Email Address</Text>
+      <TextInput
+        style={s.input}
+        value={email}
+        onChangeText={setEmail}
+        autoCapitalize="none"
+        autoComplete="email"
+        keyboardType="email-address"
+        returnKeyType="next"
+        placeholder="volunteer@pantry.org"
+        placeholderTextColor={COLORS.textSecondary}
+      />
+
+      <Text style={s.label}>Password</Text>
+      <TextInput
+        style={s.input}
+        secureTextEntry
+        value={password}
+        onChangeText={setPassword}
+        autoComplete="new-password"
+        returnKeyType="go"
+        onSubmitEditing={handleSignUp}
+        placeholder="At least 6 characters"
+        placeholderTextColor={COLORS.textSecondary}
+      />
+
+      <TouchableOpacity
+        style={s.primaryBtn}
+        onPress={handleSignUp}
+        disabled={loading || googleLoading}
+      >
+        {loading ? (
+          <ActivityIndicator color={COLORS.textOnPrimary} />
+        ) : (
+          <>
+            <Text style={s.primaryBtnText}>Create Account</Text>
+            <MaterialCommunityIcons name="arrow-right" size={20} color={COLORS.textOnPrimary} />
+          </>
+        )}
+      </TouchableOpacity>
+    </AuthLayout>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: SPACING.lg, justifyContent: 'center', minHeight: '100%' },
-  brandBox: { alignItems: 'center', marginBottom: SPACING.xl },
-  brandTitle: { fontSize: 28, fontWeight: '700', color: COLORS.textPrimary },
-  card: { backgroundColor: COLORS.cardSurface, borderRadius: RADII.lg, borderWidth: 1, borderColor: COLORS.borderSoft, padding: SPACING.lg },
-  cardTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginBottom: SPACING.md },
-  googleBtn: { backgroundColor: COLORS.background, borderWidth: 1, borderColor: COLORS.borderSoft, borderRadius: RADII.md, padding: SPACING.md, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', minHeight: SPACING.touch },
-  googleBtnText: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary, marginLeft: SPACING.sm },
-  dividerBox: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACING.lg },
-  divider: { flex: 1, height: 1, backgroundColor: COLORS.borderSoft },
-  dividerText: { marginHorizontal: SPACING.md, color: COLORS.textSecondary, fontSize: 14 },
-  label: { fontSize: 13, fontWeight: '600', color: COLORS.textPrimary, marginTop: SPACING.sm, marginBottom: 4 },
-  input: { backgroundColor: COLORS.background, borderRadius: RADII.md, borderWidth: 1, borderColor: COLORS.borderSoft, paddingHorizontal: SPACING.sm, height: 48, fontSize: 15, color: COLORS.textPrimary },
-  signInBtn: { backgroundColor: COLORS.primaryLight, borderRadius: RADII.md, padding: SPACING.md, flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: SPACING.lg, minHeight: SPACING.touch },
-  signInBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.textOnPrimary },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING.lg },
-  footerText: { color: COLORS.textSecondary, fontSize: 14 },
-  footerLink: { color: COLORS.primaryLight, fontSize: 14, fontWeight: '600' }
-});

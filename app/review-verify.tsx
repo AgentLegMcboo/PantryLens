@@ -3,7 +3,6 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   Alert,
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -11,8 +10,11 @@ import {
   View
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
+import { KeyboardScreen } from '../components/keyboard-screen';
 import { lookupBarcode } from '../lib/ai_vision';
-import { InventoryItem, usePantryStore } from '../lib/store';
+import { Condition, CONDITION_LABELS, InventoryItem, isUsableCondition, usePantryStore } from '../lib/store';
+import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
+import { PressableScale } from '../components/motion';
 
 export default function ReviewVerifyScreen() {
   const router = useRouter();
@@ -29,8 +31,12 @@ export default function ReviewVerifyScreen() {
         ]
   );
 
-  // Move low-confidence (<0.70) items to top for priority review
-  const sortedDraft = [...draftItems].sort((a, b) => (a.confidence || 1) - (b.confidence || 1));
+  // Low-confidence (<0.70) items float to the top for priority review.
+  // The original index travels with each row: sorting reorders the list, so
+  // editing by the sorted position would write to a different item entirely.
+  const sortedDraft = draftItems
+    .map((item, realIndex) => ({ item, realIndex }))
+    .sort((a, b) => (a.item.confidence || 1) - (b.item.confidence || 1));
 
   const updateItemAtIndex = (index: number, updates: Partial<InventoryItem>) => {
     const next = [...draftItems];
@@ -56,13 +62,14 @@ export default function ReviewVerifyScreen() {
 
   const handleSaveToInventory = () => {
     addItems(draftItems, 'donation');
+    cueSuccess();
     Alert.alert('Success!', 'All verified donation items have been written to inventory database.', [
       { text: 'View Inventory', onPress: () => router.replace('/(tabs)/inventory') }
     ]);
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.banner}>
         <MaterialCommunityIcons name="shield-check-outline" size={24} color={COLORS.primaryLight} />
         <View style={{ marginLeft: SPACING.xs, flex: 1 }}>
@@ -73,7 +80,7 @@ export default function ReviewVerifyScreen() {
         </View>
       </View>
 
-      {sortedDraft.map((item, idx) => {
+      {sortedDraft.map(({ item, realIndex: idx }) => {
         const isLowConf = (item.confidence || 1) < 0.70;
 
         return (
@@ -124,6 +131,47 @@ export default function ReviewVerifyScreen() {
               ))}
             </View>
 
+            {/* Inspection — replaces checking each can by hand for rust,
+                dents and broken seals. Anything not "Good" is held out of box
+                building until someone clears it. */}
+            <Text style={styles.inputLabel}>Condition</Text>
+            <View style={styles.catRow}>
+              {(Object.keys(CONDITION_LABELS) as Condition[]).map(cond => {
+                const active = (item.condition || 'ok') === cond;
+                const good = cond === 'ok';
+                return (
+                  <TouchableOpacity
+                    key={cond}
+                    style={[
+                      styles.catChip,
+                      active && {
+                        backgroundColor: good ? COLORS.statusGood : COLORS.statusCritical,
+                        borderColor: good ? COLORS.statusGood : COLORS.statusCritical
+                      }
+                    ]}
+                    onPress={() => {
+                      // A damage flag is a decision worth feeling, not a silent toggle.
+                      if (cond === 'ok') cueTap();
+                      else cueWarn();
+                      updateItemAtIndex(idx, { condition: cond });
+                    }}
+                  >
+                    <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
+                      {CONDITION_LABELS[cond]}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </View>
+            {!isUsableCondition(item.condition) && (
+              <View style={styles.damageNote}>
+                <MaterialCommunityIcons name="alert-outline" size={14} color={COLORS.statusCritical} />
+                <Text style={styles.damageNoteText}>
+                  Held back from boxes until inspected again.
+                </Text>
+              </View>
+            )}
+
             {/* Count & Expiration */}
             <View style={styles.bottomRow}>
               <View style={{ flex: 1, marginRight: 8 }}>
@@ -173,7 +221,7 @@ export default function ReviewVerifyScreen() {
         <MaterialCommunityIcons name="database-check" size={22} color={COLORS.textOnPrimary} />
         <Text style={styles.commitBtnText}>Add All Verified Items to Inventory</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 
@@ -299,6 +347,8 @@ const styles = StyleSheet.create({
     color: COLORS.textOnPrimary,
     fontWeight: '700',
   },
+  damageNote: { flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 6 },
+  damageNoteText: { fontSize: 12, color: COLORS.statusCritical, fontWeight: '600' },
   bottomRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',

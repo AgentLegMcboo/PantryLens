@@ -2,7 +2,6 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
-  ScrollView,
   StyleSheet,
   Text,
   TextInput,
@@ -12,6 +11,7 @@ import {
   Alert
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
+import { KeyboardScreen } from '../components/keyboard-screen';
 import { supabase } from '../lib/supabase';
 import { usePantryStore } from '../lib/store';
 
@@ -104,7 +104,7 @@ export default function PantrySelectionScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
       <View style={styles.header}>
         <Text style={styles.title}>Welcome!</Text>
         <Text style={styles.subtitle}>You need to join or create a pantry to continue.</Text>
@@ -144,7 +144,7 @@ export default function PantrySelectionScreen() {
       <TouchableOpacity style={styles.signOutBtn} onPress={signOut}>
         <Text style={styles.signOutText}>Sign Out</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </KeyboardScreen>
   );
 }
 

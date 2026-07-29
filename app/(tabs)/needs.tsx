@@ -14,8 +14,8 @@ import { computeAllocation } from '../../lib/allocation';
 import { usePantryStore } from '../../lib/store';
 
 export default function NeedsScreen() {
-  const { inventory, boxRules, thresholds, settings } = usePantryStore();
-  const plan = computeAllocation(inventory, boxRules, 12, settings.defaultFamilySize);
+  const { inventory, bulkLots, boxRules, thresholds, settings } = usePantryStore();
+  const plan = computeAllocation(inventory, boxRules, 12, settings.defaultFamilySize, bulkLots);
 
   const [copied, setCopied] = useState(false);
 
