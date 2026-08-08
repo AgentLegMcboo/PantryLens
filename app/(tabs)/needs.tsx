@@ -1,8 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
+// react-native's own Clipboard is deprecated and warns on every use; this is the
+// maintained module and it ships inside Expo Go.
+import * as Clipboard from 'expo-clipboard';
 import {
   Alert,
-  Clipboard,
   ScrollView,
   StyleSheet,
   Text,
@@ -55,8 +57,8 @@ ${categoryDeficits.map(item => `• ${item.category.toUpperCase()} ITEMS (Need a
 Drop-off Location: Pantry Rear Entrance (Mon-Fri 9am-4pm)
 Thank you for helping feed our local community! ❤️`;
 
-  const handleCopy = () => {
-    Clipboard.setString(formattedFlyerText);
+  const handleCopy = async () => {
+    await Clipboard.setStringAsync(formattedFlyerText);
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
     Alert.alert('Copied to Clipboard!', 'Donation request flyer text is ready to paste into emails or social media.');

@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import { log } from './log';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 
@@ -31,6 +32,13 @@ export const SOURCE_ORG_LABELS: Record<SourceOrg, string> = {
 };
 
 export const isUsableCondition = (c: Condition | undefined) => (c ?? 'ok') === 'ok';
+
+/** A photo held only for the length of a review, never persisted. */
+export interface ScanPhoto {
+  uri: string;
+  width: number;
+  height: number;
+}
 
 export interface InventoryItem {
   id: string;
@@ -116,6 +124,56 @@ export interface Activity {
 const DEFAULT_BOX_RULES: BoxRules = { grain: 2, vegetable: 2, protein: 2, breakfast: 1, snack: 1, hygiene: 1, baby: 0 };
 const DEFAULT_THRESHOLDS: CategoryThresholds = { grain: 15, vegetable: 15, protein: 15, breakfast: 10, snack: 10, hygiene: 8, baby: 5 };
 
+/**
+ * Live subscription to the pantry's tables.
+ *
+ * Held at module scope because `fetchData` both creates the subscription and is
+ * what the subscription calls. Re-subscribing from inside the callback stacked a
+ * new channel on every single row change — each one then firing its own refetch,
+ * which subscribed again. Tearing the old one down first makes re-entry safe,
+ * and gives sign-out something to close.
+ */
+let pantryChannel: ReturnType<typeof supabase.channel> | null = null;
+let subscribedPantryId: string | null = null;
+
+function subscribeToPantry(pantryId: string, onChange: () => void) {
+  // Already listening to this pantry — the callback would only duplicate work.
+  if (subscribedPantryId === pantryId && pantryChannel) return;
+
+  unsubscribeFromPantry();
+  subscribedPantryId = pantryId;
+
+  const filter = `pantry_id=eq.${pantryId}`;
+  pantryChannel = supabase
+    .channel(`pantry:${pantryId}`)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory', filter }, onChange)
+    // Bulk lots and activities move stock and the dashboard too, and were never
+    // watched — a lot logged on one phone stayed invisible on another.
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'bulk_lots', filter }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'activities', filter }, onChange)
+    .subscribe();
+}
+
+function unsubscribeFromPantry() {
+  if (pantryChannel) supabase.removeChannel(pantryChannel);
+  pantryChannel = null;
+  subscribedPantryId = null;
+}
+
+/**
+ * Coalesces a burst of row changes into one refetch. Saving a donation inserts
+ * a dozen rows at once, and without this each one pulled the whole pantry down
+ * again — twelve round trips to land the same state.
+ */
+let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+function scheduleRefetch(run: () => void) {
+  if (refetchTimer) clearTimeout(refetchTimer);
+  refetchTimer = setTimeout(() => {
+    refetchTimer = null;
+    run();
+  }, 300);
+}
+
 /** Whether the intro has been completed. Persisted so it only ever shows once. */
 export const ONBOARDING_KEY = 'pantrylens.onboarded';
 
@@ -132,6 +190,8 @@ interface AppState {
   activities: Activity[];
   isLoaded: boolean;
   currentDraft: InventoryItem[];
+  /** The photos the current draft was read from, so review can point at them. */
+  currentScanPhotos: ScanPhoto[];
 
   // Actions
   initialize: () => Promise<void>;
@@ -150,11 +210,11 @@ interface AppState {
   getItem: (id: string) => InventoryItem | undefined;
   deductItems: (itemsToDeduct: { id: string; count: number }[]) => Promise<void>;
   
-  updateSettings: (updates: Partial<Settings>) => void;
+  updateSettings: (updates: Partial<Settings>) => Promise<void>;
   updateBoxRules: (updates: Partial<BoxRules>) => Promise<void>;
   updateThresholds: (updates: Partial<CategoryThresholds>) => Promise<void>;
   
-  setDraft: (items: InventoryItem[]) => void;
+  setDraft: (items: InventoryItem[], photos?: ScanPhoto[]) => void;
   addActivity: (text: string, icon?: string) => Promise<void>;
 }
 
@@ -176,6 +236,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
   activities: [],
   isLoaded: false,
   currentDraft: [],
+  currentScanPhotos: [],
 
   initialize: async () => {
     if (__DEV__) {
@@ -204,8 +265,10 @@ export const usePantryStore = create<AppState>((set, get) => ({
         get().fetchData();
       } else {
         // Clear state on sign out
+        unsubscribeFromPantry();
         set({
           inventory: [],
+          bulkLots: [],
           activities: [],
           settings: { ...get().settings, pantryId: null, pantryName: '' },
           isLoaded: true,
@@ -225,18 +288,34 @@ export const usePantryStore = create<AppState>((set, get) => ({
       // 1. Get user's pantry
       const { data: members } = await supabase
         .from('pantry_members')
-        .select('pantry_id, role, pantries(name, box_rules, thresholds, lbs_per_unit)')
+        .select('pantry_id, role, pantries(name, box_rules, thresholds, lbs_per_unit, settings)')
         .eq('user_id', session.user.id)
         .limit(1)
         .single();
+
+      if (!members?.pantries) {
+        log.warn('store', 'signed in but not a member of any pantry');
+      }
 
       if (members && members.pantries) {
         const pantryId = members.pantry_id;
         const pantries = members.pantries as any;
         const pantry = Array.isArray(pantries) ? pantries[0] : pantries;
 
+        // Stored per pantry so every volunteer sees the same windows, and so the
+        // numbers survive a relaunch. Merged over defaults, which means a pantry
+        // row written before this column existed still reads sensibly.
+        const stored = (pantry.settings || {}) as Record<string, number>;
+
         set(state => ({
-          settings: { ...state.settings, pantryId, pantryName: pantry.name, userRole: members.role },
+          settings: {
+            ...state.settings,
+            pantryId,
+            pantryName: pantry.name,
+            userRole: members.role,
+            expirationWarningDays: stored.expiration_warning_days ?? 30,
+            defaultFamilySize: stored.default_family_size ?? 4,
+          },
           boxRules: (pantry.box_rules as BoxRules) || DEFAULT_BOX_RULES,
           thresholds: (pantry.thresholds as CategoryThresholds) || DEFAULT_THRESHOLDS,
           // Merged so a category missing from the stored JSON still has a value.
@@ -265,6 +344,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
           .order('created_at', { ascending: false })
           .limit(20);
 
+        log.debug(
+          'store',
+          `loaded "${pantry.name}": ${invData?.length ?? 0} items, ` +
+            `${lotData?.length ?? 0} bulk lots, ${actData?.length ?? 0} activities`,
+        );
+
         set({
           inventory: (invData as InventoryItem[]) || [],
           bulkLots: (lotData as BulkLot[]) || [],
@@ -272,24 +357,22 @@ export const usePantryStore = create<AppState>((set, get) => ({
           isLoaded: true
         });
 
-        // 4. Setup Realtime Subscriptions
-        supabase.channel('public:inventory')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'inventory', filter: `pantry_id=eq.${pantryId}` }, payload => {
-            get().fetchData(); // Simplest sync for now
-          })
-          .subscribe();
+        subscribeToPantry(pantryId, () => scheduleRefetch(() => get().fetchData()));
 
       } else {
         // User has no pantry yet
         set({ isLoaded: true });
       }
     } catch (err) {
-      console.error('Error fetching data:', err);
+      log.error('store', 'fetchData failed', err);
       set({ isLoaded: true });
     }
   },
 
   signOut: async () => {
+    // Closed before the session goes, or the socket keeps trying to reconnect
+    // with credentials that no longer exist.
+    unsubscribeFromPantry();
     await supabase.auth.signOut();
   },
 
@@ -336,7 +419,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
   addItems: async (items: Partial<InventoryItem>[], source = 'donation') => {
     const { settings } = get();
-    if (!settings.pantryId) return;
+    if (!settings.pantryId) {
+      // Silently dropping the write here is how a volunteer ends up believing
+      // stock was recorded when no pantry was ever loaded.
+      log.error('store', 'addItems called with no active pantry — nothing was saved');
+      throw new Error('No pantry is loaded yet. Reopen the app and try again.');
+    }
 
     const newItems = items.map(item => ({
       pantry_id: settings.pantryId,
@@ -346,12 +434,31 @@ export const usePantryStore = create<AppState>((set, get) => ({
       expiration: item.expiration || null,
       date_added: new Date().toISOString().split('T')[0],
       source: source,
-      confidence: item.confidence || 1.0
+      confidence: item.confidence || 1.0,
+      // The inspection result and donor have to travel with the row. Leaving
+      // them out silently defaulted every item to 'ok', so a can a volunteer had
+      // just flagged as dented went straight back into box building.
+      condition: item.condition || 'ok',
+      source_org: item.source_org ?? null,
+      source_name: item.source_name ?? null,
     }));
 
-    await supabase.from('inventory').insert(newItems);
-    await get().addActivity(`Added ${newItems.length} verified item(s) via ${source}`, 'plus-circle-outline');
-    // Realtime subscription will fetch latest
+    log.debug('store', `inserting ${newItems.length} item(s) into pantry ${settings.pantryId}`, newItems);
+    const { error } = await supabase.from('inventory').insert(newItems);
+    if (error) {
+      log.error('store', 'inventory insert rejected', error);
+      throw error;
+    }
+    log.debug('store', `inserted ${newItems.length} item(s)`);
+
+    const flagged = newItems.filter(i => i.condition !== 'ok').length;
+    await get().addActivity(
+      flagged > 0
+        ? `Added ${newItems.length} item(s) via ${source} — ${flagged} held back for inspection`
+        : `Added ${newItems.length} verified item(s) via ${source}`,
+      'plus-circle-outline'
+    );
+    await get().fetchData();
   },
 
   updateItem: async (id: string, updates: Partial<InventoryItem>) => {
@@ -370,11 +477,24 @@ export const usePantryStore = create<AppState>((set, get) => ({
     return get().inventory.find(i => i.id === id);
   },
 
+  /**
+   * Draws packed stock back out.
+   *
+   * An allocation row is either a real inventory item or a synthetic unit from a
+   * weighed bulk lot, and the two live in different tables. Matching only against
+   * `inventory` meant every id that belonged to a lot fell through silently — you
+   * could pack twenty boxes out of a 60 lb protein drop and the lot never moved.
+   *
+   * Still client-side arithmetic rather than an atomic RPC: two volunteers
+   * packing at the same moment can both read the same starting count. That is a
+   * real limit, written down here rather than pretended away.
+   */
   deductItems: async (itemsToDeduct: { id: string; count: number }[]) => {
-    // Note: A real implementation would use a Postgres function (RPC) to atomically decrement
-    // For now, we calculate client side and update.
-    const { inventory } = get();
+    const { inventory, bulkLots } = get();
+
     for (const deduct of itemsToDeduct) {
+      if (deduct.count <= 0) continue;
+
       const item = inventory.find(i => i.id === deduct.id);
       if (item) {
         const newCount = Math.max(0, item.count - deduct.count);
@@ -383,14 +503,62 @@ export const usePantryStore = create<AppState>((set, get) => ({
         } else {
           await supabase.from('inventory').update({ count: newCount }).eq('id', deduct.id);
         }
+        continue;
+      }
+
+      // A weighed lot. Units are the estimate; weight is the recorded truth, so
+      // both come down together and stay consistent with each other.
+      const lot = bulkLots.find(l => l.id === deduct.id);
+      if (lot) {
+        const newUnits = Math.max(0, lot.est_units - deduct.count);
+        const perUnit = lot.est_units > 0 ? lot.weight_lbs / lot.est_units : 0;
+        const newWeight = Math.max(0, Number((newUnits * perUnit).toFixed(2)));
+
+        if (newUnits === 0) {
+          await supabase.from('bulk_lots').delete().eq('id', deduct.id);
+        } else {
+          await supabase
+            .from('bulk_lots')
+            .update({ est_units: newUnits, weight_lbs: newWeight })
+            .eq('id', deduct.id);
+        }
       }
     }
+
     await get().addActivity(`Packed boxes: deducted items from stock`, 'archive-outline');
-    get().fetchData();
+    await get().fetchData();
   },
 
-  updateSettings: (updates: Partial<Settings>) => {
-    set(state => ({ settings: { ...state.settings, ...updates } }));
+  /**
+   * Writes through to the pantry row. This used to set local state only, so the
+   * Settings screen reported "Saved!" over a change that never left the phone
+   * and vanished on the next launch.
+   *
+   * State moves first so the control responds immediately; a failed write throws
+   * for the caller to surface rather than leaving the UI quietly lying.
+   */
+  updateSettings: async (updates: Partial<Settings>) => {
+    const previous = get().settings;
+    const next = { ...previous, ...updates };
+    set({ settings: next });
+
+    if (!next.pantryId) return;
+
+    const patch: Record<string, unknown> = {};
+    if (updates.pantryName !== undefined) patch.name = updates.pantryName.trim();
+    if (updates.expirationWarningDays !== undefined || updates.defaultFamilySize !== undefined) {
+      patch.settings = {
+        expiration_warning_days: next.expirationWarningDays,
+        default_family_size: next.defaultFamilySize,
+      };
+    }
+    if (Object.keys(patch).length === 0) return;
+
+    const { error } = await supabase.from('pantries').update(patch).eq('id', next.pantryId);
+    if (error) {
+      set({ settings: previous }); // don't leave the screen showing a value the server rejected
+      throw error;
+    }
   },
 
   updateBoxRules: async (updates: Partial<BoxRules>) => {
@@ -409,8 +577,8 @@ export const usePantryStore = create<AppState>((set, get) => ({
     await supabase.from('pantries').update({ thresholds: newThresholds }).eq('id', settings.pantryId);
   },
 
-  setDraft: (items: InventoryItem[]) => {
-    set({ currentDraft: items });
+  setDraft: (items: InventoryItem[], photos: ScanPhoto[] = []) => {
+    set({ currentDraft: items, currentScanPhotos: photos });
   },
 
   addActivity: async (text: string, icon = 'information-outline') => {

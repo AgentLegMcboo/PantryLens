@@ -7,16 +7,26 @@
     "userInterfaceStyle": "light",
     "scheme": "pantrylens",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "org.pantrylens.app"
     },
-    "android": {},
+    "android": {
+      "package": "org.pantrylens.app"
+    },
     "web": {
       "bundler": "metro"
     },
     "plugins": [
       "expo-router",
       "expo-audio",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "PantryLens uses your photos to read donation labels and count items.",
+          "cameraPermission": "PantryLens uses the camera to photograph donations and read their labels."
+        }
+      ]
     ]
   }
 }

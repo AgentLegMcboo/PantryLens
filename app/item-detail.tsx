@@ -11,7 +11,8 @@ import {
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
-import { usePantryStore } from '../lib/store';
+import { cueTap, cueWarn } from '../lib/feedback';
+import { Condition, CONDITION_LABELS, isUsableCondition, usePantryStore } from '../lib/store';
 
 export default function ItemDetailScreen() {
   const router = useRouter();
@@ -19,6 +20,16 @@ export default function ItemDetailScreen() {
   const { getItem, updateItem, deleteItem } = usePantryStore();
 
   const item = getItem(id as string);
+
+  // Every hook runs before the not-found branch, without exception. These used
+  // to sit below an early return, so the moment the item left the store — a
+  // delete, or a realtime refetch landing while this screen was open — React
+  // saw fewer hooks than the previous render and tore the app down.
+  const [name, setName] = useState(item?.name ?? '');
+  const [category, setCategory] = useState(item?.category ?? 'unknown');
+  const [count, setCount] = useState(item?.count ?? 1);
+  const [expiration, setExpiration] = useState(item?.expiration || '');
+  const [condition, setCondition] = useState<Condition>(item?.condition ?? 'ok');
 
   if (!item) {
     return (
@@ -31,17 +42,13 @@ export default function ItemDetailScreen() {
     );
   }
 
-  const [name, setName] = useState(item.name);
-  const [category, setCategory] = useState(item.category);
-  const [count, setCount] = useState(item.count);
-  const [expiration, setExpiration] = useState(item.expiration || '');
-
   const handleSave = () => {
     updateItem(item.id, {
       name: name.trim(),
       category: category as any,
       count,
-      expiration: expiration.trim() || null
+      expiration: expiration.trim() || null,
+      condition
     });
     Alert.alert('Saved!', 'Item updated successfully.');
     router.back();
@@ -110,6 +117,44 @@ export default function ItemDetailScreen() {
           value={expiration}
           onChangeText={setExpiration}
         />
+
+        {/* The only place a flagged item can be cleared. Intake can mark a can
+            dented, which holds it out of every box — without this the item was
+            stuck that way for good, and the shelf slowly filled with stock the
+            allocator refused to touch. */}
+        <Text style={styles.label}>Condition</Text>
+        <View style={styles.catGrid}>
+          {(Object.keys(CONDITION_LABELS) as Condition[]).map(cond => {
+            const active = condition === cond;
+            const good = cond === 'ok';
+            return (
+              <TouchableOpacity
+                key={cond}
+                style={[
+                  styles.catChip,
+                  active && {
+                    backgroundColor: good ? COLORS.statusGood : COLORS.statusCritical,
+                    borderColor: good ? COLORS.statusGood : COLORS.statusCritical
+                  }
+                ]}
+                onPress={() => {
+                  if (cond === 'ok') cueTap();
+                  else cueWarn();
+                  setCondition(cond);
+                }}
+              >
+                <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
+                  {CONDITION_LABELS[cond]}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+        {!isUsableCondition(condition) && (
+          <Text style={styles.conditionNote}>
+            Held out of box building until someone marks it Good again.
+          </Text>
+        )}
 
         <View style={styles.metaRow}>
           <Text style={styles.metaText}>Added: {item.date_added}</Text>
@@ -209,6 +254,12 @@ const styles = StyleSheet.create({
     color: COLORS.textPrimary,
     flex: 1,
     textAlign: 'center',
+  },
+  conditionNote: {
+    fontSize: 12,
+    lineHeight: 17,
+    color: COLORS.statusCritical,
+    marginTop: SPACING.xs,
   },
   metaRow: {
     flexDirection: 'row',

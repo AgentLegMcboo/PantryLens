@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
@@ -23,13 +24,54 @@ export default function SettingsScreen() {
   const [haptics, setHaptics] = useState(initialPrefs.hapticsEnabled);
   const [sound, setSound] = useState(initialPrefs.soundEnabled);
 
-  const { settings, boxRules, thresholds, updateSettings, updateBoxRules, updateThresholds } = usePantryStore();
+  const { settings, boxRules, thresholds, updateSettings, updateBoxRules, updateThresholds, signOut } =
+    usePantryStore();
 
   const [pantryName, setPantryName] = useState(settings.pantryName);
+  const [savingName, setSavingName] = useState(false);
 
-  const handleSavePantryName = () => {
-    updateSettings({ pantryName });
-    Alert.alert('Saved!', 'Pantry name updated successfully.');
+  // The field is seeded from the store, which is empty until the pantry loads.
+  useEffect(() => {
+    setPantryName(settings.pantryName);
+  }, [settings.pantryName]);
+
+  const handleSavePantryName = async () => {
+    const trimmed = pantryName.trim();
+    if (!trimmed) {
+      Alert.alert('Name required', 'A pantry needs a name your volunteers will recognise.');
+      return;
+    }
+
+    setSavingName(true);
+    try {
+      await updateSettings({ pantryName: trimmed });
+      Alert.alert('Saved', 'Everyone in this pantry will see the new name.');
+    } catch (err: any) {
+      // Admin-only under RLS, so a volunteer tapping Save gets told why.
+      Alert.alert(
+        'Could not save',
+        err?.message?.includes('policy')
+          ? 'Only a pantry admin can rename the pantry.'
+          : err?.message ?? 'Please try again.',
+      );
+    } finally {
+      setSavingName(false);
+    }
+  };
+
+  const handleSettingChange = async (updates: Parameters<typeof updateSettings>[0]) => {
+    try {
+      await updateSettings(updates);
+    } catch (err: any) {
+      Alert.alert('Could not save', err?.message ?? 'Please try again.');
+    }
+  };
+
+  const handleSignOut = () => {
+    Alert.alert('Sign out?', 'You will need to sign in again to reach this pantry.', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
+    ]);
   };
 
 
@@ -47,8 +89,16 @@ export default function SettingsScreen() {
             value={pantryName}
             onChangeText={setPantryName}
           />
-          <TouchableOpacity style={styles.saveBtn} onPress={handleSavePantryName}>
-            <Text style={styles.saveBtnText}>Save</Text>
+          <TouchableOpacity
+            style={[styles.saveBtn, savingName && { opacity: 0.6 }]}
+            onPress={handleSavePantryName}
+            disabled={savingName}
+          >
+            {savingName ? (
+              <ActivityIndicator color={COLORS.textOnPrimary} />
+            ) : (
+              <Text style={styles.saveBtnText}>Save</Text>
+            )}
           </TouchableOpacity>
         </View>
       </View>
@@ -151,7 +201,7 @@ export default function SettingsScreen() {
                 styles.dayChip,
                 settings.expirationWarningDays === days && styles.dayChipActive
               ]}
-              onPress={() => updateSettings({ expirationWarningDays: days })}
+              onPress={() => handleSettingChange({ expirationWarningDays: days })}
             >
               <Text style={[
                 styles.dayChipText,
@@ -164,7 +214,45 @@ export default function SettingsScreen() {
         </View>
       </View>
 
+      {/* Default Family Size */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Default Family Size</Text>
+        <Text style={styles.cardSub}>
+          What the dashboard and Build Boxes assume before anyone changes it:
+        </Text>
 
+        <View style={styles.daysSelector}>
+          {[2, 4, 6].map(size => (
+            <TouchableOpacity
+              key={size}
+              style={[styles.dayChip, settings.defaultFamilySize === size && styles.dayChipActive]}
+              onPress={() => handleSettingChange({ defaultFamilySize: size })}
+            >
+              <Text
+                style={[
+                  styles.dayChipText,
+                  settings.defaultFamilySize === size && styles.dayChipTextActive
+                ]}
+              >
+                {size} People
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+      </View>
+
+      {/* Account */}
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Account</Text>
+        <Text style={styles.cardSub}>
+          Signed in to {settings.pantryName || 'this pantry'} as {settings.userRole}.
+        </Text>
+
+        <TouchableOpacity style={styles.resetBtn} onPress={handleSignOut}>
+          <MaterialCommunityIcons name="logout" size={20} color={COLORS.statusCritical} />
+          <Text style={styles.resetBtnText}>Sign Out</Text>
+        </TouchableOpacity>
+      </View>
     </KeyboardScreen>
   );
 }

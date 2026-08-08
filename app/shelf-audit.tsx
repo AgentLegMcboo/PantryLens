@@ -1,8 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import {
+  ActivityIndicator,
   Alert,
+  Image,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,14 +13,21 @@ import {
   View
 } from 'react-native';
 import { COLORS, RADII, SPACING } from '../constants/theme';
+import { processImageScan, ScanError } from '../lib/ai_vision';
+import { cueTap, cueWarn } from '../lib/feedback';
+import { log } from '../lib/log';
+import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { usePantryStore } from '../lib/store';
+
+const SHOT_LABELS = ['Left view', 'Center view', 'Right view'];
+const MAX_SHOTS = 6;
 
 export default function ShelfAuditScreen() {
   const router = useRouter();
-  const { addItems } = usePantryStore();
+  const setDraft = usePantryStore(state => state.setDraft);
 
   const [section, setSection] = useState('Canned Goods (Shelf A)');
-  const [photoStep, setPhotoStep] = useState<number>(3);
+  const [shots, setShots] = useState<PreparedPhoto[]>([]);
   const [isAuditing, setIsAuditing] = useState(false);
 
   const sections = [
@@ -28,23 +38,84 @@ export default function ShelfAuditScreen() {
     'Hygiene & Baby Products'
   ];
 
-  const handleRunAudit = () => {
+  const handleTakePhoto = async () => {
+    if (shots.length >= MAX_SHOTS) return;
+
+    const permission = await ImagePicker.requestCameraPermissionsAsync();
+    if (!permission.granted) {
+      Alert.alert(
+        'Camera access needed',
+        'PantryLens uses the camera to re-count what is on the shelf. Turn it on in Settings › PantryLens.',
+      );
+      return;
+    }
+
+    const result = await ImagePicker.launchCameraAsync({
+      mediaTypes: ['images'],
+      quality: 0.5,
+      base64: true,
+      exif: false,
+    });
+
+    if (result.canceled) {
+      log.debug('scan', 'shelf photo cancelled');
+      return;
+    }
+
+    const prepared = (await Promise.all(result.assets.map(preparePhoto))).filter(
+      (p): p is NonNullable<typeof p> => p !== null,
+    );
+    if (prepared.length === 0) {
+      log.warn('scan', 'no usable shelf photos came back from the picker');
+      return;
+    }
+
+    cueTap();
+    setShots(prev => [...prev, ...prepared].slice(0, MAX_SHOTS));
+  };
+
+  /**
+   * Runs the same analyzer as a donation, then hands the result to the review
+   * screen tagged as an audit.
+   *
+   * This used to insert two hardcoded cans of corn and green beans into whatever
+   * real pantry was signed in, and report it as a completed audit. A demo that
+   * writes fiction into live inventory is worse than one that does nothing.
+   */
+  const handleRunAudit = async () => {
+    if (shots.length === 0) {
+      log.warn('scan', 'audit pressed with no photos attached');
+      cueWarn();
+      Alert.alert('No photos yet', 'Photograph the shelf first, then read the counts.');
+      return;
+    }
+    if (isAuditing) return;
+
+    log.debug('scan', `audit pressed for "${section}" with ${shots.length} photo(s)`);
     setIsAuditing(true);
 
-    setTimeout(() => {
-      setIsAuditing(false);
-      // Simulated corrected items from shelf section photo capture
-      addItems([
-        { name: 'Canned Sweet Corn (15 oz)', category: 'vegetable', count: 18, expiration: '2026-11-10' },
-        { name: 'Canned Green Beans (14.5 oz)', category: 'vegetable', count: 12, expiration: '2026-08-15' }
-      ], 'shelf_audit');
-
-      Alert.alert(
-        'Audit Completed!',
-        `Stock counts for "${section}" have been updated in inventory.`,
-        [{ text: 'View Inventory', onPress: () => router.replace('/(tabs)/inventory') }]
+    try {
+      const candidates = await processImageScan(shots.map(s => s.base64));
+      log.debug('scan', `audit produced ${candidates.length} draft row(s)`);
+      setDraft(
+        candidates as any,
+        shots.map(s => ({ uri: s.uri, width: s.width, height: s.height })),
       );
-    }, 1200);
+      router.push({ pathname: '/review-verify', params: { source: 'shelf_audit' } });
+    } catch (err) {
+      log.error('scan', 'audit scan failed', err);
+      cueWarn();
+      const message =
+        err instanceof ScanError
+          ? err.message
+          : 'Something went wrong reading the shelf. You can still correct counts by hand.';
+      Alert.alert('Could not read the shelf', message, [
+        { text: 'Correct by hand', onPress: () => router.replace('/(tabs)/inventory') },
+        { text: 'Try again', style: 'cancel' },
+      ]);
+    } finally {
+      setIsAuditing(false);
+    }
   };
 
   return (
@@ -53,7 +124,8 @@ export default function ShelfAuditScreen() {
         <MaterialCommunityIcons name="format-list-checks" size={32} color={COLORS.secondary} />
         <Text style={styles.headerTitle}>Shelf Audit Mode</Text>
         <Text style={styles.headerSub}>
-          Donations ADD stock. Shelf Audits CORRECT existing stock to keep your inventory accurate over time.
+          Photograph a shelf to re-count what is actually on it. You'll check every line before it
+          is written, and rows land tagged as an audit so you can tell a re-count from an intake.
         </Text>
       </View>
 
@@ -76,25 +148,64 @@ export default function ShelfAuditScreen() {
         <Text style={styles.guidanceText}>
           Take 3 overlapping photos (Left, Middle, Right) so hidden cans behind front rows aren't missed:
         </Text>
+        {/* The three slots fill as photos are actually taken. They used to show
+            a green tick from the moment the screen opened, before anything had
+            been photographed. */}
         <View style={styles.photoRow}>
-          {['Left View', 'Center View', 'Right View'].map((stepName, i) => (
-            <View key={i} style={styles.photoStepCard}>
-              <MaterialCommunityIcons name="camera-outline" size={24} color={COLORS.primaryLight} />
-              <Text style={styles.photoStepText}>{stepName}</Text>
-              <MaterialCommunityIcons name="check" size={16} color={COLORS.statusGood} />
-            </View>
-          ))}
+          {SHOT_LABELS.map((stepName, i) => {
+            const shot = shots[i];
+            return (
+              <TouchableOpacity
+                key={stepName}
+                style={styles.photoStepCard}
+                onPress={handleTakePhoto}
+                disabled={isAuditing}
+              >
+                {shot ? (
+                  <Image source={{ uri: shot.uri }} style={styles.photoThumb} />
+                ) : (
+                  <MaterialCommunityIcons name="camera-outline" size={24} color={COLORS.primaryLight} />
+                )}
+                <Text style={styles.photoStepText}>{stepName}</Text>
+                <MaterialCommunityIcons
+                  name={shot ? 'check' : 'circle-outline'}
+                  size={16}
+                  color={shot ? COLORS.statusGood : COLORS.borderSoft}
+                />
+              </TouchableOpacity>
+            );
+          })}
         </View>
+
+        <TouchableOpacity
+          style={styles.addShotBtn}
+          onPress={handleTakePhoto}
+          disabled={shots.length >= MAX_SHOTS || isAuditing}
+        >
+          <MaterialCommunityIcons name="camera-plus-outline" size={18} color={COLORS.primaryDark} />
+          <Text style={styles.addShotText}>
+            {shots.length === 0
+              ? 'Take the first photo'
+              : shots.length >= MAX_SHOTS
+                ? `${MAX_SHOTS} photos — that's the limit`
+                : `Add another (${shots.length} taken)`}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
-        style={styles.auditBtn}
+        style={[styles.auditBtn, (shots.length === 0 || isAuditing) && { opacity: 0.45 }]}
         onPress={handleRunAudit}
+        // Dimmed without photos but still pressable, so the tap explains itself.
         disabled={isAuditing}
       >
-        <MaterialCommunityIcons name="check-decagram" size={22} color={COLORS.textOnPrimary} />
+        {isAuditing ? (
+          <ActivityIndicator color={COLORS.textOnPrimary} />
+        ) : (
+          <MaterialCommunityIcons name="check-decagram" size={22} color={COLORS.textOnPrimary} />
+        )}
         <Text style={styles.auditBtnText}>
-          {isAuditing ? 'Processing Audit Photos...' : 'Complete Audit & Sync Stock'}
+          {isAuditing ? 'Reading the shelf…' : 'Read Shelf & Review Counts'}
         </Text>
       </TouchableOpacity>
     </ScrollView>
@@ -186,6 +297,30 @@ const styles = StyleSheet.create({
     padding: 8,
     alignItems: 'center',
     marginHorizontal: 2,
+  },
+  photoThumb: {
+    width: 34,
+    height: 34,
+    borderRadius: RADII.sm,
+    backgroundColor: COLORS.surfaceVariant,
+  },
+  addShotBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: SPACING.xs,
+    backgroundColor: COLORS.surfaceContainer,
+    borderRadius: RADII.md,
+    borderWidth: 1,
+    borderColor: COLORS.borderSoft,
+    paddingVertical: SPACING.sm,
+    marginTop: SPACING.sm,
+    minHeight: 44,
+  },
+  addShotText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: COLORS.primaryDark,
   },
   photoStepText: {
     fontSize: 11,

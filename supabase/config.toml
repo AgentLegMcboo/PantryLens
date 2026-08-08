@@ -437,7 +437,9 @@ enabled = true
 
 [functions.analyze-donation]
 enabled = true
-verify_jwt = false
+# Every call spends Gemini quota, so it is signed-in volunteers only. The app
+# sends the session token automatically via supabase.functions.invoke.
+verify_jwt = true
 import_map = "./functions/analyze-donation/deno.json"
 # Uncomment to specify a custom file path to the entrypoint.
 # Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx

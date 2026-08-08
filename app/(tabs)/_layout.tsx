@@ -2,9 +2,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { COLORS } from '../../constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { usePantryStore } from '../../lib/store';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
+  // Was hardcoded to "Grace Community Pantry", so every pantry in the world was
+  // greeted by name — someone else's.
+  const pantryName = usePantryStore(state => state.settings.pantryName);
 
   return (
     <Tabs
@@ -39,7 +43,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          headerTitle: 'Grace Community Pantry',
+          headerTitle: pantryName || 'PantryLens',
           tabBarIcon: ({ color, size }) => (
             <MaterialCommunityIcons name="home-variant-outline" size={size} color={color} />
           ),

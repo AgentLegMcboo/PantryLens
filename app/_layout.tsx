@@ -1,6 +1,9 @@
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+// Required for react-native-gesture-handler to receive touches at all. Without
+// it the box drag/resize handles in Review & Verify are inert on Android.
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { COLORS } from '../constants/theme';
 import { usePantryStore } from '../lib/store';
 import { loadFeedbackPrefs } from '../lib/feedback';
@@ -88,6 +91,7 @@ export default function RootLayout() {
   }, [isLoaded, session, pantryId, segments, onboarded]);
 
   return (
+    <GestureHandlerRootView style={{ flex: 1 }}>
     <SafeAreaProvider>
       {ready ? (
       <Stack
@@ -106,10 +110,17 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="log-donation" options={{ title: 'Log Donation', presentation: 'modal' }} />
+        {/* Log Donation and Shelf Audit are the first step of a wizard that
+            pushes on to Review & Verify, so they are cards, not modals.
+            Presented as modals they broke the flow outright: on iOS a modal sits
+            above the stack it was pushed from, so the review screen mounted and
+            rendered underneath the camera sheet — the scan appeared to do
+            nothing at all. Anything that pushes onward must stay in the stack. */}
+        <Stack.Screen name="log-donation" options={{ title: 'Log Donation' }} />
+        <Stack.Screen name="review-verify" options={{ title: 'Review & Verify' }} />
+        <Stack.Screen name="shelf-audit" options={{ title: 'Shelf Audit Mode' }} />
+        {/* Self-contained — these only ever go back, so a modal is right. */}
         <Stack.Screen name="bulk-intake" options={{ title: 'Bulk Donation', presentation: 'modal' }} />
-        <Stack.Screen name="review-verify" options={{ title: 'Review & Verify', presentation: 'card' }} />
-        <Stack.Screen name="shelf-audit" options={{ title: 'Shelf Audit Mode', presentation: 'modal' }} />
         <Stack.Screen name="item-detail" options={{ title: 'Item Details', presentation: 'modal' }} />
         <Stack.Screen name="packing-checklist" options={{ title: 'Packing Checklist', presentation: 'card' }} />
         <Stack.Screen name="expiring-soon" options={{ title: 'Expiring Soon', presentation: 'card' }} />
@@ -126,5 +137,6 @@ export default function RootLayout() {
       <GrainOverlay opacity={0.45} />
       {!splashDone && <BrandSplash hold={!ready} onDone={() => setSplashDone(true)} />}
     </SafeAreaProvider>
+    </GestureHandlerRootView>
   );
 }

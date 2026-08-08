@@ -7,12 +7,43 @@ import { computeAllocation } from '../../lib/allocation';
 import { AnimatedCounter, FadeInUp, PressableScale, Pulse } from '../../components/motion';
 import { InventoryItem, usePantryStore } from '../../lib/store';
 
+/**
+ * Activity rows store an ISO timestamp, which was being rendered raw —
+ * "2026-08-05T14:22:09.481Z" under every line. What a volunteer wants from this
+ * column is how long ago, not to the millisecond.
+ */
+function formatActivityTime(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return iso;
+
+  const minutes = Math.floor((Date.now() - then) / 60000);
+  if (minutes < 1) return 'Just now';
+  if (minutes < 60) return `${minutes}m ago`;
+
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+
+  const days = Math.floor(hours / 24);
+  if (days < 7) return `${days}d ago`;
+
+  return new Date(then).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function DashboardScreen() {
   const router = useRouter();
   const { inventory, bulkLots, boxRules, settings, activities, thresholds } = usePantryStore();
 
-  // Compute allocation metrics
-  const plan = computeAllocation(inventory, boxRules, 12, settings.defaultFamilySize, bulkLots);
+  // The dashboard's headline figure. A round dozen is the usual weekly ask and
+  // is what Build Boxes opens on, so the two screens agree.
+  const DASHBOARD_TARGET_BOXES = 12;
+  const plan = computeAllocation(
+    inventory,
+    boxRules,
+    DASHBOARD_TARGET_BOXES,
+    settings.defaultFamilySize,
+    bulkLots
+  );
+  const isShort = plan.shortfallPerCategory[plan.limitingCategory] > 0;
 
   // Compute expiring items
   const now = new Date();
@@ -34,31 +65,57 @@ export default function DashboardScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Limiting Category Alert Banner */}
+      {/* A red alarm that fires whatever the numbers say is an alarm nobody
+          reads. When stock covers the target this states that instead, in the
+          calm colour, and keeps the route through to Build Boxes. */}
       <FadeInUp index={0}>
-      <View style={styles.alertBanner}>
-        <View style={styles.alertHeader}>
-          <Pulse active={plan.achievableBoxes === 0}>
-            <MaterialCommunityIcons name="alert-circle-outline" size={24} color={COLORS.statusCritical} />
-          </Pulse>
-          <Text style={styles.alertTitle}>Limiting Category Alert</Text>
+      {isShort ? (
+        <View style={styles.alertBanner}>
+          <View style={styles.alertHeader}>
+            <Pulse active={plan.achievableBoxes === 0}>
+              <MaterialCommunityIcons name="alert-circle-outline" size={24} color={COLORS.statusCritical} />
+            </Pulse>
+            <Text style={styles.alertTitle}>Limiting Category Alert</Text>
+          </View>
+          <Text style={styles.alertText}>
+            You can make <Text style={{ fontWeight: 'bold' }}>{plan.achievableBoxes} balanced boxes</Text> right now.{' '}
+            <Text style={{ color: COLORS.statusCritical, fontWeight: 'bold', textTransform: 'capitalize' }}>
+              {plan.limitingCategory}
+            </Text>{' '}
+            is holding you back by {plan.shortfallPerCategory[plan.limitingCategory]} units.
+          </Text>
+          <PressableScale
+            style={styles.alertButton}
+            cue="press"
+            onPress={() => router.push('/(tabs)/build')}
+          >
+            <Text style={styles.alertButtonText}>Optimize Box Allocations</Text>
+            <MaterialCommunityIcons name="arrow-right" size={16} color={COLORS.textOnPrimary} />
+          </PressableScale>
         </View>
-        <Text style={styles.alertText}>
-          You can make <Text style={{ fontWeight: 'bold' }}>{plan.achievableBoxes} balanced boxes</Text> right now.{' '}
-          <Text style={{ color: COLORS.statusCritical, fontWeight: 'bold', textTransform: 'capitalize' }}>
-            {plan.limitingCategory}
-          </Text>{' '}
-          is holding you back by {plan.shortfallPerCategory[plan.limitingCategory]} units.
-        </Text>
-        <PressableScale
-          style={styles.alertButton}
-          cue="press"
-          onPress={() => router.push('/(tabs)/build')}
-        >
-          <Text style={styles.alertButtonText}>Optimize Box Allocations</Text>
-          <MaterialCommunityIcons name="arrow-right" size={16} color={COLORS.textOnPrimary} />
-        </PressableScale>
-      </View>
+      ) : (
+        <View style={styles.readyBanner}>
+          <View style={styles.alertHeader}>
+            <MaterialCommunityIcons name="check-circle-outline" size={24} color={COLORS.statusGood} />
+            <Text style={styles.readyTitle}>Stock is balanced</Text>
+          </View>
+          <Text style={styles.alertText}>
+            Enough on the shelves for{' '}
+            <Text style={{ fontWeight: 'bold' }}>
+              {plan.achievableBoxes} balanced box{plan.achievableBoxes === 1 ? '' : 'es'}
+            </Text>{' '}
+            for a family of {settings.defaultFamilySize}. No category is short.
+          </Text>
+          <PressableScale
+            style={styles.readyButton}
+            cue="press"
+            onPress={() => router.push('/(tabs)/build')}
+          >
+            <Text style={styles.readyButtonText}>Start Building Boxes</Text>
+            <MaterialCommunityIcons name="arrow-right" size={16} color={COLORS.textOnPrimary} />
+          </PressableScale>
+        </View>
+      )}
       </FadeInUp>
 
       {/* Metrics Row */}
@@ -167,17 +224,23 @@ export default function DashboardScreen() {
       {/* Recent Activity Log */}
       <Text style={styles.sectionHeader}>Recent Pantry Activity</Text>
       <View style={styles.activityCard}>
-        {activities.slice(0, 5).map((act: any) => (
-          <View key={act.id} style={styles.activityRow}>
-            <View style={styles.activityIcon}>
-              <MaterialCommunityIcons name={act.icon as any} size={20} color={COLORS.primaryLight} />
+        {activities.length === 0 ? (
+          <Text style={styles.activityEmpty}>
+            Nothing logged yet. Scanning a donation or auditing a shelf will show up here.
+          </Text>
+        ) : (
+          activities.slice(0, 5).map((act: any) => (
+            <View key={act.id} style={styles.activityRow}>
+              <View style={styles.activityIcon}>
+                <MaterialCommunityIcons name={act.icon as any} size={20} color={COLORS.primaryLight} />
+              </View>
+              <View style={styles.activityContent}>
+                <Text style={styles.activityText}>{act.text}</Text>
+                <Text style={styles.activityTime}>{formatActivityTime(act.time)}</Text>
+              </View>
             </View>
-            <View style={styles.activityContent}>
-              <Text style={styles.activityText}>{act.text}</Text>
-              <Text style={styles.activityTime}>{act.time}</Text>
-            </View>
-          </View>
-        ))}
+          ))
+        )}
       </View>
     </ScrollView>
   );
@@ -199,6 +262,35 @@ const styles = StyleSheet.create({
     borderRadius: RADII.lg,
     padding: SPACING.md,
     marginBottom: SPACING.md,
+  },
+  readyBanner: {
+    backgroundColor: '#F2F8F1',
+    borderColor: COLORS.statusGood,
+    borderWidth: 1,
+    borderRadius: RADII.lg,
+    padding: SPACING.md,
+    marginBottom: SPACING.md,
+  },
+  readyTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: COLORS.statusGood,
+    marginLeft: SPACING.xs,
+  },
+  readyButton: {
+    backgroundColor: COLORS.statusGood,
+    borderRadius: RADII.md,
+    paddingVertical: SPACING.sm,
+    paddingHorizontal: SPACING.md,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readyButtonText: {
+    color: COLORS.textOnPrimary,
+    fontSize: 14,
+    fontWeight: '600',
+    marginRight: SPACING.xs,
   },
   alertHeader: {
     flexDirection: 'row',
@@ -403,5 +495,11 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: COLORS.textSecondary,
     marginTop: 2,
+  },
+  activityEmpty: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textSecondary,
+    paddingVertical: SPACING.xs,
   },
 });
