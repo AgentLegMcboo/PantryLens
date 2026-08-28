@@ -3,14 +3,29 @@ export const COLORS = {
   primary: '#9C4226',
   primaryLight: '#BC5A3C',
   primaryDark: '#8F3E24',
+  /** The lip under a pressed-in button. Must be clearly darker than primary. */
+  primaryDeep: '#5E2411',
   secondary: '#6B8E4E',
   
   // Surfaces
-  background: '#FBF6EE',
-  cardSurface: '#FEFBF6',
-  surfaceContainer: '#F9EBE5',
+  //
+  // The canvas is the original warm cream — a deeper sand was tried and read as
+  // muddy. That leaves cards at only 1.08:1 against it, so fill alone can never
+  // separate them: the shadow does the work instead, and cards are pure white to
+  // take every bit of the little contrast available.
+  //
+  // `surfaceContainer` deliberately sits BELOW the page rather than above it.
+  // Grouped-but-secondary content should recede; only cards float.
+  background: '#FFFFFF', // EXPERIMENT: was '#FBF6EE'
+  cardSurface: '#FFFFFF',
+  surfaceContainer: '#F5EADF',
   surfaceVariant: '#EDE0D9',
-  borderSoft: '#E5DBCB',
+  borderSoft: '#E0CDBB',
+  /** Outline for controls. Deliberately stronger than borderSoft — a small
+   *  chip has too little edge for the card tone to register. */
+  borderStrong: '#CDB498',
+  /** Warm brown, never grey — a grey shadow on a cream ground looks like dirt. */
+  shadow: '#6B4A2F',
   
   // Typography
   textPrimary: '#2B2420',
@@ -62,4 +77,25 @@ export const FONTS = {
   serif: 'Newsreader_500Medium',
   serifSemi: 'Newsreader_600SemiBold',
   serifItalic: 'Newsreader_500Medium_Italic',
+} as const;
+
+/**
+ * The shared card treatment for screens still written in StyleSheet.
+ *
+ * Mirrors `cardShadow` + the border in components/ui/card.tsx so a screen that
+ * has not been ported does not look like it came from a different app. A
+ * visible warm edge does the defining; the shadow only lifts the card slightly
+ * off the page — white on cream is 1.08:1, so an edge is the only thing that
+ * can actually delineate one.
+ */
+export const CARD_ELEVATION = {
+  borderWidth: 2,
+  // A heavier near edge. Reads as a thin physical card rather than an outline.
+  borderBottomWidth: 3,
+  borderColor: COLORS.borderSoft,
+  shadowColor: COLORS.shadow,
+  shadowOpacity: 0.07,
+  shadowRadius: 8,
+  shadowOffset: { width: 0, height: 3 },
+  elevation: 2,
 } as const;

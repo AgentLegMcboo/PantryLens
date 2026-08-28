@@ -1,3 +1,7 @@
+// Compiled by NativeWind's Metro transform into the styles every `className`
+// resolves against. It must be imported exactly once, at the app root.
+import '../global.css';
+
 import { Stack, useRouter, useSegments } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -16,6 +20,7 @@ import { Newsreader_500Medium } from '@expo-google-fonts/newsreader/500Medium';
 import { Newsreader_600SemiBold } from '@expo-google-fonts/newsreader/600SemiBold';
 import { Newsreader_500Medium_Italic } from '@expo-google-fonts/newsreader/500Medium_Italic';
 import { BrandSplash } from '../components/brand-splash';
+import { StackHeader } from '../components/app-header';
 import { View } from 'react-native';
 
 export default function RootLayout() {
@@ -32,29 +37,37 @@ export default function RootLayout() {
   // Plays on every launch. Also covers the gap while the session and pantry
   // load, so the app never flashes a half-built dashboard.
   const [splashDone, setSplashDone] = useState(false);
-  const [assetsReady, setAssetsReady] = useState(false);
 
-  // Decoded behind the splash so the onboarding viewfinder and the auth
-  // background are already in cache when their screens mount. Without this the
-  // first onboarding panel visibly pops in a second late, because Metro serves
-  // assets over HTTP in development.
+  // Warmed in the background so the onboarding viewfinder and the auth
+  // background are already in cache when their screens mount. Deliberately NOT
+  // awaited before launch: it is 150KB served over HTTP by Metro in development,
+  // and a nicety for a later screen must never hold the whole app shut.
   useEffect(() => {
     Asset.loadAsync([
       require('../assets/images/donation-scan.jpg'),
       require('../assets/images/pantry-bg.jpg'),
-    ])
-      .catch(() => {
-        // A failed preload is not fatal — the image still loads on demand.
-      })
-      .finally(() => setAssetsReady(true));
+    ]).catch(() => {
+      // A failed preload is not fatal — the image still loads on demand.
+    });
   }, []);
   const [fontsLoaded] = useFonts({
     Newsreader_500Medium,
     Newsreader_600SemiBold,
     Newsreader_500Medium_Italic,
   });
-  // The splash holds until fonts are in, so serif headings never flash in sans.
-  const ready = isLoaded && onboarded !== null && fontsLoaded && assetsReady;
+  /**
+   * What the splash is allowed to wait for.
+   *
+   * Only local, fast work: fonts are bundled, and `onboarded` is one AsyncStorage
+   * read. Pantry data is deliberately NOT here. Gating on `isLoaded` meant the
+   * splash stayed up through a session read plus every Supabase round trip — a
+   * measured ten seconds on a cold launch, for an animation lasting one.
+   *
+   * The routing effect below still waits on `isLoaded` before it decides
+   * anything, so nothing can redirect early. The dashboard may show zeroes for a
+   * beat while data lands, which is the ordinary trade and much the better one.
+   */
+  const ready = fontsLoaded && onboarded !== null;
 
   useEffect(() => {
     initialize();
@@ -95,19 +108,19 @@ export default function RootLayout() {
     <SafeAreaProvider>
       {ready ? (
       <Stack
-        screenOptions={{
-          headerStyle: {
-            backgroundColor: COLORS.background,
-          },
-          headerTintColor: COLORS.textPrimary,
-          headerTitleStyle: {
-            fontWeight: 'bold',
-            color: COLORS.textPrimary,
-          },
+        screenOptions={({ navigation }) => ({
+          // Same bar as the tabs, so a pushed screen never feels like a
+          // different application.
+          header: ({ options }) => (
+            <StackHeader
+              title={String(options.title ?? '')}
+              onBack={() => navigation.goBack()}
+            />
+          ),
           contentStyle: {
             backgroundColor: COLORS.background,
           },
-        }}
+        })}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
         {/* Log Donation and Shelf Audit are the first step of a wizard that

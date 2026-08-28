@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import React, { useCallback, useEffect } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
 import { Dimensions, Pressable, StyleSheet, Text, View } from "react-native";
+import Svg, { Ellipse, G, Line, Rect } from "react-native-svg";
 import Animated, {
   Easing,
   interpolate,
@@ -29,6 +30,18 @@ const { width: W, height: H } = Dimensions.get("window");
  * so the app never flashes a half-built dashboard.
  */
 const INTRO_MS = 1050;
+
+/**
+ * Absolute ceiling on how long the splash may stay up, however unready the app
+ * behind it claims to be.
+ *
+ * `hold` used to be able to pin this open indefinitely, and did: gated on the
+ * pantry fetch it sat for about ten seconds on a cold launch. The gate is much
+ * narrower now, but a hard stop means no dependency added later can ever
+ * reintroduce that — worst case the app appears with its own loading states,
+ * which is what those states are for.
+ */
+const MAX_HOLD_MS = 2500;
 
 /**
  * Freezes the splash on screen so it can be watched and tuned.
@@ -64,10 +77,19 @@ export function BrandSplash({
     play();
   }, [play]);
 
-  // Only leave once the intro has played AND the app behind is ready.
+  /**
+   * Leaves once the intro has played and the app behind is ready — or once the
+   * ceiling is reached, whichever comes first.
+   *
+   * Mounted-at time rather than effect-run time is what the ceiling measures
+   * from, so a `hold` that flips repeatedly cannot keep restarting the clock.
+   */
+  const mountedAt = useRef(Date.now());
+
   useEffect(() => {
-    if (SPLASH_DEBUG || hold) return;
-    const timer = setTimeout(() => {
+    if (SPLASH_DEBUG) return;
+
+    const leave = () => {
       exit.value = withTiming(
         1,
         { duration: 460, easing: Easing.in(Easing.cubic) },
@@ -75,7 +97,14 @@ export function BrandSplash({
           if (finished) runOnJS(onDone)();
         },
       );
-    }, INTRO_MS - 250);
+    };
+
+    const elapsed = Date.now() - mountedAt.current;
+    const delay = hold
+      ? Math.max(0, MAX_HOLD_MS - elapsed)
+      : Math.max(0, INTRO_MS - 250 - elapsed);
+
+    const timer = setTimeout(leave, delay);
     return () => clearTimeout(timer);
   }, [hold, exit, onDone]);
 
@@ -193,16 +222,65 @@ type Falling = {
 };
 
 const FALLING: Falling[] = [
-  { x: 0.08, w: 34, fall: 1500, delay: 0, rot: -18, op: 0.16 },
-  { x: 0.78, w: 40, fall: 1750, delay: 120, rot: 14, op: 0.14 },
-  { x: 0.44, w: 28, fall: 1320, delay: 240, rot: 22, op: 0.11 },
-  { x: 0.24, w: 44, fall: 1950, delay: 360, rot: -11, op: 0.12 },
-  { x: 0.9, w: 26, fall: 1240, delay: 480, rot: 18, op: 0.13 },
-  { x: 0.6, w: 38, fall: 1640, delay: 620, rot: -20, op: 0.11 },
-  { x: 0.02, w: 24, fall: 1180, delay: 760, rot: 12, op: 0.1 },
-  { x: 0.68, w: 32, fall: 1440, delay: 900, rot: -15, op: 0.1 },
-  { x: 0.34, w: 36, fall: 1820, delay: 1040, rot: 16, op: 0.1 },
+  { x: 0.08, w: 40, fall: 1500, delay: 0, rot: -18, op: 0.26 },
+  { x: 0.78, w: 46, fall: 1750, delay: 120, rot: 14, op: 0.24 },
+  { x: 0.44, w: 32, fall: 1320, delay: 240, rot: 22, op: 0.19 },
+  { x: 0.24, w: 50, fall: 1950, delay: 360, rot: -11, op: 0.21 },
+  { x: 0.9, w: 30, fall: 1240, delay: 480, rot: 18, op: 0.22 },
+  { x: 0.6, w: 44, fall: 1640, delay: 620, rot: -20, op: 0.19 },
+  { x: 0.02, w: 28, fall: 1180, delay: 760, rot: 12, op: 0.18 },
+  { x: 0.68, w: 36, fall: 1440, delay: 900, rot: -15, op: 0.18 },
+  { x: 0.34, w: 42, fall: 1820, delay: 1040, rot: 16, op: 0.18 },
 ];
+
+/**
+ * The can itself, drawn once as vector art.
+ *
+ * The previous version was a white rounded rectangle with two hairlines across
+ * it, which read as a carton at best. What actually makes a shape say "tin can"
+ * is the elliptical rim — a cylinder seen slightly from above — and the ring
+ * ridges pressed into the metal near each end. Both are here, along with a
+ * specular stripe down the left of the body to curve the surface.
+ *
+ * Coordinates live in a 100x134 viewBox matching CAN_RATIO, so one drawing
+ * scales to every size in FALLING without redrawing anything.
+ */
+function CanShape() {
+  const rimY = 13;
+  const baseY = 121;
+
+  return (
+    <Svg width="100%" height="100%" viewBox="0 0 100 134">
+      {/* Body, then the highlight down one side. Both go first: drawn last, the
+          highlight cut a white gap straight through the ridges and label and
+          read as a manufacturing defect rather than as light. */}
+      <Rect x={6} y={rimY} width={88} height={baseY - rimY} fill="#FFFFFF" opacity={0.45} />
+      <Rect x={15} y={rimY} width={8} height={baseY - rimY} fill="#FFFFFF" opacity={0.45} />
+
+      {/* Paper label across the middle, brighter than the metal around it. */}
+      <Rect x={6} y={42} width={88} height={52} fill="#FFFFFF" opacity={0.95} />
+      <Rect x={20} y={56} width={60} height={5} rx={2.5} fill="#8F3E24" opacity={0.5} />
+      <Rect x={30} y={69} width={40} height={3.5} rx={1.75} fill="#8F3E24" opacity={0.38} />
+
+      {/* Ring ridges above and below the label — the pressed bands every steel
+          can has, and the strongest "can" cue after the rim. Placed clear of the
+          label so nothing crosses anything. */}
+      <G opacity={0.6}>
+        <Line x1={6} y1={25} x2={94} y2={25} stroke="#8F3E24" strokeWidth={2.5} />
+        <Line x1={6} y1={32} x2={94} y2={32} stroke="#8F3E24" strokeWidth={1.8} />
+        <Line x1={6} y1={102} x2={94} y2={102} stroke="#8F3E24" strokeWidth={1.8} />
+        <Line x1={6} y1={109} x2={94} y2={109} stroke="#8F3E24" strokeWidth={2.5} />
+      </G>
+
+      {/* Base, then the top rim with the lid seated inside it. The ellipses are
+          what turn a rectangle into a cylinder seen slightly from above. */}
+      <Ellipse cx={50} cy={baseY} rx={44} ry={7} fill="#FFFFFF" opacity={0.75} />
+      <Ellipse cx={50} cy={rimY} rx={44} ry={9.5} fill="#FFFFFF" opacity={1} />
+      <Ellipse cx={50} cy={rimY} rx={34} ry={6.5} fill="#8F3E24" opacity={0.42} />
+      <Ellipse cx={50} cy={rimY - 1.5} rx={34} ry={6.5} fill="#FFFFFF" opacity={0.75} />
+    </Svg>
+  );
+}
 
 /** Cans are drawn at a fixed 3:4 ratio so they never look like cartons. */
 const CAN_RATIO = 1.34;
@@ -240,14 +318,7 @@ function FallingItem({ cfg }: { cfg: Falling }) {
     <Animated.View
       style={[styles.can, { left: W * cfg.x, width: cfg.w, height: h }, style]}
     >
-      {/* Rim, seam and label band — the details that read as "can" at a glance. */}
-      <View style={styles.canLid} />
-      <View style={styles.canNeck} />
-      <View style={styles.canLabel}>
-        <View style={styles.canLabelLine} />
-        <View style={[styles.canLabelLine, { width: "52%" }]} />
-      </View>
-      <View style={styles.canBase} />
+      <CanShape />
     </Animated.View>
   );
 }
@@ -255,54 +326,7 @@ function FallingItem({ cfg }: { cfg: Falling }) {
 const styles = StyleSheet.create({
   root: { backgroundColor: COLORS.primary, zIndex: 999, elevation: 999 },
   fallLayer: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
-  can: {
-    position: "absolute",
-    top: 0,
-    backgroundColor: "#FFFFFF",
-    borderRadius: 6,
-    overflow: "hidden",
-    alignItems: "center",
-  },
-  canLid: {
-    width: "84%",
-    height: 4,
-    marginTop: 3,
-    borderRadius: 2,
-    backgroundColor: "#FFFFFF",
-    opacity: 0.85,
-  },
-  canNeck: {
-    width: "100%",
-    height: 2,
-    marginTop: 2,
-    backgroundColor: "#FFFFFF",
-    opacity: 0.5,
-  },
-  canLabel: {
-    width: "100%",
-    flex: 1,
-    marginVertical: 4,
-    backgroundColor: "#FFFFFF",
-    opacity: 0.45,
-    justifyContent: "center",
-    alignItems: "center",
-    gap: 3,
-  },
-  canLabelLine: {
-    width: "68%",
-    height: 2,
-    borderRadius: 1,
-    backgroundColor: "#8F3E24",
-    opacity: 0.5,
-  },
-  canBase: {
-    width: "88%",
-    height: 3,
-    marginBottom: 3,
-    borderRadius: 2,
-    backgroundColor: "#FFFFFF",
-    opacity: 0.7,
-  },
+  can: { position: "absolute", top: 0 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   mark: {
     width: 96,

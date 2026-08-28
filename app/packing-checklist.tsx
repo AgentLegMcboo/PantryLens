@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { COLORS, RADII, SPACING } from '../constants/theme';
+import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
 import { computeAllocation } from '../lib/allocation';
 import { usePantryStore } from '../lib/store';
 
@@ -142,8 +142,7 @@ const styles = StyleSheet.create({
   headerCard: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
@@ -187,8 +186,7 @@ const styles = StyleSheet.create({
   categoryCard: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
@@ -219,7 +217,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#F4EBE1',
+    borderBottomColor: COLORS.borderSoft,
   },
   itemRowChecked: {
     opacity: 0.6,

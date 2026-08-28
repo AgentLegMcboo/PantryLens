@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { COLORS, RADII, SPACING } from '../../constants/theme';
+import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../../constants/theme';
 import { computeAllocation } from '../../lib/allocation';
 import { usePantryStore } from '../../lib/store';
 
@@ -158,8 +158,7 @@ const styles = StyleSheet.create({
   flyerCard: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     overflow: 'hidden',
     marginBottom: SPACING.md,
   },

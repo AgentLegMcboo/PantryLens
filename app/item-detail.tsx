@@ -9,7 +9,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { COLORS, RADII, SPACING } from '../constants/theme';
+import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { cueTap, cueWarn } from '../lib/feedback';
 import { Condition, CONDITION_LABELS, isUsableCondition, usePantryStore } from '../lib/store';
@@ -185,8 +185,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.md,
   },
   label: {
@@ -267,7 +266,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
     paddingTop: SPACING.sm,
     borderTopWidth: 1,
-    borderTopColor: '#F4EBE1',
+    borderTopColor: COLORS.borderSoft,
   },
   metaText: {
     fontSize: 12,

@@ -8,7 +8,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { COLORS, RADII, SPACING } from '../constants/theme';
+import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
 import { InventoryItem, usePantryStore } from '../lib/store';
 
 export default function ExpiringSoonScreen() {
@@ -114,8 +114,7 @@ const styles = StyleSheet.create({
   itemCard: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.md,
     marginBottom: SPACING.sm,
   },
@@ -156,7 +155,7 @@ const styles = StyleSheet.create({
     marginTop: SPACING.sm,
     paddingTop: SPACING.xs,
     borderTopWidth: 1,
-    borderTopColor: '#F4EBE1',
+    borderTopColor: COLORS.borderSoft,
   },
   countText: {
     fontSize: 13,

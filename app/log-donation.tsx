@@ -2,18 +2,9 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import { COLORS, RADII, SPACING } from '../constants/theme';
-import { PressableScale } from '../components/motion';
+import { Alert, Image, Pressable, View } from 'react-native';
+import { COLORS } from '../constants/theme';
+import { Button, Screen, Text } from '../components/ui';
 import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
@@ -171,237 +162,85 @@ export default function LogDonationScreen() {
   const atLimit = shots.length >= MAX_PHOTOS;
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
+    <Screen>
       {shots.length === 0 ? (
-        <TouchableOpacity style={styles.cameraBox} onPress={handleTakePhoto} activeOpacity={0.85}>
-          <MaterialCommunityIcons name="camera-outline" size={44} color={COLORS.primaryLight} />
-          <Text style={styles.cameraTitle}>Photograph the donation</Text>
-          <Text style={styles.cameraSub}>
-            Lay items out so labels face the camera. Several photos from different angles read
-            better than one wide shot.
-          </Text>
-        </TouchableOpacity>
+        <Pressable onPress={handleTakePhoto}>
+          <View className="h-56 items-center justify-center rounded-lg border-2 border-dashed border-brand-light bg-subtle px-8">
+            <MaterialCommunityIcons name="camera-outline" size={40} color={COLORS.primaryLight} />
+            <Text variant="heading" className="mt-3">
+              Photograph the donation
+            </Text>
+            <Text variant="label" tone="soft" className="mt-2 text-center">
+              Lay items out so the labels face the camera.
+            </Text>
+          </View>
+        </Pressable>
       ) : (
-        <View style={styles.grid}>
+        <View className="flex-row flex-wrap gap-3">
           {shots.map((shot, i) => (
-            <View key={`${shot.uri}-${i}`} style={styles.thumbWrap}>
-              <Image source={{ uri: shot.uri }} style={styles.thumb} />
-              <TouchableOpacity
-                style={styles.removeBtn}
+            <View key={`${shot.uri}-${i}`} className="aspect-square w-[30%]">
+              <Image source={{ uri: shot.uri }} className="h-full w-full rounded-md bg-muted" />
+              <Pressable
                 onPress={() => removeShot(i)}
                 hitSlop={8}
                 accessibilityLabel={`Remove photo ${i + 1}`}
+                className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full bg-ink"
               >
                 <MaterialCommunityIcons name="close" size={14} color={COLORS.textOnPrimary} />
-              </TouchableOpacity>
+              </Pressable>
             </View>
           ))}
 
           {!atLimit && (
-            <TouchableOpacity style={styles.addTile} onPress={handleTakePhoto}>
-              <MaterialCommunityIcons name="camera-plus-outline" size={26} color={COLORS.primaryLight} />
-              <Text style={styles.addTileText}>Add</Text>
-            </TouchableOpacity>
+            <Pressable
+              onPress={handleTakePhoto}
+              className="aspect-square w-[30%] items-center justify-center rounded-md border-2 border-dashed border-brand-light bg-subtle"
+            >
+              <MaterialCommunityIcons name="camera-plus-outline" size={24} color={COLORS.primaryLight} />
+            </Pressable>
           )}
         </View>
       )}
 
-      <View style={styles.sourceRow}>
-        <TouchableOpacity
-          style={[styles.sourceBtn, atLimit && styles.sourceBtnDisabled]}
+      <View className="flex-row gap-3">
+        <Button
+          label="Camera"
+          variant="secondary"
+          size="compact"
+          className="flex-1 justify-center"
+          disabled={atLimit || isAnalyzing}
           onPress={handleTakePhoto}
+        />
+        <Button
+          label="Photo library"
+          variant="secondary"
+          size="compact"
+          className="flex-1 justify-center"
           disabled={atLimit || isAnalyzing}
-        >
-          <MaterialCommunityIcons name="camera-outline" size={20} color={COLORS.primaryDark} />
-          <Text style={styles.sourceBtnText}>Camera</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.sourceBtn, atLimit && styles.sourceBtnDisabled]}
           onPress={handlePickFromLibrary}
-          disabled={atLimit || isAnalyzing}
-        >
-          <MaterialCommunityIcons name="image-multiple-outline" size={20} color={COLORS.primaryDark} />
-          <Text style={styles.sourceBtnText}>Photo library</Text>
-        </TouchableOpacity>
+        />
       </View>
 
-      <Text style={styles.counterText}>
+      <Button
+        label={isAnalyzing ? 'Reading labels…' : 'Detect items'}
+        block
+        loading={isAnalyzing}
+        disabled={shots.length === 0}
+        icon={<MaterialCommunityIcons name="auto-fix" size={20} color={COLORS.textOnPrimary} />}
+        onPress={handleDetectItems}
+      />
+
+      <Text variant="micro" tone="soft" className="text-center">
         {shots.length === 0
-          ? `Up to ${MAX_PHOTOS} photos per donation.`
+          ? `Up to ${MAX_PHOTOS} photos. Several close shots beat one wide one.`
           : atLimit
             ? `${MAX_PHOTOS} photos — that's the limit for one scan.`
-            : `${shots.length} of ${MAX_PHOTOS} photos attached.`}
+            : `${shots.length} of ${MAX_PHOTOS} attached. A big pile reads better in sections.`}
       </Text>
 
-      {/* Dimmed when there is nothing to scan, but deliberately still pressable:
-          a disabled button swallows the tap and teaches the volunteer nothing.
-          Pressing it says what is missing instead. Only a scan already in
-          flight actually blocks the press. */}
-      <PressableScale
-        style={[styles.detectBtn, (shots.length === 0 || isAnalyzing) && styles.detectBtnDisabled] as any}
-        cue="press"
-        onPress={handleDetectItems}
-        disabled={isAnalyzing}
-      >
-        {isAnalyzing ? (
-          <>
-            <ActivityIndicator color={COLORS.textOnPrimary} />
-            <Text style={styles.detectBtnText}>Reading labels…</Text>
-          </>
-        ) : (
-          <>
-            <MaterialCommunityIcons name="auto-fix" size={22} color={COLORS.textOnPrimary} />
-            <Text style={styles.detectBtnText}>Detect items with AI</Text>
-          </>
-        )}
-      </PressableScale>
-
-      <View style={styles.noteBox}>
-        <MaterialCommunityIcons name="shield-check-outline" size={16} color={COLORS.textSecondary} />
-        <Text style={styles.noteText}>
-          Nothing is saved yet. You'll check and correct every line before it reaches inventory.
-        </Text>
-      </View>
-    </ScrollView>
+      <Text variant="micro" tone="soft" className="text-center">
+        Nothing is saved yet — you check every line before it reaches inventory.
+      </Text>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    padding: SPACING.md,
-    paddingBottom: SPACING.xl,
-  },
-  cameraBox: {
-    height: 200,
-    backgroundColor: '#FAF1E8',
-    borderRadius: RADII.lg,
-    borderWidth: 2,
-    borderColor: COLORS.primaryLight,
-    borderStyle: 'dashed',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: SPACING.lg,
-    marginBottom: SPACING.md,
-  },
-  cameraTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: SPACING.xs,
-  },
-  cameraSub: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  grid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: SPACING.sm,
-    marginBottom: SPACING.md,
-  },
-  thumbWrap: {
-    width: '31%',
-    aspectRatio: 1,
-  },
-  thumb: {
-    width: '100%',
-    height: '100%',
-    borderRadius: RADII.md,
-    backgroundColor: COLORS.surfaceVariant,
-  },
-  removeBtn: {
-    position: 'absolute',
-    top: -6,
-    right: -6,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: COLORS.textPrimary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addTile: {
-    width: '31%',
-    aspectRatio: 1,
-    borderRadius: RADII.md,
-    borderWidth: 2,
-    borderStyle: 'dashed',
-    borderColor: COLORS.primaryLight,
-    backgroundColor: '#FAF1E8',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 2,
-  },
-  addTileText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.primaryDark,
-  },
-  sourceRow: {
-    flexDirection: 'row',
-    gap: SPACING.sm,
-  },
-  sourceBtn: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    minHeight: SPACING.touch,
-  },
-  sourceBtnDisabled: { opacity: 0.45 },
-  sourceBtnText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.primaryDark,
-  },
-  counterText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: SPACING.sm,
-  },
-  detectBtn: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    marginTop: SPACING.md,
-    minHeight: SPACING.touch,
-  },
-  detectBtnDisabled: { opacity: 0.45 },
-  detectBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-  },
-  noteBox: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: SPACING.xs,
-    marginTop: SPACING.md,
-    paddingHorizontal: SPACING.xs,
-  },
-  noteText: {
-    flex: 1,
-    fontSize: 12,
-    lineHeight: 17,
-    color: COLORS.textSecondary,
-  },
-});

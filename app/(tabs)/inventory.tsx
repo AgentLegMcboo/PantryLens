@@ -3,16 +3,31 @@ import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import {
   FlatList,
+  KeyboardAvoidingView,
   Modal,
-  StyleSheet,
-  Text,
+  Platform,
+  Pressable,
   TextInput,
-  TouchableOpacity,
-  View
+  View,
 } from 'react-native';
-import { COLORS, RADII, SPACING } from '../../constants/theme';
-import { CONDITION_LABELS, InventoryItem, isUsableCondition, usePantryStore } from '../../lib/store';
-import { KeyboardAvoidingView, Platform } from 'react-native';
+import { COLORS } from '../../constants/theme';
+import { Badge, Button, Card, Chip, Stepper, Text } from '../../components/ui';
+import {
+  CONDITION_LABELS,
+  InventoryItem,
+  isUsableCondition,
+  usePantryStore,
+} from '../../lib/store';
+
+/**
+ * The shelf, as a list.
+ *
+ * The old version stacked a search bar, a pill row, a four-option sort bar and
+ * then rows carrying up to three badges plus a stepper — six competing controls
+ * before a single item. Sorting is now one chip row that doubles as the filter
+ * summary, rows carry at most one status badge, and the count control has room
+ * to be tapped.
+ */
 
 /** Whole days since the pantry received this item — the FIFO signal. */
 function daysOnShelf(dateAdded: string): number {
@@ -21,33 +36,38 @@ function daysOnShelf(dateAdded: string): number {
   return Math.max(0, Math.round((Date.now() - then) / 86400000));
 }
 
+const CATEGORIES = [
+  { id: 'all', label: 'All' },
+  { id: 'grain', label: 'Grain' },
+  { id: 'vegetable', label: 'Vegetables' },
+  { id: 'protein', label: 'Protein' },
+  { id: 'breakfast', label: 'Breakfast' },
+  { id: 'snack', label: 'Snacks' },
+  { id: 'hygiene', label: 'Hygiene' },
+  { id: 'baby', label: 'Baby' },
+];
+
+const SORTS = [
+  { id: 'expiration', label: 'Expiring first' },
+  { id: 'oldest', label: 'Oldest' },
+  { id: 'count', label: 'Most stock' },
+  { id: 'name', label: 'A–Z' },
+] as const;
+
 export default function InventoryScreen() {
   const router = useRouter();
   const { inventory, updateItem, deleteItem, addItems, settings } = usePantryStore();
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<'expiration' | 'oldest' | 'count' | 'name'>('expiration');
+  const [sortBy, setSortBy] = useState<(typeof SORTS)[number]['id']>('expiration');
 
-  // Manual Add Modal State
   const [modalVisible, setModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCat, setNewCat] = useState<InventoryItem['category']>('grain');
-  const [newCount, setNewCount] = useState('1');
+  const [newCount, setNewCount] = useState(1);
   const [newExp, setNewExp] = useState('');
 
-  const categories = [
-    { id: 'all', label: 'All Items' },
-    { id: 'grain', label: 'Grain' },
-    { id: 'vegetable', label: 'Vegetables' },
-    { id: 'protein', label: 'Protein' },
-    { id: 'breakfast', label: 'Breakfast' },
-    { id: 'snack', label: 'Snacks' },
-    { id: 'hygiene', label: 'Hygiene' },
-    { id: 'baby', label: 'Baby' }
-  ];
-
-  // Filtering & Sorting
   const warningLimit = new Date();
   warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
   const warningStr = warningLimit.toISOString().split('T')[0];
@@ -63,7 +83,6 @@ export default function InventoryScreen() {
       if (sortBy === 'count') return b.count - a.count;
       // FIFO: what has been sitting on the shelf longest goes out first.
       if (sortBy === 'oldest') return (a.date_added || '').localeCompare(b.date_added || '');
-      // Default: Expiration order (items with dates first, soonest first)
       if (!a.expiration) return 1;
       if (!b.expiration) return -1;
       return new Date(a.expiration).getTime() - new Date(b.expiration).getTime();
@@ -71,546 +90,238 @@ export default function InventoryScreen() {
 
   const handleManualAdd = () => {
     if (!newName.trim()) return;
-    addItems([
-      {
-        name: newName,
-        category: newCat,
-        count: parseInt(newCount, 10) || 1,
-        expiration: newExp.trim() || null
-      }
-    ], 'manual');
-
+    addItems(
+      [
+        {
+          name: newName,
+          category: newCat,
+          count: newCount,
+          expiration: newExp.trim() || null,
+        },
+      ],
+      'manual',
+    );
     setNewName('');
-    setNewCount('1');
+    setNewCount(1);
     setNewExp('');
     setModalVisible(false);
   };
 
-  const getCategoryColor = (cat: string) => {
-    return (COLORS.categories as any)[cat] || COLORS.categories.unknown;
-  };
-
   const renderItemRow = ({ item }: { item: InventoryItem }) => {
     const isExpiringSoon = !!item.expiration && item.expiration <= warningStr;
-    const catColor = getCategoryColor(item.category);
+    const damaged = !isUsableCondition(item.condition);
+    const catColor = (COLORS.categories as any)[item.category] || COLORS.categories.unknown;
 
     return (
-      <TouchableOpacity
-        style={styles.itemCard}
+      <Pressable
         onPress={() => router.push({ pathname: '/item-detail', params: { id: item.id } })}
       >
-        <View style={styles.itemHeader}>
-          <View style={styles.itemNameCol}>
-            <Text style={styles.itemName}>{item.name}</Text>
-            <View style={styles.badgeRow}>
-              <View style={[styles.categoryBadge, { backgroundColor: catColor }]}>
-                <Text style={styles.categoryBadgeText}>{item.category.toUpperCase()}</Text>
-              </View>
-              {isExpiringSoon && (
-                <View style={styles.expiringBadge}>
-                  <MaterialCommunityIcons name="alert-outline" size={12} color={COLORS.textOnPrimary} />
-                  <Text style={styles.expiringBadgeText}>EXPIRING SOON</Text>
-                </View>
-              )}
-              {!isUsableCondition(item.condition) && (
-                <View style={styles.damagedBadge}>
-                  <MaterialCommunityIcons name="close-octagon-outline" size={12} color={COLORS.textOnPrimary} />
-                  <Text style={styles.expiringBadgeText}>
-                    {CONDITION_LABELS[item.condition || 'ok'].toUpperCase()}
-                  </Text>
-                </View>
-              )}
+        <Card className="mb-3">
+          <View className="flex-row items-start gap-3">
+            {/* A colour bar instead of an uppercase category chip. It carries the
+                same information without adding a word to the row. */}
+            <View className="mt-1 h-10 w-1 rounded-full" style={{ backgroundColor: catColor }} />
+
+            <View className="flex-1">
+              <Text variant="body" className="font-semibold">
+                {item.name}
+              </Text>
+              <Text variant="micro" tone="soft" className="mt-1">
+                {item.expiration ? `Expires ${item.expiration}` : 'No expiry recorded'}
+                {item.date_added ? ` · on shelf ${daysOnShelf(item.date_added)}d` : ''}
+              </Text>
+
+              {/* At most one badge. Damage outranks expiry — it blocks packing. */}
+              {damaged ? (
+                <Badge
+                  label={CONDITION_LABELS[item.condition || 'ok']}
+                  tone="critical"
+                  className="mt-2"
+                />
+              ) : isExpiringSoon ? (
+                <Badge label="Use first" tone="warn" className="mt-2" />
+              ) : null}
             </View>
-          </View>
 
-          {/* Stepper Count adjustment */}
-          <View style={styles.countContainer}>
-            <TouchableOpacity
-              style={styles.stepperButton}
-              onPress={() => {
-                if (item.count > 1) updateItem(item.id, { count: item.count - 1 });
-                else deleteItem(item.id);
+            <Stepper
+              value={item.count}
+              min={0}
+              onChange={next => {
+                if (next === 0) deleteItem(item.id);
+                else updateItem(item.id, { count: next });
               }}
-            >
-              <MaterialCommunityIcons name="minus" size={16} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-
-            <Text style={styles.countText}>{item.count}</Text>
-
-            <TouchableOpacity
-              style={styles.stepperButton}
-              onPress={() => updateItem(item.id, { count: item.count + 1 })}
-            >
-              <MaterialCommunityIcons name="plus" size={16} color={COLORS.textPrimary} />
-            </TouchableOpacity>
+            />
           </View>
-        </View>
-
-        <View style={styles.itemFooter}>
-          <Text style={styles.expirationText}>
-            {item.expiration ? `Exp: ${item.expiration}` : 'No exp date recorded'}
-          </Text>
-          <Text style={styles.sourceText}>
-            {item.date_added ? `On shelf ${daysOnShelf(item.date_added)}d` : `Source: ${item.source}`}
-          </Text>
-        </View>
-      </TouchableOpacity>
+        </Card>
+      </Pressable>
     );
   };
 
   return (
-    <View style={styles.container}>
-      {/* Search & Sort Bar */}
-      <View style={styles.topControls}>
-        <View style={styles.searchBox}>
-          <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search items by name..."
-            value={search}
-            onChangeText={setSearch}
-            placeholderTextColor={COLORS.textSecondary}
-          />
-          {search ? (
-            <TouchableOpacity onPress={() => setSearch('')}>
-              <MaterialCommunityIcons name="close-circle" size={18} color={COLORS.textSecondary} />
-            </TouchableOpacity>
-          ) : null}
+    <View className="flex-1 bg-canvas">
+      <View className="px-gutter pt-4 gap-4">
+        <View className="flex-row items-center gap-3">
+          <View className="flex-1 flex-row items-center gap-2 rounded-md border border-hairline bg-card px-3 h-12">
+            <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
+            <TextInput
+              className="flex-1 text-body text-ink"
+              placeholder="Search items"
+              value={search}
+              onChangeText={setSearch}
+              placeholderTextColor={COLORS.textSecondary}
+            />
+            {search ? (
+              <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                <MaterialCommunityIcons name="close-circle" size={18} color={COLORS.textSecondary} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          <Pressable
+            onPress={() => setModalVisible(true)}
+            accessibilityLabel="Add an item by hand"
+            className="h-12 w-12 items-center justify-center rounded-md bg-brand-light"
+          >
+            <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
+          </Pressable>
         </View>
 
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setModalVisible(true)}
-        >
-          <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
-        </TouchableOpacity>
-      </View>
-
-      {/* Category Pills */}
-      <FlatList
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
-        horizontal
-        data={categories}
-        keyExtractor={item => item.id}
-        showsHorizontalScrollIndicator={false}
-        style={styles.pillsList}
-        contentContainerStyle={styles.pillsContent}
-        renderItem={({ item }) => {
-          const active = selectedCategory === item.id;
-          return (
-            <TouchableOpacity
-              style={[styles.pill, active && styles.pillActive]}
+        <FlatList
+          horizontal
+          data={CATEGORIES}
+          keyExtractor={c => c.id}
+          showsHorizontalScrollIndicator={false}
+          contentContainerClassName="gap-2 pr-gutter"
+          renderItem={({ item }) => (
+            <Chip
+              label={item.label}
+              selected={selectedCategory === item.id}
               onPress={() => setSelectedCategory(item.id)}
-            >
-              <Text style={[styles.pillText, active && styles.pillTextActive]}>{item.label}</Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
-
-      {/* Sort Selector Bar */}
-      <View style={styles.sortBar}>
-        <Text style={styles.resultCount}>Showing {filteredItems.length} SKUs</Text>
-        <View style={styles.sortOptions}>
-          <TouchableOpacity onPress={() => setSortBy('expiration')}>
-            <Text style={[styles.sortLink, sortBy === 'expiration' && styles.sortLinkActive]}>Expiration</Text>
-          </TouchableOpacity>
-          <Text style={styles.sortDivider}>|</Text>
-          <TouchableOpacity onPress={() => setSortBy('oldest')}>
-            <Text style={[styles.sortLink, sortBy === 'oldest' && styles.sortLinkActive]}>Oldest (FIFO)</Text>
-          </TouchableOpacity>
-          <Text style={styles.sortDivider}>·</Text>
-          <TouchableOpacity onPress={() => setSortBy('count')}>
-            <Text style={[styles.sortLink, sortBy === 'count' && styles.sortLinkActive]}>Count</Text>
-          </TouchableOpacity>
-          <Text style={styles.sortDivider}>|</Text>
-          <TouchableOpacity onPress={() => setSortBy('name')}>
-            <Text style={[styles.sortLink, sortBy === 'name' && styles.sortLinkActive]}>Name</Text>
-          </TouchableOpacity>
-        </View>
+            />
+          )}
+        />
       </View>
 
-      {/* Inventory Items List */}
       <FlatList
-        keyboardShouldPersistTaps="handled"
-        keyboardDismissMode="on-drag"
         data={filteredItems}
         keyExtractor={item => item.id}
         renderItem={renderItemRow}
-        contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
+        contentContainerClassName="px-gutter pt-4 pb-28"
+        ListHeaderComponent={
+          <View className="mb-4 flex-row items-center justify-between">
+            <Text variant="micro" tone="soft">
+              {filteredItems.length} {filteredItems.length === 1 ? 'product' : 'products'}
+            </Text>
+            <Pressable
+              onPress={() => {
+                const i = SORTS.findIndex(s => s.id === sortBy);
+                setSortBy(SORTS[(i + 1) % SORTS.length].id);
+              }}
+              className="flex-row items-center gap-1"
+              accessibilityLabel={`Sorted by ${SORTS.find(s => s.id === sortBy)?.label}. Tap to change.`}
+            >
+              <MaterialCommunityIcons name="swap-vertical" size={16} color={COLORS.primaryDark} />
+              <Text variant="micro" tone="brand" className="font-semibold">
+                {SORTS.find(s => s.id === sortBy)?.label}
+              </Text>
+            </Pressable>
+          </View>
+        }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="clipboard-text-search-outline" size={48} color={COLORS.textSecondary} />
-            <Text style={styles.emptyTitle}>No matching items found</Text>
-            <Text style={styles.emptySub}>Try searching for another name or clearing the category filter.</Text>
+          <View className="items-center px-8 py-16">
+            <MaterialCommunityIcons
+              name="clipboard-text-search-outline"
+              size={44}
+              color={COLORS.textSecondary}
+            />
+            <Text variant="heading" className="mt-4">
+              Nothing here yet
+            </Text>
+            <Text variant="body" tone="soft" className="mt-2 text-center">
+              {search || selectedCategory !== 'all'
+                ? 'Try another search, or clear the category filter.'
+                : 'Photograph a donation to fill the shelves.'}
+            </Text>
           </View>
         }
       />
 
-      {/* Manual Add Modal */}
-      <Modal visible={modalVisible} animationType="slide" transparent>
-        {/* The manual-add fields sit low on the sheet; without this the keyboard
-            covers them and there is no way to scroll them into view. */}
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        transparent
+        onRequestClose={() => setModalVisible(false)}
+      >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         >
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>Add Item Manually</Text>
-              <TouchableOpacity onPress={() => setModalVisible(false)}>
-                <MaterialCommunityIcons name="close" size={24} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-
-            <Text style={styles.inputLabel}>Item Name</Text>
-            <TextInput
-              style={styles.modalInput}
-              placeholder="e.g. Canned Black Beans (15 oz)"
-              value={newName}
-              onChangeText={setNewName}
-              placeholderTextColor={COLORS.textSecondary}
-            />
-
-            <Text style={styles.inputLabel}>Category</Text>
-            <View style={styles.categoryPickerRow}>
-              {['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygiene', 'baby'].map(cat => (
-                <TouchableOpacity
-                  key={cat}
-                  style={[styles.catPickChip, newCat === cat && styles.catPickChipActive]}
-                  onPress={() => setNewCat(cat as any)}
-                >
-                  <Text style={[styles.catPickText, newCat === cat && styles.catPickTextActive]}>
-                    {cat}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-              <View style={{ flex: 1, marginRight: 8 }}>
-                <Text style={styles.inputLabel}>Quantity</Text>
-                <TextInput
-                  style={styles.modalInput}
-                  keyboardType="numeric"
-                  value={newCount}
-                  onChangeText={setNewCount}
-                />
+          <View className="flex-1 justify-end bg-black/50">
+            <View className="rounded-t-lg bg-canvas px-gutter pb-10 pt-6 gap-4">
+              <View className="flex-row items-center justify-between">
+                <Text variant="title">Add an item</Text>
+                <Pressable onPress={() => setModalVisible(false)} hitSlop={8}>
+                  <MaterialCommunityIcons name="close" size={24} color={COLORS.textPrimary} />
+                </Pressable>
               </View>
-              <View style={{ flex: 1.5 }}>
-                <Text style={styles.inputLabel}>Expiration Date (Optional)</Text>
+
+              <View className="gap-2">
+                <Text variant="label" tone="soft">
+                  Name
+                </Text>
                 <TextInput
-                  style={styles.modalInput}
-                  placeholder="YYYY-MM-DD"
-                  value={newExp}
-                  onChangeText={setNewExp}
+                  className="h-12 rounded-md border border-hairline bg-card px-3 text-body text-ink"
+                  placeholder="Canned black beans 15 oz"
+                  value={newName}
+                  onChangeText={setNewName}
                   placeholderTextColor={COLORS.textSecondary}
                 />
               </View>
-            </View>
 
-            <TouchableOpacity style={styles.submitButton} onPress={handleManualAdd}>
-              <Text style={styles.submitButtonText}>Add to Inventory</Text>
-            </TouchableOpacity>
+              <View className="gap-2">
+                <Text variant="label" tone="soft">
+                  Category
+                </Text>
+                <View className="flex-row flex-wrap gap-2">
+                  {CATEGORIES.filter(c => c.id !== 'all').map(cat => (
+                    <Chip
+                      key={cat.id}
+                      label={cat.label}
+                      selected={newCat === cat.id}
+                      onPress={() => setNewCat(cat.id as any)}
+                    />
+                  ))}
+                </View>
+              </View>
+
+              <View className="flex-row gap-4">
+                <View className="gap-2">
+                  <Text variant="label" tone="soft">
+                    Quantity
+                  </Text>
+                  <Stepper value={newCount} min={1} onChange={setNewCount} />
+                </View>
+                <View className="flex-1 gap-2">
+                  <Text variant="label" tone="soft">
+                    Expires (optional)
+                  </Text>
+                  <TextInput
+                    className="h-12 rounded-md border border-hairline bg-card px-3 text-body text-ink"
+                    placeholder="YYYY-MM-DD"
+                    value={newExp}
+                    onChangeText={setNewExp}
+                    placeholderTextColor={COLORS.textSecondary}
+                  />
+                </View>
+              </View>
+
+              <Button label="Add to inventory" block className="mt-2" onPress={handleManualAdd} />
+            </View>
           </View>
-        </View>
         </KeyboardAvoidingView>
       </Modal>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  topControls: {
-    flexDirection: 'row',
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
-    alignItems: 'center',
-  },
-  searchBox: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.sm,
-    height: SPACING.touch,
-    marginRight: SPACING.sm,
-  },
-  searchInput: {
-    flex: 1,
-    marginLeft: SPACING.xs,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  addButton: {
-    backgroundColor: COLORS.primaryLight,
-    width: SPACING.touch,
-    height: SPACING.touch,
-    borderRadius: RADII.md,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  pillsList: {
-    maxHeight: 44,
-    marginVertical: SPACING.sm,
-  },
-  pillsContent: {
-    paddingHorizontal: SPACING.md,
-  },
-  pill: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.full,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    marginRight: 8,
-  },
-  pillActive: {
-    backgroundColor: COLORS.primaryLight,
-    borderColor: COLORS.primaryLight,
-  },
-  pillText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  pillTextActive: {
-    color: COLORS.textOnPrimary,
-  },
-  sortBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.xs,
-  },
-  resultCount: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  sortOptions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  sortLink: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  sortLinkActive: {
-    color: COLORS.primaryDark,
-    fontWeight: '700',
-  },
-  sortDivider: {
-    fontSize: 12,
-    color: COLORS.borderSoft,
-    marginHorizontal: 4,
-  },
-  listContent: {
-    paddingHorizontal: SPACING.md,
-    paddingBottom: 100,
-  },
-  itemCard: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  itemNameCol: {
-    flex: 1,
-    marginRight: SPACING.sm,
-  },
-  itemName: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  badgeRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-  },
-  categoryBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: RADII.sm,
-    marginRight: 6,
-  },
-  categoryBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-  },
-  damagedBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    backgroundColor: COLORS.statusCritical,
-    paddingHorizontal: SPACING.xs,
-    paddingVertical: 2,
-    borderRadius: RADII.sm,
-  },
-  expiringBadge: {
-    backgroundColor: COLORS.statusWarning,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RADII.sm,
-  },
-  expiringBadgeText: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-    marginLeft: 2,
-  },
-  countContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    padding: 2,
-  },
-  stepperButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  countText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    paddingHorizontal: 8,
-  },
-  itemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.xs,
-    borderTopWidth: 1,
-    borderTopColor: '#F4EBE1',
-  },
-  expirationText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  sourceText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textTransform: 'capitalize',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xl,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: SPACING.sm,
-  },
-  emptySub: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-    paddingHorizontal: SPACING.lg,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
-  },
-  modalCard: {
-    backgroundColor: COLORS.background,
-    borderTopLeftRadius: RADII.lg,
-    borderTopRightRadius: RADII.lg,
-    padding: SPACING.md,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.md,
-  },
-  modalTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  inputLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-    marginTop: SPACING.sm,
-  },
-  modalInput: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.sm,
-    height: 44,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  categoryPickerRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: SPACING.xs,
-  },
-  catPickChip: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  catPickChipActive: {
-    backgroundColor: COLORS.primaryLight,
-    borderColor: COLORS.primaryLight,
-  },
-  catPickText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textTransform: 'capitalize',
-  },
-  catPickTextActive: {
-    color: COLORS.textOnPrimary,
-    fontWeight: '700',
-  },
-  submitButton: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    paddingVertical: SPACING.md,
-    alignItems: 'center',
-    marginTop: SPACING.lg,
-    marginBottom: SPACING.md,
-  },
-  submitButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-  },
-});

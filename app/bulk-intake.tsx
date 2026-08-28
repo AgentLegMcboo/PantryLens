@@ -10,7 +10,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { COLORS, RADII, SPACING } from '../constants/theme';
+import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import {
   Category,
@@ -278,8 +278,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.md
   },
   cardTitle: { fontSize: 17, fontWeight: '700', color: COLORS.textPrimary },

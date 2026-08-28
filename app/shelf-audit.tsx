@@ -12,7 +12,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { COLORS, RADII, SPACING } from '../constants/theme';
+import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
 import { processImageScan, ScanError } from '../lib/ai_vision';
 import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
@@ -224,8 +224,7 @@ const styles = StyleSheet.create({
   headerBox: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.md,
     marginBottom: SPACING.md,
   },
@@ -251,8 +250,7 @@ const styles = StyleSheet.create({
   secChip: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.md,
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -274,8 +272,7 @@ const styles = StyleSheet.create({
   guidanceBox: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.md,
     marginBottom: SPACING.lg,
   },

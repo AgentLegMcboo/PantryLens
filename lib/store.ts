@@ -322,27 +322,32 @@ export const usePantryStore = create<AppState>((set, get) => ({
           lbsPerUnit: { ...DEFAULT_LBS_PER_UNIT, ...(pantry.lbs_per_unit || {}) }
         }));
 
-        // 2. Fetch Inventory
-        const { data: invData } = await supabase
-          .from('inventory')
-          .select('*')
-          .eq('pantry_id', pantryId)
-          .order('created_at', { ascending: false });
-
-        // 3. Fetch weighed bulk lots
-        const { data: lotData } = await supabase
-          .from('bulk_lots')
-          .select('*')
-          .eq('pantry_id', pantryId)
-          .order('date_added', { ascending: false });
-
-        // 4. Fetch Activities
-        const { data: actData } = await supabase
-          .from('activities')
-          .select('*')
-          .eq('pantry_id', pantryId)
-          .order('created_at', { ascending: false })
-          .limit(20);
+        // Inventory, bulk lots and activities depend only on pantryId, not on
+        // each other. Awaited one after another they cost three round trips of
+        // latency back to back, and the launch splash was held open for every
+        // millisecond of it. Issued together they cost one.
+        const [
+          { data: invData },
+          { data: lotData },
+          { data: actData },
+        ] = await Promise.all([
+          supabase
+            .from('inventory')
+            .select('*')
+            .eq('pantry_id', pantryId)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('bulk_lots')
+            .select('*')
+            .eq('pantry_id', pantryId)
+            .order('date_added', { ascending: false }),
+          supabase
+            .from('activities')
+            .select('*')
+            .eq('pantry_id', pantryId)
+            .order('created_at', { ascending: false })
+            .limit(20),
+        ]);
 
         log.debug(
           'store',

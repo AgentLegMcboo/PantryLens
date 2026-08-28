@@ -1,7 +1,7 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
   Dimensions,
   Image,
@@ -11,22 +11,27 @@ import {
   StyleSheet,
   Text,
   View,
-} from 'react-native';
+} from "react-native";
 import Animated, {
   Easing,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { PressableScale } from '../components/motion';
-import { BoxesMock, ScanMock, VerifyMock, WeighMock } from '../components/onboarding-mocks';
-import { COLORS, FONTS, RADII, SPACING } from '../constants/theme';
-import { cueSuccess, cueTap } from '../lib/feedback';
-import { usePantryStore } from '../lib/store';
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { PressableScale } from "../components/motion";
+import {
+  BoxesMock,
+  ScanMock,
+  VerifyMock,
+  WeighMock,
+} from "../components/onboarding-mocks";
+import { COLORS, FONTS, RADII, SPACING } from "../constants/theme";
+import { cueSuccess, cueTap } from "../lib/feedback";
+import { usePantryStore } from "../lib/store";
 
-const { width: SCREEN_W } = Dimensions.get('window');
+const { width: SCREEN_W } = Dimensions.get("window");
 
 /**
  * Each phase shows a live miniature of the screen it describes, so a volunteer
@@ -35,43 +40,45 @@ const { width: SCREEN_W } = Dimensions.get('window');
  */
 const PHASES = [
   {
-    key: 'scan',
+    key: "scan",
     Mock: ScanMock,
-    lead: 'Photograph',
-    title: 'what just came in.',
-    body: 'Point the camera at a donation bag or a shelf. PantryLens drafts the item list so nobody writes counts on paper.',
-    tint: '#F6ECE2',
+    lead: "Photograph",
+    title: "what just came in.",
+    body: "Point the camera at a donation bag or a shelf. PantryLens drafts the item list so nobody writes counts on paper.",
+    tint: "#F6ECE2",
   },
   {
-    key: 'verify',
+    key: "verify",
     Mock: VerifyMock,
-    lead: 'You',
-    title: 'have the final say.',
-    body: 'The AI only guesses. Fix a count, change a category, flag a dented can — nothing reaches inventory until you confirm it.',
-    tint: '#F3EDE0',
+    lead: "You",
+    title: "have the final say.",
+    body: "The AI only guesses. Fix a count, change a category, flag a dented can — nothing reaches inventory until you confirm it.",
+    tint: "#F3EDE0",
   },
   {
-    key: 'weigh',
+    key: "weigh",
     Mock: WeighMock,
-    lead: 'Weigh',
-    title: 'the bulk drops.',
-    body: 'Big grocery and food-bank loads get weighed, not counted. Record the pounds and PantryLens still works out what it adds to your boxes.',
-    tint: '#EDF0E4',
+    lead: "Weigh",
+    title: "the bulk drops.",
+    body: "Big grocery and food-bank loads get weighed, not counted. Record the pounds and PantryLens still works out what it adds to your boxes.",
+    tint: "#EDF0E4",
   },
   {
-    key: 'boxes',
+    key: "boxes",
     Mock: BoxesMock,
-    lead: 'Know',
+    lead: "Know",
     title: "what's holding you back.",
-    body: 'See how many balanced boxes you can really pack, which category is blocking the rest, and exactly what to ask donors for.',
-    tint: '#F7E9E4',
+    body: "See how many balanced boxes you can really pack, which category is blocking the rest, and exactly what to ask donors for.",
+    tint: "#F7E9E4",
   },
 ] as const;
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const completeOnboarding = usePantryStore(state => state.completeOnboarding);
+  const completeOnboarding = usePantryStore(
+    (state) => state.completeOnboarding,
+  );
   const [page, setPage] = useState(0);
 
   const isLast = page === PHASES.length - 1;
@@ -81,7 +88,7 @@ export default function OnboardingScreen() {
     // Must land before the navigation, or the root gate still sees the intro
     // as incomplete and sends us straight back here.
     await completeOnboarding();
-    router.replace('/login');
+    router.replace("/login");
   };
 
   const next = () => {
@@ -93,7 +100,7 @@ export default function OnboardingScreen() {
   const skip = async () => {
     cueTap();
     await completeOnboarding();
-    router.replace('/login');
+    router.replace("/login");
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -108,19 +115,31 @@ export default function OnboardingScreen() {
     <View style={styles.root}>
       {/* The pantry photo sits far back — enough to feel like a place, not
           enough to compete with the mocks in front of it. */}
-      <Image source={require('../assets/images/pantry-bg.jpg')} style={styles.bg} blurRadius={3} />
+      <Image
+        source={require("../assets/images/pantry-bg.jpg")}
+        style={styles.bg}
+        blurRadius={3}
+      />
       <LinearGradient
-        colors={['rgba(251,246,238,0.58)', 'rgba(251,246,238,0.88)', COLORS.background]}
+        colors={[
+          "rgba(251,246,238,0.58)",
+          "rgba(251,246,238,0.88)",
+          COLORS.background,
+        ]}
         locations={[0, 0.52, 1]}
         style={StyleSheet.absoluteFill}
       />
       <PhaseTint page={page} />
 
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
+      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
         <View style={styles.topBar}>
           <View style={styles.brandRow}>
             <View style={styles.brandMark}>
-              <MaterialCommunityIcons name="camera-iris" size={16} color={COLORS.textOnPrimary} />
+              <MaterialCommunityIcons
+                name="camera-iris"
+                size={16}
+                color={COLORS.textOnPrimary}
+              />
             </View>
             <Text style={styles.brandName}>PantryLens</Text>
           </View>
@@ -139,7 +158,7 @@ export default function OnboardingScreen() {
           onMomentumScrollEnd={onScroll}
           style={styles.pager}
         >
-          {PHASES.map(phase => {
+          {PHASES.map((phase) => {
             const Mock = phase.Mock;
             return (
               <View key={phase.key} style={styles.page}>
@@ -168,7 +187,9 @@ export default function OnboardingScreen() {
           </View>
 
           <PressableScale style={styles.cta} cue="press" onPress={next}>
-            <Text style={styles.ctaText}>{isLast ? 'Get Started' : 'Next'}</Text>
+            <Text style={styles.ctaText}>
+              {isLast ? "Get Started" : "Next"}
+            </Text>
             <MaterialCommunityIcons
               name="arrow-right"
               size={19}
@@ -177,7 +198,8 @@ export default function OnboardingScreen() {
           </PressableScale>
 
           <Text style={styles.legal}>
-            Built for small food pantries. Your inventory stays with your pantry.
+            Built for small food pantries. Your inventory stays with your
+            pantry.
           </Text>
         </View>
       </SafeAreaView>
@@ -190,18 +212,23 @@ function PhaseTint({ page }: { page: number }) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
-    progress.value = withTiming(page, { duration: 420, easing: Easing.out(Easing.quad) });
+    progress.value = withTiming(page, {
+      duration: 420,
+      easing: Easing.out(Easing.quad),
+    });
   }, [page, progress]);
 
   const style = useAnimatedStyle(() => ({
     backgroundColor: interpolateColor(
       progress.value,
       PHASES.map((_, i) => i),
-      PHASES.map(p => p.tint),
+      PHASES.map((p) => p.tint),
     ),
   }));
 
-  return <Animated.View style={[StyleSheet.absoluteFill, style, { opacity: 0.3 }]} />;
+  return (
+    <Animated.View style={[StyleSheet.absoluteFill, style, { opacity: 0.3 }]} />
+  );
 }
 
 function Dot({ active }: { active: boolean }) {
@@ -226,35 +253,50 @@ function Dot({ active }: { active: boolean }) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: COLORS.background },
-  bg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: 0.5 },
+  bg: {
+    ...StyleSheet.absoluteFillObject,
+    width: "100%",
+    height: "100%",
+    opacity: 0.5,
+  },
   safe: { flex: 1 },
 
   topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: SPACING.md,
     paddingTop: SPACING.sm,
   },
-  brandRow: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs + 2 },
+  brandRow: { flexDirection: "row", alignItems: "center", gap: SPACING.xs + 2 },
   brandMark: {
     width: 28,
     height: 28,
     borderRadius: 9,
     backgroundColor: COLORS.primaryLight,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
-  brandName: { fontSize: 18, fontFamily: FONTS.serifSemi, color: COLORS.textPrimary, letterSpacing: -0.1 },
+  brandName: {
+    fontSize: 18,
+    fontFamily: FONTS.serifSemi,
+    color: COLORS.textPrimary,
+    letterSpacing: -0.1,
+  },
   skipBtn: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
-  skipText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  skipText: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary },
 
   pager: { flex: 1 },
   page: { width: SCREEN_W, flex: 1, paddingHorizontal: SPACING.lg },
 
-  mockArea: { flex: 1, alignItems: 'center', justifyContent: 'center', minHeight: 280 },
+  mockArea: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    minHeight: 280,
+  },
   mockHalo: {
-    position: 'absolute',
+    position: "absolute",
     width: 300,
     height: 300,
     borderRadius: 150,
@@ -279,23 +321,27 @@ const styles = StyleSheet.create({
     paddingRight: SPACING.sm,
   },
 
-  footer: { paddingHorizontal: SPACING.lg, paddingBottom: SPACING.sm, gap: SPACING.md },
-  dots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  footer: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.sm,
+    gap: SPACING.md,
+  },
+  dots: { flexDirection: "row", alignItems: "center", gap: 6 },
   dot: { height: 7, borderRadius: 4 },
   cta: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: SPACING.sm,
     minHeight: SPACING.touch + 6,
     borderRadius: RADII.full,
     backgroundColor: COLORS.primary,
     shadowColor: COLORS.primaryDark,
-    shadowOpacity: 0.3,
+    shadowOpacity: 0.1,
     shadowRadius: 16,
     shadowOffset: { width: 0, height: 8 },
     elevation: 5,
   },
-  ctaText: { fontSize: 16.5, fontWeight: '700', color: COLORS.textOnPrimary },
-  legal: { fontSize: 11, color: COLORS.textSecondary, textAlign: 'center' },
+  ctaText: { fontSize: 16.5, fontWeight: "700", color: COLORS.textOnPrimary },
+  legal: { fontSize: 11, color: COLORS.textSecondary, textAlign: "center" },
 });

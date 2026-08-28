@@ -1,18 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useMemo, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import { COLORS, RADII, SPACING } from '../constants/theme';
+import React, { useEffect, useState } from 'react';
+import { Alert, Pressable, TextInput, View } from 'react-native';
+import { COLORS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
+import { Badge, Button, Card, Chip, Stepper, Text } from '../components/ui';
 import { lookupBarcode } from '../lib/ai_vision';
 import type { DetectionBox, ScanCandidate } from '../lib/scan-normalize';
 import {
@@ -206,16 +199,16 @@ export default function ReviewVerifyScreen() {
 
   if (draftItems.length === 0) {
     return (
-      <View style={styles.emptyState}>
-        <MaterialCommunityIcons name="camera-off-outline" size={48} color={COLORS.textSecondary} />
-        <Text style={styles.emptyTitle}>Nothing to review</Text>
-        <Text style={styles.emptySub}>
+      <View className="flex-1 items-center justify-center bg-canvas px-10">
+        <MaterialCommunityIcons name="camera-off-outline" size={44} color={COLORS.textSecondary} />
+        <Text variant="title" className="mt-4">
+          Nothing to review
+        </Text>
+        <Text variant="body" tone="soft" className="mt-2 text-center">
           Every line was removed, or the scan came back empty. Photograph the donation again, or
           add the items by hand.
         </Text>
-        <TouchableOpacity style={styles.emptyBtn} onPress={() => router.back()}>
-          <Text style={styles.emptyBtnText}>Back to camera</Text>
-        </TouchableOpacity>
+        <Button label="Back to camera" className="mt-6" onPress={() => router.back()} />
       </View>
     );
   }
@@ -227,7 +220,7 @@ export default function ReviewVerifyScreen() {
   const overlayItems: OverlayItem[] = draftItems
     .map((item, i) => ({ item, i }))
     .filter(({ item }) => (item.imageIndex ?? 0) === photoIndex)
-    .map(({ item, i }) => ({
+    .map(({ item }) => ({
       id: item.uid,
       label: item.name ?? 'Item',
       count: item.count ?? 1,
@@ -244,43 +237,33 @@ export default function ReviewVerifyScreen() {
 
   return (
     <KeyboardScreen
-      style={styles.container}
-      contentContainerStyle={styles.content}
+      style={{ flex: 1, backgroundColor: COLORS.background }}
+      contentContainerStyle={{ padding: 20, paddingBottom: 96, gap: 16 }}
       scrollEnabled={scrollEnabled}
     >
-      <View style={styles.progressCard}>
-        <View style={styles.progressHeader}>
+      {/* Progress, stated once as a sentence rather than as a card full of
+          chrome. The bar is the only ornament it needs. */}
+      <View className="gap-2">
+        <View className="flex-row items-center justify-between">
+          <Text variant="heading">
+            {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
+          </Text>
           <MaterialCommunityIcons
             name={allVerified ? 'shield-check' : 'shield-search'}
-            size={22}
+            size={20}
             color={allVerified ? COLORS.statusGood : COLORS.primaryLight}
           />
-          <Text style={styles.progressTitle}>
-            {allVerified
-              ? 'Everything checked'
-              : `${verifiedCount} of ${draftItems.length} confirmed`}
-          </Text>
         </View>
-        <Text style={styles.progressSub}>
-          {allVerified
-            ? 'Save when you are ready.'
-            : 'Tap a glowing box to check it against the shelf.'}
-        </Text>
-        <View style={styles.progressTrack}>
+        <View className="h-1.5 overflow-hidden rounded-full bg-muted">
           <View
-            style={[
-              styles.progressFill,
-              {
-                width: `${(verifiedCount / draftItems.length) * 100}%`,
-                backgroundColor: allVerified ? COLORS.statusGood : COLORS.primaryLight,
-              },
-            ]}
+            className={allVerified ? 'h-full rounded-full bg-good' : 'h-full rounded-full bg-brand-light'}
+            style={{ width: `${(verifiedCount / draftItems.length) * 100}%` }}
           />
         </View>
       </View>
 
       {photo ? (
-        <>
+        <View className="gap-3">
           <DetectionOverlay
             uri={photo.uri}
             aspectRatio={photo.width && photo.height ? photo.width / photo.height : 4 / 3}
@@ -296,77 +279,54 @@ export default function ReviewVerifyScreen() {
             onDragStateChange={dragging => setScrollEnabled(!dragging)}
           />
 
-          <View style={styles.toolbar}>
-            <TouchableOpacity
-              style={[styles.toolBtn, drawMode && styles.toolBtnActive]}
+          <View className="flex-row items-center justify-between gap-3">
+            <Text variant="micro" tone="soft" className="flex-1">
+              {drawMode
+                ? 'Drag a rectangle around the item that was missed.'
+                : selectedId
+                  ? 'Drag to move it, or pull a corner to resize.'
+                  : 'Tap a box. Nudge it if it sits off the item.'}
+            </Text>
+            <Button
+              label={drawMode ? 'Cancel' : 'Add missed item'}
+              variant={drawMode ? 'primary' : 'secondary'}
+              size="compact"
               onPress={() => {
-                cueTap();
                 setDrawMode(m => !m);
                 setSelectedId(null);
               }}
-            >
-              <MaterialCommunityIcons
-                name={drawMode ? 'close' : 'vector-rectangle'}
-                size={16}
-                color={drawMode ? COLORS.textOnPrimary : COLORS.primaryDark}
-              />
-              <Text style={[styles.toolBtnText, drawMode && styles.toolBtnTextActive]}>
-                {drawMode ? 'Cancel drawing' : 'Add missed item'}
-              </Text>
-            </TouchableOpacity>
+            />
           </View>
-
-          <Text style={styles.toolHint}>
-            {drawMode
-              ? 'Drag a rectangle around the item the scanner missed.'
-              : selectedId
-                ? 'Drag the box to move it, or pull a corner to resize.'
-                : 'The scanner places boxes roughly — tap one, then nudge it if it sits off the item.'}
-          </Text>
-        </>
+        </View>
       ) : (
-        <View style={styles.noPhoto}>
-          <MaterialCommunityIcons name="image-off-outline" size={22} color={COLORS.textSecondary} />
-          <Text style={styles.noPhotoText}>
+        <Card>
+          <Text variant="label" tone="soft">
             The photo isn&apos;t available, so everything is listed below instead.
           </Text>
-        </View>
+        </Card>
       )}
 
       {currentScanPhotos.length > 1 && (
-        <View style={styles.photoTabs}>
+        <View className="flex-row flex-wrap gap-2">
           {currentScanPhotos.map((_, i) => {
-            const active = i === photoIndex;
             const pending = draftItems.filter(
               item => (item.imageIndex ?? 0) === i && !verifiedIds[item.uid],
             ).length;
             return (
-              <TouchableOpacity
+              <Chip
                 key={i}
-                style={[styles.photoTab, active && styles.photoTabActive]}
+                label={pending > 0 ? `Photo ${i + 1} · ${pending}` : `Photo ${i + 1}`}
+                selected={i === photoIndex}
                 onPress={() => {
-                  cueTap();
                   setPhotoIndex(i);
                   setSelectedId(null);
                 }}
-              >
-                <Text style={[styles.photoTabText, active && styles.photoTabTextActive]}>
-                  Photo {i + 1}
-                </Text>
-                {pending > 0 && (
-                  <View style={styles.photoTabBadge}>
-                    <Text style={styles.photoTabBadgeText}>{pending}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
+              />
             );
           })}
         </View>
       )}
 
-      {/* The editor for whatever box is currently tapped. Only one is open at a
-          time — this is a checking task, and nineteen expanded cards is the wall
-          of forms the overlay exists to replace. */}
       {selectedItem && selectedIndex >= 0 ? (
         <ItemEditor
           item={selectedItem}
@@ -377,70 +337,60 @@ export default function ReviewVerifyScreen() {
           onToggleVerified={() => toggleVerified(selectedId!)}
           onClose={() => setSelectedId(null)}
         />
-      ) : (
-        <View style={styles.hintCard}>
-          <MaterialCommunityIcons name="gesture-tap" size={20} color={COLORS.textSecondary} />
-          <Text style={styles.hintText}>
-            Tap any box on the photo to check its name, category, count and condition.
-          </Text>
-        </View>
-      )}
+      ) : null}
 
       {unplaced.length > 0 && (
-        <View style={styles.unplacedCard}>
-          <Text style={styles.unplacedTitle}>Not pinned to a spot</Text>
-          <Text style={styles.unplacedSub}>
-            The scanner read these but could not say exactly where they were.
+        <Card>
+          <Text variant="heading">Not pinned to a spot</Text>
+          <Text variant="label" tone="soft" className="mt-1">
+            Read, but the scanner could not say where they were.
           </Text>
-          {unplaced.map(({ item, i }) => {
-            const id = item.uid;
-            const isVerified = !!verifiedIds[id];
-            return (
-              <TouchableOpacity
-                key={id}
-                style={styles.unplacedRow}
-                onPress={() => {
-                  cueTap();
-                  setSelectedId(prev => (prev === id ? null : id));
-                }}
-              >
-                <MaterialCommunityIcons
-                  name={isVerified ? 'check-circle' : 'circle-outline'}
-                  size={20}
-                  color={isVerified ? COLORS.statusGood : COLORS.textSecondary}
-                />
-                <Text style={styles.unplacedName} numberOfLines={1}>
-                  {item.count && item.count > 1 ? `${item.count}× ` : ''}
-                  {item.name}
-                </Text>
-                <MaterialCommunityIcons name="chevron-right" size={18} color={COLORS.textSecondary} />
-              </TouchableOpacity>
-            );
-          })}
-        </View>
+          <View className="mt-4 gap-3">
+            {unplaced.map(({ item }) => {
+              const isVerified = !!verifiedIds[item.uid];
+              return (
+                <Pressable
+                  key={item.uid}
+                  className="flex-row items-center gap-3"
+                  onPress={() => {
+                    cueTap();
+                    setSelectedId(prev => (prev === item.uid ? null : item.uid));
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name={isVerified ? 'check-circle' : 'circle-outline'}
+                    size={20}
+                    color={isVerified ? COLORS.statusGood : COLORS.textSecondary}
+                  />
+                  <Text variant="label" className="flex-1" numberOfLines={1}>
+                    {item.count && item.count > 1 ? `${item.count}× ` : ''}
+                    {item.name}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        </Card>
       )}
 
-      <TouchableOpacity
-        style={[styles.commitBtn, saving && { opacity: 0.6 }]}
+      <Button
+        label={`Add ${draftItems.length} item${draftItems.length === 1 ? '' : 's'} to inventory`}
+        block
+        loading={saving}
+        icon={<MaterialCommunityIcons name="database-check" size={20} color={COLORS.textOnPrimary} />}
         onPress={handleSaveToInventory}
-        disabled={saving}
-      >
-        {saving ? (
-          <ActivityIndicator color={COLORS.textOnPrimary} />
-        ) : (
-          <>
-            <MaterialCommunityIcons name="database-check" size={22} color={COLORS.textOnPrimary} />
-            <Text style={styles.commitBtnText}>
-              Add {draftItems.length} Item{draftItems.length === 1 ? '' : 's'} to Inventory
-            </Text>
-          </>
-        )}
-      </TouchableOpacity>
+      />
     </KeyboardScreen>
   );
 }
 
-/** The edit panel for a single tapped detection. */
+/**
+ * The edit panel for a single tapped detection.
+ *
+ * One card, one column, generous gaps. Previously this was five labelled blocks
+ * with 12px gaps and its own confidence badge styling, which made an eight-field
+ * form feel like a tax return.
+ */
 function ItemEditor({
   item,
   verified,
@@ -461,124 +411,94 @@ function ItemEditor({
   const isLowConf = (item.confidence ?? 1) < 0.7;
 
   return (
-    <View style={[styles.editor, verified && styles.editorVerified]}>
-      <View style={styles.editorHeader}>
-        {isLowConf ? (
-          <View style={styles.lowConfBadge}>
-            <MaterialCommunityIcons name="alert-circle" size={14} color={COLORS.statusWarning} />
-            <Text style={styles.lowConfBadgeText}>
-              CHECK THIS ONE ({Math.round((item.confidence ?? 0) * 100)}%)
-            </Text>
-          </View>
-        ) : (
-          <View style={styles.highConfBadge}>
-            <MaterialCommunityIcons name="check" size={14} color={COLORS.statusGood} />
-            <Text style={styles.highConfBadgeText}>
-              HIGH CONFIDENCE ({Math.round((item.confidence ?? 0) * 100)}%)
-            </Text>
-          </View>
-        )}
-
-        <View style={styles.editorHeaderActions}>
-          <TouchableOpacity onPress={onRemove} hitSlop={8}>
+    <Card className={verified ? 'border-good' : 'border-brand-light'}>
+      <View className="flex-row items-center justify-between">
+        <Badge
+          label={`${Math.round((item.confidence ?? 0) * 100)}% sure`}
+          tone={isLowConf ? 'warn' : 'good'}
+        />
+        <View className="flex-row items-center gap-5">
+          <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove this item">
             <MaterialCommunityIcons name="trash-can-outline" size={20} color={COLORS.textSecondary} />
-          </TouchableOpacity>
-          <TouchableOpacity onPress={onClose} hitSlop={8}>
+          </Pressable>
+          <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
             <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
-          </TouchableOpacity>
+          </Pressable>
         </View>
       </View>
 
-      <Text style={styles.inputLabel}>Item Name</Text>
-      <TextInput
-        style={styles.nameInput}
-        value={item.name}
-        onChangeText={txt => onChange({ name: txt })}
-      />
-
-      <Text style={styles.inputLabel}>Category</Text>
-      <View style={styles.catRow}>
-        {CATEGORIES.map(cat => (
-          <TouchableOpacity
-            key={cat}
-            style={[styles.catChip, item.category === cat && styles.catChipActive]}
-            onPress={() => {
-              cueTap();
-              onChange({ category: cat as any });
-            }}
-          >
-            <Text style={[styles.catChipText, item.category === cat && styles.catChipTextActive]}>
-              {cat}
-            </Text>
-          </TouchableOpacity>
-        ))}
+      <View className="mt-5 gap-2">
+        <Text variant="label" tone="soft">
+          Name
+        </Text>
+        <TextInput
+          className="h-12 rounded-md border border-hairline bg-canvas px-3 text-body text-ink"
+          value={item.name}
+          placeholder="What is it?"
+          placeholderTextColor={COLORS.textSecondary}
+          onChangeText={txt => onChange({ name: txt })}
+        />
       </View>
 
-      <Text style={styles.inputLabel}>Condition</Text>
-      <View style={styles.catRow}>
-        {(Object.keys(CONDITION_LABELS) as Condition[]).map(cond => {
-          const active = (item.condition || 'ok') === cond;
-          const good = cond === 'ok';
-          return (
-            <TouchableOpacity
-              key={cond}
-              style={[
-                styles.catChip,
-                active && {
-                  backgroundColor: good ? COLORS.statusGood : COLORS.statusCritical,
-                  borderColor: good ? COLORS.statusGood : COLORS.statusCritical
-                }
-              ]}
-              onPress={() => {
-                if (cond === 'ok') cueTap();
-                else cueWarn();
-                onChange({ condition: cond });
-              }}
-            >
-              <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
-                {CONDITION_LABELS[cond]}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
+      <View className="mt-5 gap-2">
+        <Text variant="label" tone="soft">
+          Category
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          {CATEGORIES.map(cat => (
+            <Chip
+              key={cat}
+              label={cat}
+              selected={item.category === cat}
+              onPress={() => onChange({ category: cat as any })}
+            />
+          ))}
+        </View>
       </View>
-      {!isUsableCondition(item.condition) && (
-        <View style={styles.damageNote}>
-          <MaterialCommunityIcons name="alert-outline" size={14} color={COLORS.statusCritical} />
-          <Text style={styles.damageNoteText}>Held back from boxes until inspected again.</Text>
-        </View>
-      )}
 
-      <View style={styles.bottomRow}>
-        <View style={{ flex: 1, marginRight: 8 }}>
-          <Text style={styles.inputLabel}>Quantity</Text>
-          <View style={styles.stepper}>
-            <TouchableOpacity
-              style={styles.stepBtn}
-              onPress={() => {
-                cueTap();
-                onChange({ count: Math.max(1, (item.count || 1) - 1) });
-              }}
-            >
-              <MaterialCommunityIcons name="minus" size={16} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.stepVal}>{item.count || 1}</Text>
-            <TouchableOpacity
-              style={styles.stepBtn}
-              onPress={() => {
-                cueTap();
-                onChange({ count: (item.count || 1) + 1 });
-              }}
-            >
-              <MaterialCommunityIcons name="plus" size={16} color={COLORS.textPrimary} />
-            </TouchableOpacity>
-          </View>
+      <View className="mt-5 gap-2">
+        <Text variant="label" tone="soft">
+          Condition
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          {(Object.keys(CONDITION_LABELS) as Condition[]).map(cond => {
+            const active = (item.condition || 'ok') === cond;
+            const good = cond === 'ok';
+            return (
+              <Chip
+                key={cond}
+                label={CONDITION_LABELS[cond]}
+                selected={active}
+                className={active && !good ? 'border-critical bg-critical' : undefined}
+                onPress={() => {
+                  // A damage flag is a decision worth feeling, not a silent toggle.
+                  if (!good) cueWarn();
+                  onChange({ condition: cond });
+                }}
+              />
+            );
+          })}
         </View>
+        {!isUsableCondition(item.condition) && (
+          <Text variant="micro" tone="critical" className="mt-1">
+            Held back from boxes until inspected again.
+          </Text>
+        )}
+      </View>
 
-        <View style={{ flex: 1.2 }}>
-          <Text style={styles.inputLabel}>Expiration Date</Text>
+      <View className="mt-5 flex-row gap-4">
+        <View className="gap-2">
+          <Text variant="label" tone="soft">
+            Quantity
+          </Text>
+          <Stepper value={item.count || 1} min={1} onChange={next => onChange({ count: next })} />
+        </View>
+        <View className="flex-1 gap-2">
+          <Text variant="label" tone="soft">
+            Expires
+          </Text>
           <TextInput
-            style={styles.expInput}
+            className="h-12 rounded-md border border-hairline bg-canvas px-3 text-body text-ink"
             placeholder="YYYY-MM-DD"
             placeholderTextColor={COLORS.textSecondary}
             value={item.expiration || ''}
@@ -588,305 +508,23 @@ function ItemEditor({
       </View>
 
       {isLowConf && (
-        <TouchableOpacity style={styles.barcodeBtn} onPress={onBarcode}>
-          <MaterialCommunityIcons name="barcode-scan" size={18} color={COLORS.primaryDark} />
-          <Text style={styles.barcodeBtnText}>Scan Barcode Fast-Path</Text>
-        </TouchableOpacity>
+        <Button label="Scan barcode instead" variant="secondary" size="compact" className="mt-5" onPress={onBarcode} />
       )}
 
-      <TouchableOpacity
-        style={[styles.verifyBtn, verified && styles.verifyBtnDone]}
+      <Button
+        label={verified ? 'Confirmed — tap to undo' : 'Looks right, confirm it'}
+        block
+        variant={verified ? 'secondary' : 'primary'}
+        className={verified ? 'mt-3' : 'mt-5'}
+        icon={
+          <MaterialCommunityIcons
+            name={verified ? 'check-circle' : 'check-circle-outline'}
+            size={18}
+            color={verified ? COLORS.primaryDark : COLORS.textOnPrimary}
+          />
+        }
         onPress={onToggleVerified}
-      >
-        <MaterialCommunityIcons
-          name={verified ? 'check-circle' : 'check-circle-outline'}
-          size={20}
-          color={COLORS.textOnPrimary}
-        />
-        <Text style={styles.verifyBtnText}>
-          {verified ? 'Confirmed — tap to undo' : 'Looks right, confirm it'}
-        </Text>
-      </TouchableOpacity>
-    </View>
+      />
+    </Card>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  content: { padding: SPACING.md, paddingBottom: SPACING.xl },
-
-  progressCard: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  progressHeader: { flexDirection: 'row', alignItems: 'center', gap: SPACING.xs },
-  progressTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
-  progressSub: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  progressTrack: {
-    height: 6,
-    borderRadius: RADII.full,
-    backgroundColor: COLORS.surfaceVariant,
-    marginTop: SPACING.sm,
-    overflow: 'hidden',
-  },
-  progressFill: { height: '100%', borderRadius: RADII.full },
-
-  noPhoto: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-  },
-  noPhotoText: { flex: 1, fontSize: 12, color: COLORS.textSecondary },
-
-  photoTabs: { flexDirection: 'row', gap: SPACING.xs, marginTop: SPACING.sm, flexWrap: 'wrap' },
-  photoTab: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: COLORS.cardSurface,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    borderRadius: RADII.full,
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-  },
-  photoTabActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primaryLight },
-  photoTabText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
-  photoTabTextActive: { color: COLORS.textOnPrimary },
-  photoTabBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
-    paddingHorizontal: 4,
-    backgroundColor: COLORS.statusWarning,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  photoTabBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.textOnPrimary },
-
-  toolbar: { flexDirection: 'row', gap: SPACING.xs, marginTop: SPACING.sm },
-  toolBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    backgroundColor: COLORS.surfaceContainer,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    borderRadius: RADII.full,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-  },
-  toolBtnActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primaryLight },
-  toolBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.primaryDark },
-  toolBtnTextActive: { color: COLORS.textOnPrimary },
-  toolHint: {
-    fontSize: 11,
-    lineHeight: 16,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
-    paddingHorizontal: 2,
-  },
-  hintCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-    marginTop: SPACING.md,
-  },
-  hintText: { flex: 1, fontSize: 12, lineHeight: 17, color: COLORS.textSecondary },
-
-  editor: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.lg,
-    borderWidth: 1.5,
-    borderColor: COLORS.primaryLight,
-    padding: SPACING.md,
-    marginTop: SPACING.md,
-  },
-  editorVerified: { borderColor: COLORS.statusGood },
-  editorHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  editorHeaderActions: { flexDirection: 'row', alignItems: 'center', gap: SPACING.md },
-
-  lowConfBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#FDF4E7',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADII.sm,
-  },
-  lowConfBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.statusWarning },
-  highConfBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    backgroundColor: '#F2F8F1',
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADII.sm,
-  },
-  highConfBadgeText: { fontSize: 10, fontWeight: '800', color: COLORS.statusGood },
-
-  inputLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: SPACING.sm,
-    marginBottom: 4,
-  },
-  nameInput: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.sm,
-    height: 44,
-    fontSize: 15,
-    color: COLORS.textPrimary,
-  },
-  catRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6 },
-  catChip: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  catChipActive: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primaryLight },
-  catChipText: { fontSize: 12, color: COLORS.textSecondary, textTransform: 'capitalize' },
-  catChipTextActive: { color: COLORS.textOnPrimary, fontWeight: '700' },
-
-  damageNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    marginTop: SPACING.xs,
-  },
-  damageNoteText: { fontSize: 11, color: COLORS.statusCritical, flex: 1 },
-
-  bottomRow: { flexDirection: 'row', alignItems: 'flex-start' },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    height: 44,
-    paddingHorizontal: 4,
-  },
-  stepBtn: { width: 36, height: 36, justifyContent: 'center', alignItems: 'center' },
-  stepVal: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary },
-  expInput: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.sm,
-    height: 44,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-
-  barcodeBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.md,
-  },
-  barcodeBtnText: { fontSize: 13, fontWeight: '600', color: COLORS.primaryDark },
-
-  verifyBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.md,
-    minHeight: SPACING.touch,
-  },
-  verifyBtnDone: { backgroundColor: COLORS.statusGood },
-  verifyBtnText: { fontSize: 15, fontWeight: '700', color: COLORS.textOnPrimary },
-
-  unplacedCard: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    padding: SPACING.md,
-    marginTop: SPACING.md,
-  },
-  unplacedTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary },
-  unplacedSub: { fontSize: 11, color: COLORS.textSecondary, marginTop: 2, marginBottom: SPACING.xs },
-  unplacedRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: '#F4EBE1',
-  },
-  unplacedName: { flex: 1, fontSize: 13, color: COLORS.textPrimary },
-
-  commitBtn: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    padding: SPACING.md,
-    marginTop: SPACING.lg,
-    minHeight: SPACING.touch,
-  },
-  commitBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.textOnPrimary },
-
-  emptyState: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.background,
-    padding: SPACING.xl,
-  },
-  emptyTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginTop: SPACING.sm },
-  emptySub: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: SPACING.xs,
-  },
-  emptyBtn: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.lg,
-    marginTop: SPACING.lg,
-    minHeight: SPACING.touch,
-    justifyContent: 'center',
-  },
-  emptyBtnText: { fontSize: 15, fontWeight: '700', color: COLORS.textOnPrimary },
-});

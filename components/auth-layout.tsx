@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../constants/theme';
+import { CARD_ELEVATION, COLORS, FONTS, RADII, SPACING } from '../constants/theme';
 import { GoogleLogo } from './google-logo';
 import { KeyboardScreen } from './keyboard-screen';
 
@@ -152,8 +152,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.lg,
     // Lifts the form off the shelves behind it.
     shadowColor: '#2B2420',

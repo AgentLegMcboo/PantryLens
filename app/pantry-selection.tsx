@@ -11,7 +11,7 @@ import {
   TouchableOpacity,
   View
 } from 'react-native';
-import { COLORS, FONTS, RADII, SPACING } from '../constants/theme';
+import { CARD_ELEVATION, COLORS, FONTS, RADII, SPACING } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { FadeInUp, PressableScale } from '../components/motion';
 import { cueSuccess, cueTap } from '../lib/feedback';
@@ -280,8 +280,7 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: COLORS.cardSurface,
     borderRadius: RADII.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
+    ...CARD_ELEVATION,
     padding: SPACING.lg,
     shadowColor: '#2B2420',
     shadowOpacity: 0.16,

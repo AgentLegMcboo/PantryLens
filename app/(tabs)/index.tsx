@@ -1,11 +1,27 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React from 'react';
-import { ScrollView, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { COLORS, RADII, SPACING } from '../../constants/theme';
-import { computeAllocation } from '../../lib/allocation';
-import { AnimatedCounter, FadeInUp, PressableScale, Pulse } from '../../components/motion';
-import { InventoryItem, usePantryStore } from '../../lib/store';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React from "react";
+import { Image, Pressable, StyleSheet, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { COLORS } from "../../constants/theme";
+import { computeAllocation } from "../../lib/allocation";
+import { AnimatedCounter, FadeInUp } from "../../components/motion";
+import { Badge, Button, Panel, Screen, Text } from "../../components/ui";
+import { InventoryItem, usePantryStore } from "../../lib/store";
+import { cuePress } from "../../lib/feedback";
+
+/**
+ * The dashboard.
+ *
+ * Rebuilt for calm. Previously an alert banner, three metric tiles, three action
+ * buttons, a low-stock card and an activity list all fought above the fold, in
+ * four competing accent colours and nine font sizes.
+ *
+ * The rule now: one headline answer, one primary action, everything else
+ * subordinate. A volunteer walking in wants to know "how many boxes can we make
+ * and what's stopping us" — that is the top card, and nothing else gets to be
+ * red.
+ */
 
 /**
  * Activity rows store an ISO timestamp, which was being rendered raw —
@@ -17,7 +33,7 @@ function formatActivityTime(iso: string): string {
   if (Number.isNaN(then)) return iso;
 
   const minutes = Math.floor((Date.now() - then) / 60000);
-  if (minutes < 1) return 'Just now';
+  if (minutes < 1) return "Just now";
   if (minutes < 60) return `${minutes}m ago`;
 
   const hours = Math.floor(minutes / 60);
@@ -26,480 +42,346 @@ function formatActivityTime(iso: string): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
 
-  return new Date(then).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+  return new Date(then).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+  });
 }
+
+/** The dashboard's headline figure, and what Build Boxes opens on. */
+const DASHBOARD_TARGET_BOXES = 12;
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { inventory, bulkLots, boxRules, settings, activities, thresholds } = usePantryStore();
+  const { inventory, bulkLots, boxRules, settings, activities, thresholds } =
+    usePantryStore();
 
-  // The dashboard's headline figure. A round dozen is the usual weekly ask and
-  // is what Build Boxes opens on, so the two screens agree.
-  const DASHBOARD_TARGET_BOXES = 12;
   const plan = computeAllocation(
     inventory,
     boxRules,
     DASHBOARD_TARGET_BOXES,
     settings.defaultFamilySize,
-    bulkLots
+    bulkLots,
   );
   const isShort = plan.shortfallPerCategory[plan.limitingCategory] > 0;
 
-  // Compute expiring items
-  const now = new Date();
   const warningLimit = new Date();
-  warningLimit.setDate(now.getDate() + settings.expirationWarningDays);
+  warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
 
-  const expiringCount = inventory.filter((i: InventoryItem) => {
-    if (!i.expiration) return false;
-    return new Date(i.expiration) <= warningLimit;
-  }).reduce((sum: number, item: InventoryItem) => sum + item.count, 0);
+  const expiringCount = inventory
+    .filter(
+      (i: InventoryItem) =>
+        !!i.expiration && new Date(i.expiration) <= warningLimit,
+    )
+    .reduce((sum: number, item: InventoryItem) => sum + item.count, 0);
 
-  const totalStockCount = inventory.reduce((sum: number, item: InventoryItem) => sum + item.count, 0);
+  const totalStockCount = inventory.reduce(
+    (sum: number, i: InventoryItem) => sum + i.count,
+    0,
+  );
 
-  // Low stock category calculation
   const lowCategories = Object.keys(thresholds).filter((cat: string) => {
-    const total = inventory.filter((i: InventoryItem) => i.category === cat).reduce((sum: number, i: InventoryItem) => sum + i.count, 0);
+    const total = inventory
+      .filter((i: InventoryItem) => i.category === cat)
+      .reduce((sum: number, i: InventoryItem) => sum + i.count, 0);
     return total < (thresholds as any)[cat];
   });
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* A red alarm that fires whatever the numbers say is an alarm nobody
-          reads. When stock covers the target this states that instead, in the
-          calm colour, and keeps the route through to Build Boxes. */}
+    <Screen>
+      {/* The hero is the brand colour, not another white card.
+          A screen made entirely of pale rectangles on a pale ground has no
+          anchor and no shape — this is what your eye lands on first, and it
+          carries the one number the whole app exists to produce. */}
       <FadeInUp index={0}>
-      {isShort ? (
-        <View style={styles.alertBanner}>
-          <View style={styles.alertHeader}>
-            <Pulse active={plan.achievableBoxes === 0}>
-              <MaterialCommunityIcons name="alert-circle-outline" size={24} color={COLORS.statusCritical} />
-            </Pulse>
-            <Text style={styles.alertTitle}>Limiting Category Alert</Text>
+        <View
+          className="overflow-hidden rounded-lg"
+          style={{
+            // The same lip the buttons carry, so the hero reads as part of the
+            // same physical family rather than as a flat coloured rectangle.
+            borderBottomWidth: 6,
+            borderBottomColor: COLORS.primaryDeep,
+            shadowColor: COLORS.shadow,
+            shadowOpacity: 0.18,
+            shadowRadius: 14,
+            shadowOffset: { width: 0, height: 5 },
+            elevation: 4,
+          }}
+        >
+          {/* A real pantry behind the number. The flat brand block fixed
+              "everything is a white rectangle" but was still a rectangle; a
+              photograph of the actual thing says what this app is for before a
+              word is read.
+
+              Photo: Unsplash (unsplash.com/license — free to use, no
+              attribution required). Cropped to 2.4:1 and recompressed so the
+              bundle carries ~100KB rather than the ~260KB original. */}
+          <Image
+            source={require("../../assets/images/pantry-banner.jpg")}
+            style={StyleSheet.absoluteFill}
+            resizeMode="cover"
+          />
+          {/* Scrim: dense where the type sits, thinning toward the top-right so
+              the shelves stay visible. White text over a busy illustration needs
+              this everywhere, not just behind the words. */}
+          <LinearGradient
+            colors={[
+              "rgba(156,66,38,0.98)",
+              "rgba(156,66,38,0.90)",
+              "rgba(156,66,38,0.60)",
+            ]}
+            locations={[0, 0.55, 1]}
+            start={{ x: 0, y: 1 }}
+            end={{ x: 1, y: 0 }}
+            style={StyleSheet.absoluteFill}
+          />
+
+          <View className="p-card">
+            <Text variant="label" className="text-ink-on/70">
+              Balanced boxes ready now
+            </Text>
+
+            <View className="mt-1 flex-row items-baseline gap-3">
+              <AnimatedCounter
+                value={plan.achievableBoxes}
+                style={{
+                  fontSize: 60,
+                  fontWeight: "800",
+                  color: COLORS.textOnPrimary,
+                  letterSpacing: -2,
+                }}
+              />
+              <Text variant="body" className="text-ink-on/70">
+                family of {settings.defaultFamilySize}
+              </Text>
+            </View>
+
+            {/* Hairline in the brand block, not on the page. */}
+            <View className="my-4 h-px bg-white/20" />
+
+            <View className="flex-row items-center justify-between gap-3">
+              <Text variant="label" className="flex-1 text-ink-on/85">
+                {isShort ? (
+                  <>
+                    <Text
+                      variant="label"
+                      className="font-bold capitalize text-ink-on"
+                    >
+                      {plan.limitingCategory}
+                    </Text>{" "}
+                    short by {plan.shortfallPerCategory[plan.limitingCategory]}
+                  </>
+                ) : (
+                  "Every category has enough"
+                )}
+              </Text>
+
+              <Pressable
+                onPress={() => router.push("/(tabs)/build")}
+                className="flex-row items-center gap-1 rounded-full bg-white/15 px-4 py-2"
+              >
+                <Text variant="label" className="font-semibold text-ink-on">
+                  Build
+                </Text>
+                <MaterialCommunityIcons
+                  name="arrow-right"
+                  size={14}
+                  color={COLORS.textOnPrimary}
+                />
+              </Pressable>
+            </View>
           </View>
-          <Text style={styles.alertText}>
-            You can make <Text style={{ fontWeight: 'bold' }}>{plan.achievableBoxes} balanced boxes</Text> right now.{' '}
-            <Text style={{ color: COLORS.statusCritical, fontWeight: 'bold', textTransform: 'capitalize' }}>
-              {plan.limitingCategory}
-            </Text>{' '}
-            is holding you back by {plan.shortfallPerCategory[plan.limitingCategory]} units.
-          </Text>
-          <PressableScale
-            style={styles.alertButton}
-            cue="press"
-            onPress={() => router.push('/(tabs)/build')}
-          >
-            <Text style={styles.alertButtonText}>Optimize Box Allocations</Text>
-            <MaterialCommunityIcons name="arrow-right" size={16} color={COLORS.textOnPrimary} />
-          </PressableScale>
         </View>
-      ) : (
-        <View style={styles.readyBanner}>
-          <View style={styles.alertHeader}>
-            <MaterialCommunityIcons name="check-circle-outline" size={24} color={COLORS.statusGood} />
-            <Text style={styles.readyTitle}>Stock is balanced</Text>
-          </View>
-          <Text style={styles.alertText}>
-            Enough on the shelves for{' '}
-            <Text style={{ fontWeight: 'bold' }}>
-              {plan.achievableBoxes} balanced box{plan.achievableBoxes === 1 ? '' : 'es'}
-            </Text>{' '}
-            for a family of {settings.defaultFamilySize}. No category is short.
-          </Text>
-          <PressableScale
-            style={styles.readyButton}
-            cue="press"
-            onPress={() => router.push('/(tabs)/build')}
-          >
-            <Text style={styles.readyButtonText}>Start Building Boxes</Text>
-            <MaterialCommunityIcons name="arrow-right" size={16} color={COLORS.textOnPrimary} />
-          </PressableScale>
-        </View>
-      )}
       </FadeInUp>
 
-      {/* Metrics Row */}
-      <View style={styles.metricsGrid}>
-        <FadeInUp index={1} style={styles.metricFlex}>
-          <View style={[styles.metricCard, { borderLeftColor: COLORS.primaryLight, borderLeftWidth: 4 }]}>
-            <Text style={styles.metricLabel}>Total Items</Text>
-            <AnimatedCounter value={totalStockCount} style={styles.metricValue} />
-            <Text style={styles.metricSub}>Across {inventory.length} SKUs</Text>
+      {/* Two figures sitting directly on the canvas. Wrapping every number in
+          its own bordered card is what made the screen feel like a filing
+          cabinet; a divider is enough to separate two of them. */}
+      <FadeInUp index={1}>
+        <View className="flex-row items-center px-1">
+          <View className="flex-1">
+            <AnimatedCounter
+              value={totalStockCount}
+              style={{
+                fontSize: 28,
+                fontWeight: "700",
+                color: COLORS.textPrimary,
+              }}
+            />
+            <Text variant="micro" tone="soft" className="mt-0.5">
+              items · {inventory.length} products
+            </Text>
           </View>
-        </FadeInUp>
 
-        <FadeInUp index={2} style={styles.metricFlex}>
-          <View style={[styles.metricCard, { borderLeftColor: COLORS.statusGood, borderLeftWidth: 4 }]}>
-            <Text style={styles.metricLabel}>Box Capacity</Text>
-            <AnimatedCounter value={plan.achievableBoxes} style={[styles.metricValue, { color: COLORS.statusGood }]} />
-            <Text style={styles.metricSub}>Family of {settings.defaultFamilySize}</Text>
-          </View>
-        </FadeInUp>
+          <View className="h-9 w-px bg-hairline" />
 
-        <FadeInUp index={3} style={styles.metricFlex}>
-          <PressableScale
-            style={[styles.metricCard, { borderLeftColor: COLORS.statusWarning, borderLeftWidth: 4 }]}
-            onPress={() => router.push('/expiring-soon')}
+          <Pressable
+            className="flex-1 pl-5"
+            onPress={() => router.push("/expiring-soon")}
           >
-            <Text style={styles.metricLabel}>Expiring Soon</Text>
-            <AnimatedCounter value={expiringCount} style={[styles.metricValue, { color: COLORS.statusWarning }]} />
-            <Text style={styles.metricSub}>Use First items</Text>
-          </PressableScale>
-        </FadeInUp>
-      </View>
-
-      {/* Primary Action Buttons */}
-      <Text style={styles.sectionHeader}>Quick Actions</Text>
-
-      <PressableScale
-        style={styles.primaryActionButton}
-        cue="press"
-        onPress={() => router.push('/log-donation')}
-      >
-        <View style={styles.actionIconContainer}>
-          <MaterialCommunityIcons name="camera-outline" size={28} color={COLORS.textOnPrimary} />
+            <View className="flex-row items-center gap-1.5">
+              <AnimatedCounter
+                value={expiringCount}
+                style={{
+                  fontSize: 28,
+                  fontWeight: "700",
+                  color: COLORS.statusWarning,
+                }}
+              />
+              <MaterialCommunityIcons
+                name="chevron-right"
+                size={18}
+                color={COLORS.textSecondary}
+              />
+            </View>
+            <Text variant="micro" tone="soft" className="mt-0.5">
+              use within {settings.expirationWarningDays} days
+            </Text>
+          </Pressable>
         </View>
-        <View style={styles.actionTextContainer}>
-          <Text style={styles.primaryActionTitle}>Log Donation</Text>
-          <Text style={styles.primaryActionSub}>Photograph bags or boxes for AI auto-intake</Text>
-        </View>
-        <MaterialCommunityIcons name="chevron-right" size={24} color={COLORS.textOnPrimary} />
-      </PressableScale>
+      </FadeInUp>
 
-      <View style={styles.actionGrid}>
-        <TouchableOpacity
-          style={[styles.secondaryActionButton, { backgroundColor: COLORS.cardSurface }]}
-          onPress={() => router.push('/bulk-intake')}
+      {/* The app's whole reason for existing, given the weight to match.
+          As one of three identical buttons it read as a peer of "Weigh bulk";
+          as a picture of a donation box with a camera on it, it reads as the
+          thing you came here to do. */}
+      <FadeInUp index={2}>
+        <Pressable
+          onPress={() => {
+            cuePress();
+            router.push("/log-donation");
+          }}
+          style={({ pressed }) => ({
+            borderBottomWidth: pressed ? 2 : 7,
+            borderBottomColor: COLORS.primaryDeep,
+            transform: [{ translateY: pressed ? 5 : 0 }],
+            shadowColor: COLORS.shadow,
+            shadowOpacity: 0.2,
+            shadowRadius: 12,
+            shadowOffset: { width: 0, height: 5 },
+            elevation: 5,
+            borderRadius: 16,
+          })}
+          className="flex-row items-center overflow-hidden rounded-lg bg-brand"
         >
-          <MaterialCommunityIcons name="scale-balance" size={24} color={COLORS.secondary} />
-          <Text style={styles.secondaryActionTitle}>Bulk Donation</Text>
-          <Text style={styles.secondaryActionSub}>Log by weight</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.secondaryActionButton, { backgroundColor: COLORS.cardSurface }]}
-          onPress={() => router.push('/shelf-audit')}
-        >
-          <MaterialCommunityIcons name="format-list-checks" size={24} color={COLORS.secondary} />
-          <Text style={styles.secondaryActionTitle}>Audit Shelf</Text>
-          <Text style={styles.secondaryActionSub}>Re-count stock</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.secondaryActionButton, { backgroundColor: COLORS.cardSurface }]}
-          onPress={() => router.push('/(tabs)/build')}
-        >
-          <MaterialCommunityIcons name="package-variant-closed" size={24} color={COLORS.primaryLight} />
-          <Text style={styles.secondaryActionTitle}>Build Boxes</Text>
-          <Text style={styles.secondaryActionSub}>Plan family distribution</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Low Stock Categories */}
-      {lowCategories.length > 0 && (
-        <View style={styles.lowStockSection}>
-          <Text style={styles.sectionHeader}>Low Stock Warnings</Text>
-          <View style={styles.lowStockCard}>
-            {lowCategories.map((cat: string) => (
-              <View key={cat} style={styles.lowStockRow}>
-                <View style={styles.lowStockCategoryTag}>
-                  <Text style={styles.lowStockCategoryText}>{cat.toUpperCase()}</Text>
-                </View>
-                <Text style={styles.lowStockDetail}>
-                  {inventory.filter((i: InventoryItem) => i.category === cat).reduce((s: number, i: InventoryItem) => s + i.count, 0)} units in stock (Min:{' '}
-                  {(thresholds as any)[cat]})
-                </Text>
+          <View className="flex-1 py-5 pl-5 pr-3">
+            <View className="flex-row items-center gap-2">
+              <View className="h-8 w-8 items-center justify-center rounded-full bg-white/20">
+                <MaterialCommunityIcons
+                  name="camera-outline"
+                  size={18}
+                  color={COLORS.textOnPrimary}
+                />
               </View>
-            ))}
-            <TouchableOpacity
-              style={styles.needButton}
-              onPress={() => router.push('/(tabs)/needs')}
-            >
-              <Text style={styles.needButtonText}>Generate Donation Request Flyer</Text>
-            </TouchableOpacity>
+              <Text variant="heading" className="font-bold text-ink-on">
+                Photograph a donation
+              </Text>
+            </View>
+            <Text variant="label" className="mt-2 text-ink-on/75">
+              Point, shoot, and every label is read for you.
+            </Text>
           </View>
+
+          {/* The donation box, fading in from the right rather than sitting in
+              a hard-edged panel — the gradient is what keeps it part of the
+              button instead of a picture glued to one. */}
+          <View className="h-full w-28">
+            <Image
+              source={require("../../assets/images/donation-scan.jpg")}
+              style={StyleSheet.absoluteFill}
+              resizeMode="cover"
+            />
+            <LinearGradient
+              colors={["rgba(156,66,38,1)", "rgba(156,66,38,0.35)"]}
+              start={{ x: 0, y: 0.5 }}
+              end={{ x: 1, y: 0.5 }}
+              style={StyleSheet.absoluteFill}
+            />
+          </View>
+        </Pressable>
+      </FadeInUp>
+
+      {/* The other two intakes stay quiet beside it. */}
+      <FadeInUp index={3}>
+        <View className="flex-row gap-2">
+          <Button
+            label="Weigh bulk"
+            variant="secondary"
+            size="compact"
+            onPress={() => router.push("/bulk-intake")}
+          />
+          <Button
+            label="Audit a shelf"
+            variant="secondary"
+            size="compact"
+            onPress={() => router.push("/shelf-audit")}
+          />
         </View>
+      </FadeInUp>
+
+      {lowCategories.length > 0 && (
+        <FadeInUp index={3}>
+          <Panel>
+            <View className="flex-row items-center gap-2">
+              <MaterialCommunityIcons
+                name="trending-down"
+                size={16}
+                color={COLORS.statusCritical}
+              />
+              <Text variant="label" className="font-semibold">
+                Running low
+              </Text>
+            </View>
+            <View className="mt-3 flex-row flex-wrap gap-2">
+              {lowCategories.map((cat: string) => (
+                <Badge key={cat} label={cat} tone="critical" />
+              ))}
+            </View>
+            <Button
+              label="Write a donation request"
+              variant="ghost"
+              size="compact"
+              className="mt-3"
+              onPress={() => router.push("/(tabs)/needs")}
+            />
+          </Panel>
+        </FadeInUp>
       )}
 
-      {/* Recent Activity Log */}
-      <Text style={styles.sectionHeader}>Recent Pantry Activity</Text>
-      <View style={styles.activityCard}>
-        {activities.length === 0 ? (
-          <Text style={styles.activityEmpty}>
-            Nothing logged yet. Scanning a donation or auditing a shelf will show up here.
+      {/* Activity is a log, not a card. Rows on the page, no container. */}
+      <FadeInUp index={4}>
+        <View className="gap-4">
+          <Text variant="label" tone="soft" className="font-semibold">
+            Recent activity
           </Text>
-        ) : (
-          activities.slice(0, 5).map((act: any) => (
-            <View key={act.id} style={styles.activityRow}>
-              <View style={styles.activityIcon}>
-                <MaterialCommunityIcons name={act.icon as any} size={20} color={COLORS.primaryLight} />
-              </View>
-              <View style={styles.activityContent}>
-                <Text style={styles.activityText}>{act.text}</Text>
-                <Text style={styles.activityTime}>{formatActivityTime(act.time)}</Text>
-              </View>
+
+          {activities.length === 0 ? (
+            <Text variant="label" tone="soft">
+              Nothing logged yet. Scanning a donation will show up here.
+            </Text>
+          ) : (
+            <View className="gap-4">
+              {activities.slice(0, 5).map((act: any) => (
+                <View key={act.id} className="flex-row items-start gap-3">
+                  <View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-subtle">
+                    <MaterialCommunityIcons
+                      name={act.icon as any}
+                      size={16}
+                      color={COLORS.primaryLight}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text variant="label">{act.text}</Text>
+                    <Text variant="micro" tone="soft" className="mt-0.5">
+                      {formatActivityTime(act.time)}
+                    </Text>
+                  </View>
+                </View>
+              ))}
             </View>
-          ))
-        )}
-      </View>
-    </ScrollView>
+          )}
+        </View>
+      </FadeInUp>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    padding: SPACING.md,
-    paddingBottom: 100,
-  },
-  alertBanner: {
-    backgroundColor: '#FDF3F2',
-    borderColor: COLORS.statusCritical,
-    borderWidth: 1,
-    borderRadius: RADII.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  readyBanner: {
-    backgroundColor: '#F2F8F1',
-    borderColor: COLORS.statusGood,
-    borderWidth: 1,
-    borderRadius: RADII.lg,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  readyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.statusGood,
-    marginLeft: SPACING.xs,
-  },
-  readyButton: {
-    backgroundColor: COLORS.statusGood,
-    borderRadius: RADII.md,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  readyButtonText: {
-    color: COLORS.textOnPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginRight: SPACING.xs,
-  },
-  alertHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  alertTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.statusCritical,
-    marginLeft: SPACING.xs,
-  },
-  alertText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    lineHeight: 20,
-    marginBottom: SPACING.sm,
-  },
-  alertButton: {
-    backgroundColor: COLORS.statusCritical,
-    borderRadius: RADII.md,
-    paddingVertical: SPACING.sm,
-    paddingHorizontal: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  alertButtonText: {
-    color: COLORS.textOnPrimary,
-    fontSize: 14,
-    fontWeight: '600',
-    marginRight: SPACING.xs,
-  },
-  metricsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.md,
-  },
-  metricFlex: { flex: 1 },
-  metricCard: {
-    flex: 1,
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    padding: SPACING.sm,
-    marginHorizontal: 3,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-  },
-  metricLabel: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    textTransform: 'uppercase',
-  },
-  metricValue: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginVertical: 2,
-  },
-  metricSub: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-  },
-  sectionHeader: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.sm,
-  },
-  primaryActionButton: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.lg,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-    minHeight: SPACING.touch,
-  },
-  actionIconContainer: {
-    width: 44,
-    height: 44,
-    borderRadius: RADII.md,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: SPACING.md,
-  },
-  actionTextContainer: {
-    flex: 1,
-  },
-  primaryActionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-  },
-  primaryActionSub: {
-    fontSize: 12,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 2,
-  },
-  actionGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: SPACING.md,
-  },
-  secondaryActionButton: {
-    flex: 1,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    padding: SPACING.md,
-    marginHorizontal: 4,
-  },
-  secondaryActionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: SPACING.xs,
-  },
-  secondaryActionSub: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  lowStockSection: {
-    marginBottom: SPACING.sm,
-  },
-  lowStockCard: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    padding: SPACING.md,
-  },
-  lowStockRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  lowStockCategoryTag: {
-    backgroundColor: '#FDF3F2',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADII.sm,
-    marginRight: SPACING.sm,
-  },
-  lowStockCategoryText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.statusCritical,
-  },
-  lowStockDetail: {
-    fontSize: 13,
-    color: COLORS.textPrimary,
-  },
-  needButton: {
-    marginTop: SPACING.sm,
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    padding: SPACING.sm,
-    alignItems: 'center',
-  },
-  needButtonText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.primaryDark,
-  },
-  activityCard: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    padding: SPACING.md,
-    marginBottom: SPACING.xl,
-  },
-  activityRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: SPACING.xs,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F4EBE1',
-  },
-  activityIcon: {
-    width: 32,
-    height: 32,
-    borderRadius: RADII.sm,
-    backgroundColor: COLORS.surfaceContainer,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: SPACING.sm,
-  },
-  activityContent: {
-    flex: 1,
-  },
-  activityText: {
-    fontSize: 13,
-    color: COLORS.textPrimary,
-  },
-  activityTime: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  activityEmpty: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: COLORS.textSecondary,
-    paddingVertical: SPACING.xs,
-  },
-});
