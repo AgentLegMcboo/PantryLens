@@ -1,19 +1,52 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useState } from 'react';
-import {
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
+import { Alert, View } from 'react-native';
+import { COLORS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
-import { cueTap, cueWarn } from '../lib/feedback';
-import { Condition, CONDITION_LABELS, isUsableCondition, usePantryStore } from '../lib/store';
+import { FadeInUp } from '../components/motion';
+import {
+  Button,
+  Card,
+  CardHeader,
+  Chip,
+  EmptyState,
+  Input,
+  Panel,
+  Stepper,
+  Text,
+} from '../components/ui';
+import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
+import {
+  Category,
+  Condition,
+  CONDITION_LABELS,
+  isUsableCondition,
+  usePantryStore,
+} from '../lib/store';
 
+const CATEGORIES: Category[] = [
+  'grain',
+  'vegetable',
+  'protein',
+  'breakfast',
+  'snack',
+  'hygiene',
+  'baby',
+];
+
+/**
+ * One item, editable.
+ *
+ * Was a single card holding nine stacked label-and-control pairs with a 44px
+ * stepper wedged among them — a form with no shape, where "how many are on the
+ * shelf" looked exactly as important as "what date is printed on the tin".
+ *
+ * Three cards now, each answering one question, in the order a volunteer holding
+ * the tin would ask them: what is it, how many and how long, is it fit to give
+ * out. Condition gets a card of its own because it is the only field here that
+ * silently removes stock from every box the app builds.
+ */
 export default function ItemDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
@@ -26,301 +59,192 @@ export default function ItemDetailScreen() {
   // delete, or a realtime refetch landing while this screen was open — React
   // saw fewer hooks than the previous render and tore the app down.
   const [name, setName] = useState(item?.name ?? '');
-  const [category, setCategory] = useState(item?.category ?? 'unknown');
+  const [category, setCategory] = useState<Category>(item?.category ?? 'unknown');
   const [count, setCount] = useState(item?.count ?? 1);
   const [expiration, setExpiration] = useState(item?.expiration || '');
   const [condition, setCondition] = useState<Condition>(item?.condition ?? 'ok');
 
   if (!item) {
     return (
-      <View style={styles.notFound}>
-        <Text style={styles.notFoundText}>Item not found in inventory.</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={() => router.back()}>
-          <Text style={styles.backBtnText}>Back to Inventory</Text>
-        </TouchableOpacity>
+      <View className="flex-1 justify-center bg-canvas">
+        <EmptyState
+          icon="package-variant"
+          title="This item is gone"
+          body="It was deleted, or packed into a box, while you had this open."
+          actionLabel="Back to the shelf"
+          onAction={() => router.back()}
+        />
       </View>
     );
   }
 
   const handleSave = () => {
+    // The stepper goes to zero and the hint says so, so zero has to actually
+    // mean gone — the same thing it means on the shelf list. Saving a 0-count
+    // item would otherwise leave a row nothing can ever be packed from.
+    if (count === 0) {
+      deleteItem(item.id);
+      cueSuccess();
+      router.back();
+      return;
+    }
+
     updateItem(item.id, {
       name: name.trim(),
-      category: category as any,
+      category,
       count,
       expiration: expiration.trim() || null,
-      condition
+      condition,
     });
-    Alert.alert('Saved!', 'Item updated successfully.');
+    cueSuccess();
     router.back();
   };
 
   const handleDelete = () => {
-    Alert.alert('Delete Item?', `Remove "${item.name}" from live inventory?`, [
-      { text: 'Cancel', style: 'cancel' },
+    Alert.alert('Remove this item?', `"${item.name}" will come off the shelf entirely.`, [
+      { text: 'Keep it', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'Remove',
         style: 'destructive',
         onPress: () => {
           deleteItem(item.id);
           router.back();
-        }
-      }
+        },
+      },
     ]);
   };
 
+  const usable = isUsableCondition(condition);
+
   return (
-    <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.card}>
-        <Text style={styles.label}>Item Name</Text>
-        <TextInput
-          style={styles.input}
-          value={name}
-          onChangeText={setName}
-        />
+    <KeyboardScreen>
+      <FadeInUp index={0}>
+        <Card className="gap-5">
+          <Input label="What is it?" value={name} onChangeText={setName} placeholder="Canned black beans 15 oz" />
 
-        <Text style={styles.label}>Category</Text>
-        <View style={styles.catGrid}>
-          {['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygiene', 'baby'].map(cat => (
-            <TouchableOpacity
-              key={cat}
-              style={[styles.catChip, category === cat && styles.catChipActive]}
-              onPress={() => setCategory(cat as any)}
-            >
-              <Text style={[styles.catChipText, category === cat && styles.catChipTextActive]}>
-                {cat}
+          <View className="gap-2">
+            <Text variant="label" tone="soft" className="font-semibold">
+              Category
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {CATEGORIES.map(cat => (
+                <Chip
+                  key={cat}
+                  label={cat.charAt(0).toUpperCase() + cat.slice(1)}
+                  selected={category === cat}
+                  onPress={() => setCategory(cat)}
+                />
+              ))}
+            </View>
+          </View>
+        </Card>
+      </FadeInUp>
+
+      <FadeInUp index={1}>
+        <Card className="gap-5">
+          <View className="flex-row items-center justify-between gap-3">
+            <View className="flex-1">
+              <Text variant="body" className="font-semibold">
+                How many on the shelf?
               </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+              <Text variant="micro" tone="soft" className="mt-0.5">
+                Counting down to zero removes the item.
+              </Text>
+            </View>
+            <Stepper value={count} min={0} onChange={setCount} />
+          </View>
 
-        <Text style={styles.label}>Quantity in Stock</Text>
-        <View style={styles.stepper}>
-          <TouchableOpacity
-            style={styles.stepBtn}
-            onPress={() => setCount(Math.max(1, count - 1))}
-          >
-            <MaterialCommunityIcons name="minus" size={20} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-          <Text style={styles.stepVal}>{count}</Text>
-          <TouchableOpacity
-            style={styles.stepBtn}
-            onPress={() => setCount(count + 1)}
-          >
-            <MaterialCommunityIcons name="plus" size={20} color={COLORS.textPrimary} />
-          </TouchableOpacity>
-        </View>
+          <Input
+            label="Date printed on it"
+            value={expiration}
+            onChangeText={setExpiration}
+            placeholder="YYYY-MM-DD"
+            hint="Leave it blank if there is no date to read."
+          />
+        </Card>
+      </FadeInUp>
 
-        <Text style={styles.label}>Expiration Date (YYYY-MM-DD)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="YYYY-MM-DD"
-          value={expiration}
-          onChangeText={setExpiration}
-        />
+      {/* The only place a flagged item can be cleared. Intake can mark a can
+          dented, which holds it out of every box — without this the item was
+          stuck that way for good, and the shelf slowly filled with stock the
+          allocator refused to touch. */}
+      <FadeInUp index={2}>
+        <Card>
+          <CardHeader
+            title="Is it fit to give out?"
+            subtitle="Anything but Good is held back from every box until someone clears it."
+          />
 
-        {/* The only place a flagged item can be cleared. Intake can mark a can
-            dented, which holds it out of every box — without this the item was
-            stuck that way for good, and the shelf slowly filled with stock the
-            allocator refused to touch. */}
-        <Text style={styles.label}>Condition</Text>
-        <View style={styles.catGrid}>
-          {(Object.keys(CONDITION_LABELS) as Condition[]).map(cond => {
-            const active = condition === cond;
-            const good = cond === 'ok';
-            return (
-              <TouchableOpacity
-                key={cond}
-                style={[
-                  styles.catChip,
-                  active && {
-                    backgroundColor: good ? COLORS.statusGood : COLORS.statusCritical,
-                    borderColor: good ? COLORS.statusGood : COLORS.statusCritical
+          <View className="flex-row flex-wrap gap-2">
+            {(Object.keys(CONDITION_LABELS) as Condition[]).map(cond => {
+              const active = condition === cond;
+              const good = cond === 'ok';
+              return (
+                <Chip
+                  key={cond}
+                  label={CONDITION_LABELS[cond]}
+                  selected={active}
+                  className={
+                    active
+                      ? good
+                        ? 'border-good bg-good'
+                        : 'border-critical bg-critical'
+                      : undefined
                   }
-                ]}
-                onPress={() => {
-                  if (cond === 'ok') cueTap();
-                  else cueWarn();
-                  setCondition(cond);
-                }}
-              >
-                <Text style={[styles.catChipText, active && styles.catChipTextActive]}>
-                  {CONDITION_LABELS[cond]}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-        {!isUsableCondition(condition) && (
-          <Text style={styles.conditionNote}>
-            Held out of box building until someone marks it Good again.
+                  onPress={() => {
+                    (good ? cueTap : cueWarn)();
+                    setCondition(cond);
+                  }}
+                />
+              );
+            })}
+          </View>
+
+          {!usable && (
+            <Panel className="mt-4 flex-row gap-3">
+              <MaterialCommunityIcons
+                name="alert-circle-outline"
+                size={18}
+                color={COLORS.statusCritical}
+              />
+              <Text variant="label" tone="critical" className="flex-1">
+                Held out of box building until someone marks it Good again.
+              </Text>
+            </Panel>
+          )}
+        </Card>
+      </FadeInUp>
+
+      <FadeInUp index={3}>
+        <View className="flex-row items-center justify-between px-1">
+          <Text variant="micro" tone="soft">
+            Received {item.date_added}
           </Text>
-        )}
-
-        <View style={styles.metaRow}>
-          <Text style={styles.metaText}>Added: {item.date_added}</Text>
-          <Text style={styles.metaText}>Source: {item.source}</Text>
+          <Text variant="micro" tone="soft" className="capitalize">
+            {item.source.replace('_', ' ')}
+          </Text>
         </View>
+      </FadeInUp>
 
-        <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-          <Text style={styles.saveBtnText}>Save Changes</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity style={styles.deleteBtn} onPress={handleDelete}>
-          <MaterialCommunityIcons name="trash-can-outline" size={20} color={COLORS.statusCritical} />
-          <Text style={styles.deleteBtnText}>Delete Item</Text>
-        </TouchableOpacity>
-      </View>
+      <FadeInUp index={4}>
+        <View className="gap-3">
+          <Button label="Save changes" block onPress={handleSave} />
+          <Button
+            label="Remove from the shelf"
+            variant="criticalGhost"
+            size="compact"
+            className="self-center"
+            icon={
+              <MaterialCommunityIcons
+                name="trash-can-outline"
+                size={18}
+                color={COLORS.statusCritical}
+              />
+            }
+            onPress={handleDelete}
+          />
+        </View>
+      </FadeInUp>
     </KeyboardScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    padding: SPACING.md,
-  },
-  card: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    ...CARD_ELEVATION,
-    padding: SPACING.md,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginTop: SPACING.sm,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.sm,
-    height: 44,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  catGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    marginBottom: SPACING.xs,
-  },
-  catChip: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    marginRight: 6,
-    marginBottom: 6,
-  },
-  catChipActive: {
-    backgroundColor: COLORS.primaryLight,
-    borderColor: COLORS.primaryLight,
-  },
-  catChipText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textTransform: 'capitalize',
-  },
-  catChipTextActive: {
-    color: COLORS.textOnPrimary,
-    fontWeight: '700',
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    width: 140,
-    height: 44,
-  },
-  stepBtn: {
-    width: 44,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepVal: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    flex: 1,
-    textAlign: 'center',
-  },
-  conditionNote: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: COLORS.statusCritical,
-    marginTop: SPACING.xs,
-  },
-  metaRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: SPACING.md,
-    paddingTop: SPACING.sm,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderSoft,
-  },
-  metaText: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    textTransform: 'capitalize',
-  },
-  saveBtn: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-    alignItems: 'center',
-    marginTop: SPACING.lg,
-    minHeight: SPACING.touch,
-  },
-  saveBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-  },
-  deleteBtn: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FDF3F2',
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.statusCritical,
-    padding: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  deleteBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.statusCritical,
-    marginLeft: 4,
-  },
-  notFound: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-  notFoundText: {
-    fontSize: 16,
-    color: COLORS.textPrimary,
-  },
-  backBtn: {
-    marginTop: SPACING.md,
-    backgroundColor: COLORS.primaryLight,
-    padding: SPACING.sm,
-    borderRadius: RADII.md,
-  },
-  backBtnText: {
-    color: COLORS.textOnPrimary,
-    fontWeight: '700',
-  },
-});

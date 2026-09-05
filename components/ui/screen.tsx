@@ -16,7 +16,7 @@ export function Screen({ className, contentContainerClassName, ...props }: Scrol
   return (
     <ScrollView
       className={cn('flex-1 bg-canvas', className)}
-      contentContainerClassName={cn('px-gutter pt-gutter pb-24 gap-gap', contentContainerClassName)}
+      contentContainerClassName={cn('px-gutter pt-gutter pb-16 gap-gap', contentContainerClassName)}
       showsVerticalScrollIndicator={false}
       {...props}
     />

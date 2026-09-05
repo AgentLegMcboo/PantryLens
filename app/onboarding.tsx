@@ -1,84 +1,81 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { LinearGradient } from "expo-linear-gradient";
-import { useRouter } from "expo-router";
-import React, { useEffect, useRef, useState } from "react";
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Dimensions,
-  Image,
   NativeScrollEvent,
   NativeSyntheticEvent,
+  Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   View,
-} from "react-native";
+} from 'react-native';
 import Animated, {
   Easing,
   interpolateColor,
   useAnimatedStyle,
   useSharedValue,
   withTiming,
-} from "react-native-reanimated";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { PressableScale } from "../components/motion";
-import {
-  BoxesMock,
-  ScanMock,
-  VerifyMock,
-  WeighMock,
-} from "../components/onboarding-mocks";
-import { COLORS, FONTS, RADII, SPACING } from "../constants/theme";
-import { cueSuccess, cueTap } from "../lib/feedback";
-import { usePantryStore } from "../lib/store";
+} from 'react-native-reanimated';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { AuthBackdrop } from '../components/auth-layout';
+import { BoxesMock, ScanMock, VerifyMock, WeighMock } from '../components/onboarding-mocks';
+import { Button, Text } from '../components/ui';
+import { COLORS, FONTS } from '../constants/theme';
+import { cueSuccess, cueTap } from '../lib/feedback';
+import { usePantryStore } from '../lib/store';
 
-const { width: SCREEN_W } = Dimensions.get("window");
+const { width: SCREEN_W } = Dimensions.get('window');
 
 /**
  * Each phase shows a live miniature of the screen it describes, so a volunteer
  * arrives at the real thing already recognising it. Headlines lead with the
  * verb — what they will actually do — not with the technology.
+ *
+ * The chrome is the app's: the same photograph and scrim as Log In, and the same
+ * physical button with a lip that every other screen commits with. Before this
+ * the intro had its own pill-shaped CTA and its own copy of the background, so
+ * the very first tap a volunteer made felt nothing like the second.
  */
 const PHASES = [
   {
-    key: "scan",
+    key: 'scan',
     Mock: ScanMock,
-    lead: "Photograph",
-    title: "what just came in.",
-    body: "Point the camera at a donation bag or a shelf. PantryLens drafts the item list so nobody writes counts on paper.",
-    tint: "#F6ECE2",
+    lead: 'Photograph',
+    title: 'what just came in.',
+    body: 'Point the camera at a donation bag or a shelf. PantryLens drafts the item list so nobody writes counts on paper.',
+    tint: '#F6ECE2',
   },
   {
-    key: "verify",
+    key: 'verify',
     Mock: VerifyMock,
-    lead: "You",
-    title: "have the final say.",
-    body: "The AI only guesses. Fix a count, change a category, flag a dented can — nothing reaches inventory until you confirm it.",
-    tint: "#F3EDE0",
+    lead: 'You',
+    title: 'have the final say.',
+    body: 'The AI only guesses. Fix a count, change a category, flag a dented can — nothing reaches inventory until you confirm it.',
+    tint: '#F3EDE0',
   },
   {
-    key: "weigh",
+    key: 'weigh',
     Mock: WeighMock,
-    lead: "Weigh",
-    title: "the bulk drops.",
-    body: "Big grocery and food-bank loads get weighed, not counted. Record the pounds and PantryLens still works out what it adds to your boxes.",
-    tint: "#EDF0E4",
+    lead: 'Weigh',
+    title: 'the bulk drops.',
+    body: 'Big grocery and food-bank loads get weighed, not counted. Record the pounds and PantryLens still works out what it adds to your boxes.',
+    tint: '#EDF0E4',
   },
   {
-    key: "boxes",
+    key: 'boxes',
     Mock: BoxesMock,
-    lead: "Know",
+    lead: 'Know',
     title: "what's holding you back.",
-    body: "See how many balanced boxes you can really pack, which category is blocking the rest, and exactly what to ask donors for.",
-    tint: "#F7E9E4",
+    body: 'See how many balanced boxes you can really pack, which category is blocking the rest, and exactly what to ask donors for.',
+    tint: '#F7E9E4',
   },
 ] as const;
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const completeOnboarding = usePantryStore(
-    (state) => state.completeOnboarding,
-  );
+  const completeOnboarding = usePantryStore(state => state.completeOnboarding);
   const [page, setPage] = useState(0);
 
   const isLast = page === PHASES.length - 1;
@@ -88,19 +85,18 @@ export default function OnboardingScreen() {
     // Must land before the navigation, or the root gate still sees the intro
     // as incomplete and sends us straight back here.
     await completeOnboarding();
-    router.replace("/login");
+    router.replace('/login');
   };
 
   const next = () => {
     if (isLast) return finish();
-    cueTap();
     scrollRef.current?.scrollTo({ x: (page + 1) * SCREEN_W, animated: true });
   };
 
   const skip = async () => {
     cueTap();
     await completeOnboarding();
-    router.replace("/login");
+    router.replace('/login');
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -112,41 +108,40 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <View style={styles.root}>
+    <View className="flex-1 bg-canvas">
       {/* The pantry photo sits far back — enough to feel like a place, not
           enough to compete with the mocks in front of it. */}
-      <Image
-        source={require("../assets/images/pantry-bg.jpg")}
-        style={styles.bg}
-        blurRadius={3}
-      />
-      <LinearGradient
-        colors={[
-          "rgba(251,246,238,0.58)",
-          "rgba(251,246,238,0.88)",
-          COLORS.background,
-        ]}
-        locations={[0, 0.52, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+      <AuthBackdrop blurRadius={3} />
       <PhaseTint page={page} />
 
-      <SafeAreaView style={styles.safe} edges={["top", "bottom"]}>
-        <View style={styles.topBar}>
-          <View style={styles.brandRow}>
-            <View style={styles.brandMark}>
+      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+        <View className="flex-row items-center justify-between px-gutter pt-2">
+          <View className="flex-row items-center gap-2.5">
+            <View className="h-8 w-8 items-center justify-center rounded-md bg-brand">
               <MaterialCommunityIcons
                 name="camera-iris"
-                size={16}
+                size={17}
                 color={COLORS.textOnPrimary}
               />
             </View>
-            <Text style={styles.brandName}>PantryLens</Text>
+            <Text
+              style={{
+                fontFamily: FONTS.serifSemi,
+                fontSize: 19,
+                lineHeight: 24,
+                color: COLORS.textPrimary,
+              }}
+            >
+              PantryLens
+            </Text>
           </View>
+
           {!isLast && (
-            <PressableScale style={styles.skipBtn} onPress={skip}>
-              <Text style={styles.skipText}>Skip</Text>
-            </PressableScale>
+            <Pressable onPress={skip} hitSlop={10} className="px-2 py-2">
+              <Text variant="label" tone="soft" className="font-semibold">
+                Skip
+              </Text>
+            </Pressable>
           )}
         </View>
 
@@ -156,50 +151,75 @@ export default function OnboardingScreen() {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={onScroll}
-          style={styles.pager}
+          className="flex-1"
         >
-          {PHASES.map((phase) => {
+          {PHASES.map(phase => {
             const Mock = phase.Mock;
             return (
-              <View key={phase.key} style={styles.page}>
-                <View style={styles.mockArea}>
-                  <View style={styles.mockHalo} />
+              <View key={phase.key} style={{ width: SCREEN_W }} className="flex-1 px-gutter">
+                <View className="min-h-[280px] flex-1 items-center justify-center">
+                  <View className="absolute h-[300px] w-[300px] rounded-full bg-card opacity-60" />
                   <Mock />
                 </View>
 
-                <View style={styles.copy}>
-                  <Text style={styles.title}>
-                    <Text style={styles.titleLead}>{phase.lead} </Text>
+                <View className="pb-4">
+                  {/* Every nested span carries its own lineHeight. `Text`
+                      defaults to the `body` variant and its 22px line box, and a
+                      33px serif dropped into that gets clipped — which is
+                      exactly what happened to "Photograph what just came in."
+                      Sizing up here means sizing the line box up with it. */}
+                  <Text
+                    style={{
+                      fontFamily: FONTS.serif,
+                      fontSize: 33,
+                      lineHeight: 42,
+                      letterSpacing: -0.3,
+                      color: COLORS.textPrimary,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        fontFamily: FONTS.serifSemi,
+                        fontSize: 33,
+                        lineHeight: 42,
+                        color: COLORS.primaryLight,
+                      }}
+                    >
+                      {phase.lead}{' '}
+                    </Text>
                     {phase.title}
                   </Text>
-                  <Text style={styles.body}>{phase.body}</Text>
+                  <Text variant="body" tone="soft" className="mt-3 pr-2">
+                    {phase.body}
+                  </Text>
                 </View>
               </View>
             );
           })}
         </ScrollView>
 
-        <View style={styles.footer}>
-          <View style={styles.dots}>
+        <View className="gap-4 px-gutter pb-2">
+          <View className="flex-row items-center gap-1.5">
             {PHASES.map((p, i) => (
               <Dot key={p.key} active={i === page} />
             ))}
           </View>
 
-          <PressableScale style={styles.cta} cue="press" onPress={next}>
-            <Text style={styles.ctaText}>
-              {isLast ? "Get Started" : "Next"}
-            </Text>
-            <MaterialCommunityIcons
-              name="arrow-right"
-              size={19}
-              color={COLORS.textOnPrimary}
-            />
-          </PressableScale>
+          <Button
+            label={isLast ? 'Get started' : 'Next'}
+            block
+            icon={
+              <MaterialCommunityIcons
+                name="arrow-right"
+                size={19}
+                color={COLORS.textOnPrimary}
+              />
+            }
+            onPress={next}
+          />
 
-          <Text style={styles.legal}>
-            Built for small food pantries. Your inventory stays with your
-            pantry.
+          <Text variant="micro" tone="soft" className="text-center">
+            Built for small food pantries. Your inventory stays with your pantry.
           </Text>
         </View>
       </SafeAreaView>
@@ -222,13 +242,11 @@ function PhaseTint({ page }: { page: number }) {
     backgroundColor: interpolateColor(
       progress.value,
       PHASES.map((_, i) => i),
-      PHASES.map((p) => p.tint),
+      PHASES.map(p => p.tint),
     ),
   }));
 
-  return (
-    <Animated.View style={[StyleSheet.absoluteFill, style, { opacity: 0.3 }]} />
-  );
+  return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style, { opacity: 0.3 }]} />;
 }
 
 function Dot({ active }: { active: boolean }) {
@@ -245,103 +263,11 @@ function Dot({ active }: { active: boolean }) {
   const style = useAnimatedStyle(() => ({
     width: 7 + progress.value * 19,
     opacity: 0.3 + progress.value * 0.7,
-    backgroundColor: COLORS.primaryLight,
   }));
 
-  return <Animated.View style={[styles.dot, style]} />;
+  return (
+    <Animated.View
+      style={[{ height: 7, borderRadius: 4, backgroundColor: COLORS.primaryLight }, style]}
+    />
+  );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  bg: {
-    ...StyleSheet.absoluteFillObject,
-    width: "100%",
-    height: "100%",
-    opacity: 0.5,
-  },
-  safe: { flex: 1 },
-
-  topBar: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.md,
-    paddingTop: SPACING.sm,
-  },
-  brandRow: { flexDirection: "row", alignItems: "center", gap: SPACING.xs + 2 },
-  brandMark: {
-    width: 28,
-    height: 28,
-    borderRadius: 9,
-    backgroundColor: COLORS.primaryLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  brandName: {
-    fontSize: 18,
-    fontFamily: FONTS.serifSemi,
-    color: COLORS.textPrimary,
-    letterSpacing: -0.1,
-  },
-  skipBtn: { paddingHorizontal: SPACING.sm, paddingVertical: SPACING.xs },
-  skipText: { fontSize: 14, fontWeight: "600", color: COLORS.textSecondary },
-
-  pager: { flex: 1 },
-  page: { width: SCREEN_W, flex: 1, paddingHorizontal: SPACING.lg },
-
-  mockArea: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 280,
-  },
-  mockHalo: {
-    position: "absolute",
-    width: 300,
-    height: 300,
-    borderRadius: 150,
-    backgroundColor: COLORS.cardSurface,
-    opacity: 0.55,
-  },
-
-  copy: { paddingBottom: SPACING.md },
-  title: {
-    fontSize: 33,
-    fontFamily: FONTS.serif,
-    color: COLORS.textPrimary,
-    letterSpacing: -0.3,
-    lineHeight: 41,
-  },
-  titleLead: { color: COLORS.primaryLight, fontFamily: FONTS.serifSemi },
-  body: {
-    fontSize: 14.5,
-    lineHeight: 21,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.sm,
-    paddingRight: SPACING.sm,
-  },
-
-  footer: {
-    paddingHorizontal: SPACING.lg,
-    paddingBottom: SPACING.sm,
-    gap: SPACING.md,
-  },
-  dots: { flexDirection: "row", alignItems: "center", gap: 6 },
-  dot: { height: 7, borderRadius: 4 },
-  cta: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: SPACING.sm,
-    minHeight: SPACING.touch + 6,
-    borderRadius: RADII.full,
-    backgroundColor: COLORS.primary,
-    shadowColor: COLORS.primaryDark,
-    shadowOpacity: 0.1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 5,
-  },
-  ctaText: { fontSize: 16.5, fontWeight: "700", color: COLORS.textOnPrimary },
-  legal: { fontSize: 11, color: COLORS.textSecondary, textAlign: "center" },
-});

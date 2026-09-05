@@ -35,6 +35,10 @@ const buttonVariants = cva(
         secondary: 'bg-card border-[1.5px] border-outline',
         critical: 'bg-critical',
         ghost: 'bg-transparent px-0',
+        // Destructive, but not the loudest thing on the page. Sign-out and
+        // "remove this item" are red because of what they do, not because they
+        // are what the screen wants you to press.
+        criticalGhost: 'bg-transparent px-0',
       },
       size: {
         // 48 keeps the accessibility floor for the actions that matter.
@@ -52,6 +56,7 @@ const labelTone = {
   secondary: 'default',
   critical: 'on',
   ghost: 'brand',
+  criticalGhost: 'critical',
 } as const;
 
 /** The lip colour per variant. Null means the variant has no lip. */
@@ -60,6 +65,7 @@ const lipColor = {
   critical: '#8E2A1F',
   secondary: COLORS.borderStrong,
   ghost: null,
+  criticalGhost: null,
 } as const;
 
 export function Button({

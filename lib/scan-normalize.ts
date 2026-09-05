@@ -120,6 +120,15 @@ export type ScanCandidate = Partial<InventoryItem> & {
   condition: Condition;
   /** Which photo this was found in. */
   imageIndex: number;
+  /** A validated GTIN, when the digits were legible and checksummed. */
+  barcode?: string | null;
+  /**
+   * What named this row, when it was something better than the vision model.
+   * The review screen shows it, because "the manufacturer says so" and "your
+   * pantry has called it this eleven times" deserve to be told apart from a
+   * guess — and from each other.
+   */
+  resolvedBy?: 'barcode' | 'catalogue' | null;
   /** Null when the model gave no usable box — the item is still verifiable. */
   box: DetectionBox | null;
 };
@@ -159,6 +168,8 @@ export function normaliseItem(raw: any): ScanCandidate | null {
 
   const imageIndex = Math.floor(Number(raw?.image_index));
 
+  const barcode = String(raw?.barcode ?? '').replace(/\D/g, '');
+
   return {
     name: name.slice(0, 120),
     category: normaliseCategory(raw?.category),
@@ -167,43 +178,84 @@ export function normaliseItem(raw: any): ScanCandidate | null {
     confidence: normaliseConfidence(raw?.confidence),
     condition: isExpired ? 'expired' : condition,
     imageIndex: Number.isFinite(imageIndex) && imageIndex >= 0 ? imageIndex : 0,
+    barcode: barcode || null,
+    resolvedBy: raw?.resolved_by === 'barcode' ? 'barcode' : null,
     box: normaliseBox(raw?.box_2d),
   };
 }
 
+/** The identity of a product: same name, same category, ignoring punctuation. */
+function productKey(item: ScanCandidate): string {
+  return `${item.category}|${item.name.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+}
+
 /**
- * Merges duplicates across photos.
+ * Folds `item` into `existing`, taking `count` from the caller.
  *
- * Volunteers are told to shoot the same bag from several angles, so the same jar
- * legitimately appears in two frames. Summing those counts would double the
- * pantry's stock. Same name and category means same product: keep the higher
- * count seen in any single frame rather than adding them.
+ * Everything except the count merges the same way in both passes: keep the best
+ * reading of each field, and let whichever frame saw the product most clearly
+ * own the box.
+ */
+function combine(existing: ScanCandidate, item: ScanCandidate, count: number): ScanCandidate {
+  // Pointing at the item in the photo where it is clearest is the whole point of
+  // the overlay.
+  const clearest = item.confidence > existing.confidence ? item : existing;
+
+  return {
+    ...existing,
+    count: normaliseCount(count),
+    confidence: Math.max(existing.confidence, item.confidence),
+    expiration: existing.expiration ?? item.expiration,
+    // A damage flag on either reading is worth keeping: it only ever holds stock
+    // back for a human to look at, which is the safe direction to be wrong in.
+    condition: existing.condition !== 'ok' ? existing.condition : item.condition,
+    imageIndex: clearest.imageIndex,
+    box: clearest.box ?? existing.box ?? item.box,
+    // One frame reading the barcode is enough for both.
+    barcode: existing.barcode ?? item.barcode,
+    resolvedBy: existing.resolvedBy ?? item.resolvedBy,
+  };
+}
+
+/**
+ * Collapses the same product reported more than once — in two passes, because
+ * "twice" means two opposite things depending on where it happened.
+ *
+ * WITHIN one photo, two rows for the same product are two groups of DIFFERENT
+ * cans. The model is told to box a stack once and set the count, but it does not
+ * always: shown ten tins of green beans in two clusters it will often report six
+ * and four. Those add up to ten.
+ *
+ * ACROSS photos, two rows for the same product are usually the SAME cans seen
+ * from another angle — volunteers are told to shoot a pile from several sides —
+ * so the counts must not add. The higher of the two is the better estimate of
+ * how many there really are.
+ *
+ * Doing one pass of `max` over everything, which is what this used to do, got
+ * the cross-photo case right and silently undercounted the split-stack case:
+ * ten tins went into inventory as six. That mattered little while the model was
+ * being asked to de-duplicate everything itself; now that each photo is analysed
+ * on its own it is the difference between correct stock and quietly wrong stock.
  */
 export function mergeDuplicates(items: ScanCandidate[]): ScanCandidate[] {
-  const merged = new Map<string, ScanCandidate>();
-
+  // Pass one: within a photo, counts add.
+  const perPhoto = new Map<string, ScanCandidate>();
   for (const item of items) {
-    const key = `${item.category}|${item.name.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
-    const existing = merged.get(key);
-    if (!existing) {
-      merged.set(key, item);
-      continue;
-    }
-    // Whichever frame read the label best owns the box: pointing at the item in
-    // the photo where it is clearest is the whole point of the overlay.
-    const clearest = item.confidence > existing.confidence ? item : existing;
+    const key = `${item.imageIndex}|${productKey(item)}`;
+    const existing = perPhoto.get(key);
+    perPhoto.set(key, existing ? combine(existing, item, existing.count + item.count) : item);
+  }
 
-    merged.set(key, {
-      ...existing,
-      count: Math.max(existing.count, item.count),
-      confidence: Math.max(existing.confidence, item.confidence),
-      expiration: existing.expiration ?? item.expiration,
-      condition: existing.condition !== 'ok' ? existing.condition : item.condition,
-      imageIndex: clearest.imageIndex,
-      box: clearest.box ?? existing.box ?? item.box,
-    });
+  // Pass two: across photos, the same cans seen twice — take the better reading.
+  const merged = new Map<string, ScanCandidate>();
+  for (const item of perPhoto.values()) {
+    const key = productKey(item);
+    const existing = merged.get(key);
+    merged.set(
+      key,
+      existing ? combine(existing, item, Math.max(existing.count, item.count)) : item,
+    );
   }
 
   return [...merged.values()];
 }
-

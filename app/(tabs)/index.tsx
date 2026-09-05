@@ -348,18 +348,22 @@ export default function DashboardScreen() {
         </FadeInUp>
       )}
 
-      {/* Activity is a log, not a card. Rows on the page, no container. */}
-      <FadeInUp index={4}>
-        <View className="gap-4">
-          <Text variant="label" tone="soft" className="font-semibold">
-            Recent activity
-          </Text>
+      {/* Activity is a log, not a card. Rows on the page, no container.
 
-          {activities.length === 0 ? (
-            <Text variant="label" tone="soft">
-              Nothing logged yet. Scanning a donation will show up here.
+          With nothing in it, a heading plus a sentence plus the section's own
+          rhythm reserved most of a screen to say "nothing happened yet" — so an
+          empty log collapses to the one line, no heading above it. */}
+      <FadeInUp index={4}>
+        {activities.length === 0 ? (
+          <Text variant="micro" tone="soft" className="px-1">
+            Nothing logged yet. Scanning a donation will show up here.
+          </Text>
+        ) : (
+          <View className="gap-4">
+            <Text variant="label" tone="soft" className="font-semibold">
+              Recent activity
             </Text>
-          ) : (
+
             <View className="gap-4">
               {activities.slice(0, 5).map((act: any) => (
                 <View key={act.id} className="flex-row items-start gap-3">
@@ -379,8 +383,8 @@ export default function DashboardScreen() {
                 </View>
               ))}
             </View>
-          )}
-        </View>
+          </View>
+        )}
       </FadeInUp>
     </Screen>
   );

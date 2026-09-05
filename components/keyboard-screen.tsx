@@ -5,14 +5,16 @@ import {
   Platform,
   ScrollView,
   ScrollViewProps,
-  StyleProp,
-  ViewStyle,
 } from 'react-native';
+import { cn } from '../lib/cn';
 
 /**
- * The scrolling container every screen with a text field should use.
+ * `Screen`, for pages that contain a text field.
  *
- * Three things it fixes, all of which were missing app-wide:
+ * It carries the same gutter, the same rhythm between blocks and the same cream
+ * ground as components/ui/screen.tsx — a form should not be a differently
+ * proportioned page just because it takes typing — and adds the three keyboard
+ * behaviours that were missing app-wide:
  *
  *  - iOS does not move content for the keyboard on its own, so a field near the
  *    bottom (the weight entry, the expiration field, the password) ended up
@@ -28,14 +30,10 @@ import {
  */
 export function KeyboardScreen({
   children,
-  style,
-  contentContainerStyle,
+  className,
+  contentContainerClassName,
   ...rest
-}: ScrollViewProps & {
-  children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  contentContainerStyle?: StyleProp<ViewStyle>;
-}) {
+}: ScrollViewProps & { children: React.ReactNode }) {
   // Null outside a navigator that renders a header (tab screens, modals with
   // headerShown: false), in which case there is nothing to offset by.
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
@@ -47,8 +45,11 @@ export function KeyboardScreen({
       keyboardVerticalOffset={Platform.OS === 'ios' ? headerHeight : 0}
     >
       <ScrollView
-        style={style}
-        contentContainerStyle={contentContainerStyle}
+        className={cn('flex-1 bg-canvas', className)}
+        contentContainerClassName={cn(
+          'px-gutter pt-gutter pb-16 gap-gap',
+          contentContainerClassName,
+        )}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}

@@ -1,12 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, TextInput, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
-import { Badge, Button, Card, Chip, Stepper, Text } from '../components/ui';
-import { lookupBarcode } from '../lib/ai_vision';
+import { Badge, Button, Card, Chip, Input, Stepper, Text } from '../components/ui';
+import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
 import type { DetectionBox, ScanCandidate } from '../lib/scan-normalize';
 import {
   Condition,
@@ -38,7 +38,17 @@ import { log } from '../lib/log';
  * to catch, so it must not be the one it makes.
  */
 type DraftRow = Partial<InventoryItem> &
-  Partial<Pick<ScanCandidate, 'imageIndex' | 'box'>> & { uid: string };
+  Partial<Pick<ScanCandidate, 'imageIndex' | 'box' | 'barcode' | 'resolvedBy'>> & {
+    uid: string;
+    /**
+     * Exactly what the scanner said, frozen before anyone edited it.
+     *
+     * The catalogue learns by pairing what the model produced with what a human
+     * left it as, so the original has to survive the editing. Reading it back off
+     * the row at save time would only ever record the corrected name twice.
+     */
+    rawName: string;
+  };
 
 let uidCounter = 0;
 const nextUid = () => `row-${++uidCounter}`;
@@ -48,13 +58,20 @@ const CATEGORIES = ['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygi
 export default function ReviewVerifyScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string }>();
-  const { currentDraft, currentScanPhotos, addItems } = usePantryStore();
+  const {
+    currentDraft,
+    currentScanPhotos,
+    addItems,
+    settings,
+    pendingBarcode,
+    setPendingBarcode,
+  } = usePantryStore();
 
   const source: 'donation' | 'shelf_audit' =
     params.source === 'shelf_audit' ? 'shelf_audit' : 'donation';
 
   const [draftItems, setDraftItems] = useState<DraftRow[]>(() =>
-    currentDraft.map(item => ({ ...item, uid: nextUid() })),
+    currentDraft.map(item => ({ ...item, uid: nextUid(), rawName: item.name ?? '' })),
   );
   const [saving, setSaving] = useState(false);
   // Which photo is on screen, when the scan covered more than one.
@@ -113,6 +130,9 @@ export default function ReviewVerifyScreen() {
   const handleDrawBox = (box: DetectionBox) => {
     const row: DraftRow = {
       uid: nextUid(),
+      // A box a human drew has no model reading behind it, so there is nothing
+      // for the catalogue to learn from — an empty rawName excludes it.
+      rawName: '',
       name: '',
       category: 'unknown',
       count: 1,
@@ -134,21 +154,81 @@ export default function ReviewVerifyScreen() {
     setVerifiedIds(prev => ({ ...prev, [id]: next }));
   };
 
-  const handleBarcodeScan = (index: number) => {
-    const item = lookupBarcode('0111222333');
-    updateItemAtIndex(index, {
-      name: item.name,
-      category: item.category,
-      expiration: item.expiration,
-      confidence: 1.0
-    });
-    Alert.alert('Barcode Identified!', `Resolved to "${item.name}" (${item.category?.toUpperCase()})`);
+  /**
+   * Opens the scanner for one specific row.
+   *
+   * This used to call lookupBarcode with a hardcoded barcode against a hardcoded
+   * table of three products, so pressing it returned the same imaginary tin of
+   * garbanzo beans for every item in the app, forever. It now points the camera
+   * at the actual package.
+   */
+  const handleBarcodeScan = (uid: string) => {
+    cueTap();
+    router.push({ pathname: '/barcode-scan', params: { uid } });
   };
+
+  /**
+   * Collects a result the scanner parked in the store on its way back.
+   *
+   * Cleared as soon as it is applied, so a result can never land twice or drift
+   * onto a different row.
+   */
+  useEffect(() => {
+    if (!pendingBarcode) return;
+    const index = draftItems.findIndex(i => i.uid === pendingBarcode.uid);
+    if (index < 0) {
+      setPendingBarcode(null);
+      return;
+    }
+
+    setDraftItems(prev => {
+      const next = [...prev];
+      next[index] = {
+        ...next[index],
+        name: pendingBarcode.name,
+        category: (pendingBarcode.category ?? next[index].category) as any,
+        barcode: pendingBarcode.barcode,
+        resolvedBy: 'barcode',
+        // The manufacturer said so. Nothing in this pipeline is more certain.
+        confidence: 1,
+      };
+      return next;
+    });
+    // Identified by its barcode and already confirmed by the human who chose to
+    // scan it — making them tick it again would be theatre.
+    setVerifiedIds(prev => ({ ...prev, [pendingBarcode.uid]: true }));
+    setPendingBarcode(null);
+  }, [pendingBarcode]);
 
   const commit = async () => {
     setSaving(true);
     try {
       await addItems(draftItems, source);
+
+      /**
+       * Teach the catalogue what this pantry just agreed to.
+       *
+       * After the save, never before — only rows that actually reached the shelf
+       * are worth learning from. Rows whose name came from a barcode are skipped:
+       * they were never the model's guess, so pairing them with it would teach
+       * the catalogue a relationship that does not exist.
+       *
+       * Untouched rows are recorded too. A reading a human ticked without
+       * changing is the strongest evidence the catalogue can hold, and learning
+       * only from corrections would remember every product the scanner gets
+       * wrong and none of the ones it gets right.
+       */
+      const lessons: ConfirmationEntry[] = draftItems
+        .filter(row => row.resolvedBy !== 'barcode' && row.rawName.trim() && row.name?.trim())
+        .map(row => ({
+          raw_name: row.rawName,
+          canonical_name: row.name!.trim(),
+          category: (row.category ?? 'unknown') as any,
+          was_corrected:
+            row.rawName.trim().toLowerCase() !== row.name!.trim().toLowerCase(),
+        }));
+      await recordConfirmations(settings.pantryId, lessons);
+
       cueSuccess();
       Alert.alert(
         'Saved to inventory',
@@ -236,11 +316,7 @@ export default function ReviewVerifyScreen() {
     .filter(({ item }) => !item.box && (item.imageIndex ?? 0) === photoIndex);
 
   return (
-    <KeyboardScreen
-      style={{ flex: 1, backgroundColor: COLORS.background }}
-      contentContainerStyle={{ padding: 20, paddingBottom: 96, gap: 16 }}
-      scrollEnabled={scrollEnabled}
-    >
+    <KeyboardScreen scrollEnabled={scrollEnabled}>
       {/* Progress, stated once as a sentence rather than as a card full of
           chrome. The bar is the only ornament it needs. */}
       <View className="gap-2">
@@ -333,7 +409,7 @@ export default function ReviewVerifyScreen() {
           verified={!!verifiedIds[selectedId!]}
           onChange={updates => updateItemAtIndex(selectedIndex, updates)}
           onRemove={() => removeItemAtIndex(selectedIndex)}
-          onBarcode={() => handleBarcodeScan(selectedIndex)}
+          onBarcode={() => handleBarcodeScan(selectedItem.uid)}
           onToggleVerified={() => toggleVerified(selectedId!)}
           onClose={() => setSelectedId(null)}
         />
@@ -413,10 +489,20 @@ function ItemEditor({
   return (
     <Card className={verified ? 'border-good' : 'border-brand-light'}>
       <View className="flex-row items-center justify-between">
-        <Badge
-          label={`${Math.round((item.confidence ?? 0) * 100)}% sure`}
-          tone={isLowConf ? 'warn' : 'good'}
-        />
+        {/* WHERE this name came from, not just how sure something is about it.
+            "The manufacturer says so" and "your pantry has called it this a
+            dozen times" are different kinds of trustworthy, and both are
+            different from the model having had a good look. */}
+        {item.resolvedBy === 'barcode' ? (
+          <Badge label="From the barcode" tone="good" />
+        ) : item.resolvedBy === 'catalogue' ? (
+          <Badge label="Named by your pantry" tone="brand" />
+        ) : (
+          <Badge
+            label={`${Math.round((item.confidence ?? 0) * 100)}% sure`}
+            tone={isLowConf ? 'warn' : 'good'}
+          />
+        )}
         <View className="flex-row items-center gap-5">
           <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove this item">
             <MaterialCommunityIcons name="trash-can-outline" size={20} color={COLORS.textSecondary} />
@@ -427,15 +513,11 @@ function ItemEditor({
         </View>
       </View>
 
-      <View className="mt-5 gap-2">
-        <Text variant="label" tone="soft">
-          Name
-        </Text>
-        <TextInput
-          className="h-12 rounded-md border border-hairline bg-canvas px-3 text-body text-ink"
+      <View className="mt-5">
+        <Input
+          label="Name"
           value={item.name}
           placeholder="What is it?"
-          placeholderTextColor={COLORS.textSecondary}
           onChangeText={txt => onChange({ name: txt })}
         />
       </View>
@@ -493,22 +575,30 @@ function ItemEditor({
           </Text>
           <Stepper value={item.count || 1} min={1} onChange={next => onChange({ count: next })} />
         </View>
-        <View className="flex-1 gap-2">
-          <Text variant="label" tone="soft">
-            Expires
-          </Text>
-          <TextInput
-            className="h-12 rounded-md border border-hairline bg-canvas px-3 text-body text-ink"
+        <View className="flex-1">
+          <Input
+            label="Expires"
             placeholder="YYYY-MM-DD"
-            placeholderTextColor={COLORS.textSecondary}
             value={item.expiration || ''}
             onChangeText={txt => onChange({ expiration: txt })}
           />
         </View>
       </View>
 
-      {isLowConf && (
-        <Button label="Scan barcode instead" variant="secondary" size="compact" className="mt-5" onPress={onBarcode} />
+      {/* Offered on every row that a barcode has not already settled — a
+          volunteer who doubts a confident-looking reading should not have to
+          talk the app into letting them check it. */}
+      {item.resolvedBy !== 'barcode' && (
+        <Button
+          label={isLowConf ? 'Scan the barcode instead' : 'Scan the barcode'}
+          variant="secondary"
+          size="compact"
+          className="mt-5"
+          icon={
+            <MaterialCommunityIcons name="barcode-scan" size={17} color={COLORS.textPrimary} />
+          }
+          onPress={onBarcode}
+        />
       )}
 
       <Button

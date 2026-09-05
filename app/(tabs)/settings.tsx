@@ -1,31 +1,51 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  StyleSheet,
-  Text,
-  TextInput,
-  Switch,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../../constants/theme';
+import { Alert, View } from 'react-native';
+import { COLORS } from '../../constants/theme';
 import { KeyboardScreen } from '../../components/keyboard-screen';
+import { FadeInUp } from '../../components/motion';
 import {
-  getFeedbackPrefs,
-  setHapticsEnabled,
-  setSoundEnabled,
-} from '../../lib/feedback';
+  Button,
+  Card,
+  CardHeader,
+  categoryIcon,
+  Input,
+  Row,
+  Segmented,
+  Stepper,
+  Text,
+  Toggle,
+} from '../../components/ui';
+import { getFeedbackPrefs, setHapticsEnabled, setSoundEnabled } from '../../lib/feedback';
 import { BoxRules, usePantryStore } from '../../lib/store';
 
+/**
+ * Pantry settings.
+ *
+ * Seven cards of stacked label-and-control pairs, each drawn slightly
+ * differently — 32px steppers here, a full-width chip row there, a red Sign Out
+ * slab at the bottom — which is how a settings page ends up reading as a
+ * spreadsheet nobody wants to scroll.
+ *
+ * It is the same seven groups, but every line is now the same `Row` at the same
+ * height with the same divider, and every control is the one the rest of the app
+ * uses. The two numeric groups are the ones a volunteer will actually change, so
+ * they get the full 44px stepper rather than the cramped one they had.
+ */
 export default function SettingsScreen() {
   const initialPrefs = getFeedbackPrefs();
   const [haptics, setHaptics] = useState(initialPrefs.hapticsEnabled);
   const [sound, setSound] = useState(initialPrefs.soundEnabled);
 
-  const { settings, boxRules, thresholds, updateSettings, updateBoxRules, updateThresholds, signOut } =
-    usePantryStore();
+  const {
+    settings,
+    boxRules,
+    thresholds,
+    updateSettings,
+    updateBoxRules,
+    updateThresholds,
+    signOut,
+  } = usePantryStore();
 
   const [pantryName, setPantryName] = useState(settings.pantryName);
   const [savingName, setSavingName] = useState(false);
@@ -34,6 +54,9 @@ export default function SettingsScreen() {
   useEffect(() => {
     setPantryName(settings.pantryName);
   }, [settings.pantryName]);
+
+  const categories = Object.keys(boxRules) as (keyof BoxRules)[];
+  const nameChanged = pantryName.trim() !== settings.pantryName;
 
   const handleSavePantryName = async () => {
     const trimmed = pantryName.trim();
@@ -45,14 +68,13 @@ export default function SettingsScreen() {
     setSavingName(true);
     try {
       await updateSettings({ pantryName: trimmed });
-      Alert.alert('Saved', 'Everyone in this pantry will see the new name.');
     } catch (err: any) {
       // Admin-only under RLS, so a volunteer tapping Save gets told why.
       Alert.alert(
         'Could not save',
         err?.message?.includes('policy')
           ? 'Only a pantry admin can rename the pantry.'
-          : err?.message ?? 'Please try again.',
+          : (err?.message ?? 'Please try again.'),
       );
     } finally {
       setSavingName(false);
@@ -74,328 +96,160 @@ export default function SettingsScreen() {
     ]);
   };
 
-
-  const categories = Object.keys(boxRules) as (keyof BoxRules)[];
-
   return (
-    <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
-      {/* Pantry Profile */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Pantry Profile</Text>
-        <Text style={styles.label}>Pantry Account Name</Text>
-        <View style={styles.inputRow}>
-          <TextInput
-            style={styles.textInput}
+    <KeyboardScreen>
+      <FadeInUp index={0}>
+        <Card className="gap-4">
+          <Input
+            label="Pantry name"
             value={pantryName}
             onChangeText={setPantryName}
+            hint="What every volunteer sees at the top of the app."
           />
-          <TouchableOpacity
-            style={[styles.saveBtn, savingName && { opacity: 0.6 }]}
-            onPress={handleSavePantryName}
-            disabled={savingName}
-          >
-            {savingName ? (
-              <ActivityIndicator color={COLORS.textOnPrimary} />
-            ) : (
-              <Text style={styles.saveBtnText}>Save</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+          {/* Only appears once there is something to save — a Save button that
+              is always there is a Save button nobody reads. */}
+          {nameChanged && (
+            <Button
+              label="Save the new name"
+              loading={savingName}
+              onPress={handleSavePantryName}
+            />
+          )}
+        </Card>
+      </FadeInUp>
 
-      {/* Box Rules Configuration */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Feel & Sound</Text>
-        <Text style={styles.cardSub}>
-          Sound is off by default — a pantry back room is loud and the phone is often shared.
-        </Text>
-
-        <View style={styles.feedbackRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.ruleLabel}>Haptic feedback</Text>
-            <Text style={styles.feedbackHint}>A light tick when you tap or confirm.</Text>
-          </View>
-          <Switch
-            value={haptics}
-            onValueChange={v => { setHaptics(v); setHapticsEnabled(v); }}
-            trackColor={{ true: COLORS.secondary, false: COLORS.borderSoft }}
+      <FadeInUp index={1}>
+        <Card>
+          <CardHeader
+            title="Feel & sound"
+            subtitle="Sound is off by default — a back room is loud and the phone is often shared."
           />
-        </View>
-
-        <View style={styles.feedbackRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.ruleLabel}>Sound effects</Text>
-            <Text style={styles.feedbackHint}>Soft confirmation tones when something is saved.</Text>
-          </View>
-          <Switch
-            value={sound}
-            onValueChange={v => { setSound(v); setSoundEnabled(v); }}
-            trackColor={{ true: COLORS.secondary, false: COLORS.borderSoft }}
+          <Row
+            icon="vibrate"
+            label="Haptic feedback"
+            hint="A light tick when you tap or confirm."
+            right={
+              <Toggle
+                value={haptics}
+                accessibilityLabel="Haptic feedback"
+                onValueChange={v => {
+                  setHaptics(v);
+                  setHapticsEnabled(v);
+                }}
+              />
+            }
           />
-        </View>
-      </View>
+          <Row
+            icon="volume-high"
+            label="Sound effects"
+            hint="Soft confirmation tones when something is saved."
+            divider={false}
+            right={
+              <Toggle
+                value={sound}
+                accessibilityLabel="Sound effects"
+                onValueChange={v => {
+                  setSound(v);
+                  setSoundEnabled(v);
+                }}
+              />
+            }
+          />
+        </Card>
+      </FadeInUp>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Standard Box Target Rules</Text>
-        <Text style={styles.cardSub}>Number of items per category required for 1 standard family box (4 people):</Text>
-
-        {categories.map(cat => (
-          <View key={cat} style={styles.ruleRow}>
-            <Text style={styles.ruleLabel}>{cat.toUpperCase()}</Text>
-            <View style={styles.stepper}>
-              <TouchableOpacity
-                style={styles.stepBtn}
-                onPress={() => updateBoxRules({ [cat]: Math.max(0, boxRules[cat] - 1) })}
-              >
-                <MaterialCommunityIcons name="minus" size={16} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-              <Text style={styles.stepVal}>{boxRules[cat]}</Text>
-              <TouchableOpacity
-                style={styles.stepBtn}
-                onPress={() => updateBoxRules({ [cat]: boxRules[cat] + 1 })}
-              >
-                <MaterialCommunityIcons name="plus" size={16} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {/* Category Low Stock Thresholds */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Low Stock Warning Thresholds</Text>
-        <Text style={styles.cardSub}>Minimum total stock count before a category turns red on the dashboard:</Text>
-
-        {categories.map(cat => (
-          <View key={cat} style={styles.ruleRow}>
-            <Text style={styles.ruleLabel}>{cat.toUpperCase()}</Text>
-            <View style={styles.stepper}>
-              <TouchableOpacity
-                style={styles.stepBtn}
-                onPress={() => updateThresholds({ [cat]: Math.max(1, thresholds[cat] - 1) })}
-              >
-                <MaterialCommunityIcons name="minus" size={16} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-              <Text style={styles.stepVal}>{thresholds[cat]}</Text>
-              <TouchableOpacity
-                style={styles.stepBtn}
-                onPress={() => updateThresholds({ [cat]: thresholds[cat] + 1 })}
-              >
-                <MaterialCommunityIcons name="plus" size={16} color={COLORS.textPrimary} />
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))}
-      </View>
-
-      {/* Expiration Warning Window */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Expiration Warning Window</Text>
-        <Text style={styles.cardSub}>Flag items as "Use First" if expiring within:</Text>
-
-        <View style={styles.daysSelector}>
-          {[14, 21, 30].map(days => (
-            <TouchableOpacity
-              key={days}
-              style={[
-                styles.dayChip,
-                settings.expirationWarningDays === days && styles.dayChipActive
-              ]}
-              onPress={() => handleSettingChange({ expirationWarningDays: days })}
-            >
-              <Text style={[
-                styles.dayChipText,
-                settings.expirationWarningDays === days && styles.dayChipTextActive
-              ]}>
-                {days} Days
-              </Text>
-            </TouchableOpacity>
+      <FadeInUp index={2}>
+        <Card>
+          <CardHeader
+            title="What goes in a box"
+            subtitle="Items per category in one standard box, for a family of four."
+          />
+          {categories.map((cat, i) => (
+            <Row
+              key={cat}
+              icon={categoryIcon(String(cat))}
+              label={String(cat).charAt(0).toUpperCase() + String(cat).slice(1)}
+              divider={i < categories.length - 1}
+              right={
+                <Stepper
+                  value={boxRules[cat]}
+                  min={0}
+                  onChange={next => updateBoxRules({ [cat]: next })}
+                />
+              }
+            />
           ))}
-        </View>
-      </View>
+        </Card>
+      </FadeInUp>
 
-      {/* Default Family Size */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Default Family Size</Text>
-        <Text style={styles.cardSub}>
-          What the dashboard and Build Boxes assume before anyone changes it:
-        </Text>
-
-        <View style={styles.daysSelector}>
-          {[2, 4, 6].map(size => (
-            <TouchableOpacity
-              key={size}
-              style={[styles.dayChip, settings.defaultFamilySize === size && styles.dayChipActive]}
-              onPress={() => handleSettingChange({ defaultFamilySize: size })}
-            >
-              <Text
-                style={[
-                  styles.dayChipText,
-                  settings.defaultFamilySize === size && styles.dayChipTextActive
-                ]}
-              >
-                {size} People
-              </Text>
-            </TouchableOpacity>
+      <FadeInUp index={3}>
+        <Card>
+          <CardHeader
+            title="Tell me when stock is low"
+            subtitle="Below this total, a category starts showing up on the dashboard and in Needs."
+          />
+          {categories.map((cat, i) => (
+            <Row
+              key={cat}
+              icon={categoryIcon(String(cat))}
+              label={String(cat).charAt(0).toUpperCase() + String(cat).slice(1)}
+              divider={i < categories.length - 1}
+              right={
+                <Stepper
+                  value={thresholds[cat]}
+                  min={1}
+                  onChange={next => updateThresholds({ [cat]: next })}
+                />
+              }
+            />
           ))}
+        </Card>
+      </FadeInUp>
+
+      <FadeInUp index={4}>
+        <Card>
+          <CardHeader
+            title="Flag stock as use-first"
+            subtitle="How far ahead to look when deciding what is about to expire."
+          />
+          <Segmented
+            value={settings.expirationWarningDays}
+            options={[14, 21, 30].map(days => ({ value: days, label: `${days} days` }))}
+            onChange={days => handleSettingChange({ expirationWarningDays: days })}
+          />
+        </Card>
+      </FadeInUp>
+
+      <FadeInUp index={5}>
+        <Card>
+          <CardHeader
+            title="Usual family size"
+            subtitle="What the dashboard and Build Boxes assume before anyone changes it."
+          />
+          <Segmented
+            value={settings.defaultFamilySize}
+            options={[2, 4, 6].map(size => ({ value: size, label: `${size} people` }))}
+            onChange={size => handleSettingChange({ defaultFamilySize: size })}
+          />
+        </Card>
+      </FadeInUp>
+
+      <FadeInUp index={6}>
+        <View className="gap-4">
+          <Text variant="micro" tone="soft" className="px-1 text-center">
+            Signed in to {settings.pantryName || 'this pantry'} as {settings.userRole}.
+          </Text>
+          <Button
+            label="Sign out"
+            variant="criticalGhost"
+            className="self-center"
+            icon={
+              <MaterialCommunityIcons name="logout" size={18} color={COLORS.statusCritical} />
+            }
+            onPress={handleSignOut}
+          />
         </View>
-      </View>
-
-      {/* Account */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Account</Text>
-        <Text style={styles.cardSub}>
-          Signed in to {settings.pantryName || 'this pantry'} as {settings.userRole}.
-        </Text>
-
-        <TouchableOpacity style={styles.resetBtn} onPress={handleSignOut}>
-          <MaterialCommunityIcons name="logout" size={20} color={COLORS.statusCritical} />
-          <Text style={styles.resetBtnText}>Sign Out</Text>
-        </TouchableOpacity>
-      </View>
+      </FadeInUp>
     </KeyboardScreen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    padding: SPACING.md,
-    paddingBottom: 100,
-  },
-  card: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    ...CARD_ELEVATION,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  cardTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  cardSub: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: SPACING.sm,
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: 4,
-  },
-  inputRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  textInput: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.sm,
-    height: 44,
-    fontSize: 14,
-    color: COLORS.textPrimary,
-    marginRight: SPACING.sm,
-  },
-  saveBtn: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    paddingHorizontal: SPACING.md,
-    height: 44,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  saveBtnText: {
-    color: COLORS.textOnPrimary,
-    fontWeight: '700',
-  },
-  feedbackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    paddingVertical: SPACING.sm,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderSoft,
-  },
-  feedbackHint: { fontSize: 12, color: COLORS.textSecondary, marginTop: 2 },
-  ruleRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderSoft,
-  },
-  ruleLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  stepper: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-  },
-  stepBtn: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  stepVal: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    paddingHorizontal: 10,
-  },
-  daysSelector: {
-    flexDirection: 'row',
-    marginTop: SPACING.xs,
-  },
-  dayChip: {
-    flex: 1,
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    paddingVertical: 10,
-    alignItems: 'center',
-    marginHorizontal: 4,
-  },
-  dayChipActive: {
-    backgroundColor: COLORS.primaryLight,
-  },
-  dayChipText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  dayChipTextActive: {
-    color: COLORS.textOnPrimary,
-  },
-  resetBtn: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#FDF3F2',
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.statusCritical,
-    padding: SPACING.md,
-    marginTop: SPACING.sm,
-  },
-  resetBtnText: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.statusCritical,
-    marginLeft: SPACING.xs,
-  },
-});

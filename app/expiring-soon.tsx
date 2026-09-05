@@ -1,192 +1,139 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React from 'react';
-import {
-  FlatList,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
+import { FlatList, View } from 'react-native';
+import { COLORS } from '../constants/theme';
+import { FadeInUp } from '../components/motion';
+import { Badge, Button, Card, EmptyState, Text } from '../components/ui';
 import { InventoryItem, usePantryStore } from '../lib/store';
+
+/**
+ * What to use before it is wasted.
+ *
+ * The old version led with a yellow banner explaining the allocation engine,
+ * then rows carrying the raw ISO date and a "Prioritize in Build Boxes" button
+ * on every single line — the same action repeated twenty times.
+ *
+ * A volunteer standing at the shelf wants one thing from this screen: what goes
+ * first. So the ordering IS the answer, each row says how long it has in days
+ * rather than in a date they must subtract from today, and the action sits once
+ * at the bottom where an action belongs.
+ */
+
+/** Whole days from today until the date, negative once it is past. */
+function daysUntil(date: string): number {
+  const then = new Date(`${date}T00:00:00`).getTime();
+  if (Number.isNaN(then)) return 0;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((then - today.getTime()) / 86400000);
+}
+
+/** How a window of days should read: past, this week, or merely soon. */
+function urgency(days: number) {
+  if (days < 0) return { colour: COLORS.statusCritical, tone: 'critical' as const, label: 'Past date' };
+  if (days === 0) return { colour: COLORS.statusCritical, tone: 'critical' as const, label: 'Today' };
+  if (days <= 7) return { colour: COLORS.statusCritical, tone: 'critical' as const, label: `${days}d left` };
+  return { colour: COLORS.statusWarning, tone: 'warn' as const, label: `${days}d left` };
+}
 
 export default function ExpiringSoonScreen() {
   const router = useRouter();
   const { inventory, settings } = usePantryStore();
 
-  const now = new Date();
   const warningLimit = new Date();
-  warningLimit.setDate(now.getDate() + settings.expirationWarningDays);
+  warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
   const warningStr = warningLimit.toISOString().split('T')[0];
 
-  const expiringItems = inventory
+  const expiring = inventory
     .filter(item => !!item.expiration && item.expiration <= warningStr)
-    .sort((a, b) => new Date(a.expiration!).getTime() - new Date(b.expiration!).getTime());
+    .sort((a, b) => a.expiration!.localeCompare(b.expiration!));
 
-  const renderItem = ({ item }: { item: InventoryItem }) => (
-    <View style={styles.itemCard}>
-      <View style={styles.itemHeader}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.itemName}>{item.name}</Text>
-          <Text style={styles.itemCategory}>{item.category.toUpperCase()}</Text>
-        </View>
+  const unitsAtRisk = expiring.reduce((sum, item) => sum + item.count, 0);
 
-        <View style={styles.expBadge}>
-          <MaterialCommunityIcons name="clock-alert-outline" size={14} color={COLORS.textOnPrimary} />
-          <Text style={styles.expBadgeText}>Exp: {item.expiration}</Text>
-        </View>
-      </View>
+  const renderRow = ({ item, index }: { item: InventoryItem; index: number }) => {
+    const days = daysUntil(item.expiration!);
+    const state = urgency(days);
 
-      <View style={styles.itemFooter}>
-        <Text style={styles.countText}>Current Stock: {item.count} units</Text>
+    return (
+      <FadeInUp index={index + 1}>
+        <Card className="mb-3 flex-row items-center gap-4">
+          {/* Urgency is carried by the bar, not by a second badge. The rows are
+              already in order, so the colour only has to confirm it. */}
+          <View className="h-11 w-1.5 rounded-full" style={{ backgroundColor: state.colour }} />
 
-        <TouchableOpacity
-          style={styles.packFirstBtn}
-          onPress={() => router.push('/(tabs)/build')}
-        >
-          <Text style={styles.packFirstBtnText}>Prioritize in Build Boxes</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+          <View className="flex-1">
+            <Text variant="body" className="font-semibold">
+              {item.name}
+            </Text>
+            <Text variant="micro" tone="soft" className="mt-1 capitalize">
+              {item.category} · {item.count} {item.count === 1 ? 'unit' : 'units'} ·{' '}
+              {item.expiration}
+            </Text>
+          </View>
+
+          <Badge label={state.label} tone={state.tone} />
+        </Card>
+      </FadeInUp>
+    );
+  };
 
   return (
-    <View style={styles.container}>
-      <View style={styles.banner}>
-        <MaterialCommunityIcons name="alert-circle-outline" size={24} color={COLORS.statusWarning} />
-        <View style={{ marginLeft: SPACING.xs, flex: 1 }}>
-          <Text style={styles.bannerTitle}>
-            Expiring Within {settings.expirationWarningDays} Days ({expiringItems.length} SKUs)
-          </Text>
-          <Text style={styles.bannerSub}>
-            Items listed below are automatically marked "Use First" by the allocation engine to prevent waste.
-          </Text>
-        </View>
-      </View>
-
+    <View className="flex-1 bg-canvas">
       <FlatList
-        data={expiringItems}
+        data={expiring}
         keyExtractor={item => item.id}
-        renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
+        renderItem={renderRow}
+        contentContainerClassName="px-gutter pt-gutter pb-28"
+        showsVerticalScrollIndicator={false}
+        ListHeaderComponent={
+          expiring.length > 0 ? (
+            <FadeInUp index={0}>
+              <View className="mb-5 px-1">
+                <Text variant="headline">
+                  {unitsAtRisk} {unitsAtRisk === 1 ? 'unit' : 'units'} to use first
+                </Text>
+                <Text variant="body" tone="soft" className="mt-1">
+                  Everything here is inside your {settings.expirationWarningDays}-day window,
+                  soonest at the top. Pack from the top down and none of it is wasted.
+                </Text>
+              </View>
+            </FadeInUp>
+          ) : null
+        }
+        ListFooterComponent={
+          expiring.length > 0 ? (
+            <FadeInUp index={expiring.length + 1}>
+              <Button
+                label="Build boxes with these"
+                block
+                className="mt-2"
+                icon={
+                  <MaterialCommunityIcons
+                    name="package-variant-closed"
+                    size={19}
+                    color={COLORS.textOnPrimary}
+                  />
+                }
+                onPress={() => router.push('/(tabs)/build')}
+              />
+              <Text variant="micro" tone="soft" className="mt-3 text-center">
+                Box building already pulls the shortest-dated stock first.
+              </Text>
+            </FadeInUp>
+          ) : null
+        }
         ListEmptyComponent={
-          <View style={styles.emptyContainer}>
-            <MaterialCommunityIcons name="check-circle-outline" size={48} color={COLORS.statusGood} />
-            <Text style={styles.emptyTitle}>No Expiring Items Found!</Text>
-            <Text style={styles.emptySub}>All inventory items are well within their expiration date window.</Text>
-          </View>
+          <EmptyState
+            icon="check-circle-outline"
+            tone="good"
+            title="Nothing on the clock"
+            body={`No stock expires in the next ${settings.expirationWarningDays} days. This page fills itself in when something does.`}
+            actionLabel="Back to the shelf"
+            onAction={() => router.push('/(tabs)/inventory')}
+          />
         }
       />
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  banner: {
-    backgroundColor: '#FEF8F0',
-    borderColor: COLORS.statusWarning,
-    borderWidth: 1,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-    margin: SPACING.md,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bannerTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  bannerSub: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  listContent: {
-    paddingHorizontal: SPACING.md,
-    paddingBottom: SPACING.xl,
-  },
-  itemCard: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    ...CARD_ELEVATION,
-    padding: SPACING.md,
-    marginBottom: SPACING.sm,
-  },
-  itemHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  itemName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  itemCategory: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  expBadge: {
-    backgroundColor: COLORS.statusWarning,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADII.sm,
-  },
-  expBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-    marginLeft: 3,
-  },
-  itemFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: SPACING.sm,
-    paddingTop: SPACING.xs,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.borderSoft,
-  },
-  countText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  packFirstBtn: {
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.sm,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-  },
-  packFirstBtnText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primaryDark,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    paddingVertical: SPACING.xl,
-  },
-  emptyTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.statusGood,
-    marginTop: SPACING.xs,
-  },
-  emptySub: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-});

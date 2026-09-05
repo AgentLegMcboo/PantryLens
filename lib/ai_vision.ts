@@ -1,5 +1,6 @@
 import { supabase } from './supabase';
-import { InventoryItem } from './store';
+import { usePantryStore } from './store';
+import { applyCatalogue } from './catalogue';
 import { mergeDuplicates, normaliseItem, type ScanCandidate } from './scan-normalize';
 import { describeImage, log } from './log';
 
@@ -12,6 +13,21 @@ import { describeImage, log } from './log';
  */
 
 export type { ScanCandidate };
+
+/**
+ * What came back from a scan.
+ *
+ * `photosRead` can now be lower than `photosSent`: the analyzer sends one
+ * request per photo and tolerates one of them failing, which is right — five
+ * photos' worth of rows beats making the volunteer redo all six. But a photo
+ * that quietly vanished is worse than one that failed loudly, so the counts
+ * travel with the result and the caller says so.
+ */
+export interface ScanResult {
+  candidates: ScanCandidate[];
+  photosRead: number;
+  photosSent: number;
+}
 
 export class ScanError extends Error {
   constructor(message: string) {
@@ -51,7 +67,7 @@ async function readFunctionError(error: any): Promise<string | null> {
   }
 }
 
-export async function processImageScan(images: string[] | string): Promise<ScanCandidate[]> {
+export async function processImageScan(images: string[] | string): Promise<ScanResult> {
   const imageList = (Array.isArray(images) ? images : [images]).filter(Boolean);
   if (imageList.length === 0) {
     throw new ScanError('No photos to analyse yet — take one first.');
@@ -91,8 +107,14 @@ export async function processImageScan(images: string[] | string): Promise<ScanC
   }
 
   const rawItems = Array.isArray(data?.items) ? data.items : [];
-  log.debug('scan', `model returned ${rawItems.length} raw item(s)`, rawItems);
+  const photosSent = imageList.length;
+  const photosRead = Number.isFinite(data?.photosRead) ? Number(data.photosRead) : photosSent;
+  log.debug('scan', `model returned ${rawItems.length} raw item(s) from ${photosRead}/${photosSent} photo(s)`, rawItems);
 
+  // Now load-bearing rather than a safety net. Each photo is analysed on its own,
+  // so a jar shot from two angles genuinely does come back twice — this is what
+  // stops that from doubling the pantry's stock. Asking the model to de-duplicate
+  // across frames, which is what used to happen, was both slower and worse.
   const candidates = mergeDuplicates(
     rawItems
       .map(normaliseItem)
@@ -106,22 +128,71 @@ export async function processImageScan(images: string[] | string): Promise<ScanC
     );
   }
 
-  // Least certain first, so the rows needing a human are the first ones seen.
-  return candidates.sort((a, b) => a.confidence - b.confidence);
+  // What this pantry has already agreed these products are called. Runs after
+  // the merge so it sees one row per product, and never throws — an unreachable
+  // catalogue costs nothing but the improvement it would have made.
+  const snapped = await applyCatalogue(
+    candidates,
+    usePantryStore.getState().settings.pantryId,
+  );
+
+  return {
+    // Least certain first, so the rows needing a human are the first ones seen.
+    // Barcode and catalogue hits sort to the bottom by construction, which is
+    // right: they are the rows least in need of a person.
+    candidates: snapped.sort((a, b) => a.confidence - b.confidence),
+    photosRead,
+    photosSent,
+  };
 }
 
-export function lookupBarcode(barcode: string): Partial<InventoryItem> {
-  const barcodeDB: Record<string, Partial<InventoryItem>> = {
-    '0111222333': { name: 'Canned Garbanzo Beans 15 oz', category: 'protein', count: 1, expiration: '2027-04-10', confidence: 1.0 },
-    '0412200112': { name: 'Whole Wheat Bread Loaf', category: 'grain', count: 1, expiration: '2026-08-02', confidence: 1.0 },
-    '0700000123': { name: 'Chicken Noodle Soup 10.5 oz', category: 'protein', count: 1, expiration: '2026-09-20', confidence: 1.0 }
-  };
+export interface BarcodeLookup {
+  found: boolean;
+  barcode?: string;
+  name?: string;
+  brand?: string | null;
+  category?: string | null;
+  /** 'usda' | 'openfoodfacts' | 'cache' when found. */
+  source?: string;
+  /** 'INVALID' when the digits failed their check digit, 'UNKNOWN' when no
+   *  provider recognised them. */
+  reason?: string;
+  error?: string;
+}
 
-  return barcodeDB[barcode] || {
-    name: `Scanned Item (${barcode})`,
-    category: 'unknown',
-    count: 1,
-    expiration: null,
-    confidence: 1.0
-  };
+/**
+ * Resolves a scanned barcode against the shared product cache and, on a miss,
+ * USDA FoodData Central and Open Food Facts.
+ *
+ * This used to be a hardcoded object of three fake products that the review
+ * screen called with a hardcoded barcode — so the "Scan barcode instead" button
+ * returned the same imaginary tin of garbanzo beans every time it was pressed,
+ * for any item, forever.
+ *
+ * Not found is a normal answer, not an error. A pantry receives plenty of things
+ * no public database has heard of, and the honest response is to leave the row
+ * alone and let a human name it.
+ */
+export async function lookupBarcode(barcode: string): Promise<BarcodeLookup> {
+  try {
+    const { data, error } = await supabase.functions.invoke('lookup-barcode', {
+      body: { barcode },
+    });
+
+    if (error) {
+      const serverMessage = await readFunctionError(error);
+      log.error('scan', 'barcode lookup failed', error.message);
+      return {
+        found: false,
+        reason: 'ERROR',
+        error: serverMessage ?? 'Could not reach the product database. Try again, or type the name in.',
+      };
+    }
+
+    log.debug('scan', `barcode ${barcode}: ${data?.found ? data.name : 'no match'}`);
+    return data as BarcodeLookup;
+  } catch (err) {
+    log.error('scan', 'barcode lookup threw', err);
+    return { found: false, reason: 'ERROR', error: 'Could not reach the product database.' };
+  }
 }

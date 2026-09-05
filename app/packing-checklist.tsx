@@ -1,18 +1,27 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useState } from 'react';
-import {
-  Alert,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
+import React, { useMemo, useState } from 'react';
+import { Alert, Pressable, View } from 'react-native';
+import { COLORS } from '../constants/theme';
 import { computeAllocation } from '../lib/allocation';
+import { FadeInUp, ProgressBar } from '../components/motion';
+import { Badge, Button, Card, CategoryIcon, EmptyState, Screen, Text } from '../components/ui';
+import { cueSuccess, cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
 
+/**
+ * The pick list, walked one shelf at a time.
+ *
+ * The old version opened on a card explaining the per-box recipe in shouted
+ * capitals, then category cards whose rows carried a tick, a name, a date, a
+ * "USE FIRST" badge and a "Grab 3" badge — five things per line, none of which
+ * was the one a volunteer needs while walking a shelf with a trolley.
+ *
+ * This is a checklist, so it is built like one: how far through you are at the
+ * top, big tap targets down the page, and the finish button only lights up when
+ * the trolley is actually full. Ticking a row visibly strikes it out — the
+ * progress you can see is what makes a long pick list bearable.
+ */
 export default function PackingChecklistScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -22,260 +31,173 @@ export default function PackingChecklistScreen() {
   const { inventory, bulkLots, boxRules, deductItems } = usePantryStore();
   const plan = computeAllocation(inventory, boxRules, targetBoxes, familySize, bulkLots);
 
-  // Local state for checked off items
-  const [checkedIds, setCheckedIds] = useState<Record<string, boolean>>({});
+  const [checked, setChecked] = useState<Record<string, boolean>>({});
 
-  const toggleCheck = (id: string) => {
-    setCheckedIds(prev => ({ ...prev, [id]: !prev[id] }));
+  const allKeys = useMemo(
+    () =>
+      plan.packingChecklist.flatMap(group =>
+        group.items.map((item, i) => `${group.category}-${item.id}-${i}`),
+      ),
+    [plan.packingChecklist],
+  );
+
+  const doneCount = allKeys.filter(key => checked[key]).length;
+  const total = allKeys.length;
+  const allDone = total > 0 && doneCount === total;
+
+  const toggle = (key: string) => {
+    cueTap();
+    setChecked(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleFinishPacking = () => {
-    const itemsToDeduct = plan.allocatedItems.map(a => ({
-      id: a.item.id,
-      count: a.countToGrab
-    }));
-
-    deductItems(itemsToDeduct);
+  const handleFinish = () => {
+    deductItems(plan.allocatedItems.map(a => ({ id: a.item.id, count: a.countToGrab })));
+    cueSuccess();
     Alert.alert(
-      'Packing Complete!',
-      `Successfully packed ${plan.achievableBoxes} family boxes. Stock counts have been updated.`,
-      [{ text: 'Return Home', onPress: () => router.replace('/(tabs)') }]
+      'Boxes packed',
+      `${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? 'box is' : 'boxes are'} ready, and the shelf counts have come down to match.`,
+      [{ text: 'Done', onPress: () => router.replace('/(tabs)') }],
     );
   };
 
+  const recipe = Object.entries(plan.perBoxNeeds)
+    .filter(([, qty]) => qty > 0)
+    .map(([cat, qty]) => `${qty} ${cat}`)
+    .join(' · ');
+
+  if (total === 0) {
+    return (
+      <View className="flex-1 justify-center bg-canvas">
+        <EmptyState
+          icon="package-variant"
+          title="Nothing to pick yet"
+          body="A box needs every category the recipe calls for. Add stock, or lower the per-box amounts in pantry settings."
+          actionLabel="Back to building"
+          onAction={() => router.back()}
+        />
+      </View>
+    );
+  }
+
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      {/* Header Info */}
-      <View style={styles.headerCard}>
-        <View style={styles.headerRow}>
-          <MaterialCommunityIcons name="package-variant" size={28} color={COLORS.primaryLight} />
-          <View style={{ marginLeft: SPACING.xs, flex: 1 }}>
-            <Text style={styles.headerTitle}>Family Box Packing Checklist</Text>
-            <Text style={styles.headerSub}>
-              Packing {plan.achievableBoxes} boxes (Family of {familySize})
+    <Screen>
+      {/* How far through you are, which is the only thing this screen has to
+          keep telling you while your eyes are on the shelf. */}
+      <FadeInUp index={0}>
+        <View className="px-1">
+          <View className="flex-row items-baseline justify-between">
+            <Text variant="headline">
+              {doneCount} of {total} picked
+            </Text>
+            <Text variant="label" tone="soft">
+              {plan.achievableBoxes} {plan.achievableBoxes === 1 ? 'box' : 'boxes'}
             </Text>
           </View>
-        </View>
 
-        <View style={styles.recipeBanner}>
-          <Text style={styles.recipeTitle}>PER-BOX RECIPE:</Text>
-          <Text style={styles.recipeText}>
-            {Object.entries(plan.perBoxNeeds)
-              .filter(([_, qty]) => qty > 0)
-              .map(([cat, qty]) => `${qty} ${cat.toUpperCase()}`)
-              .join(' • ')}
+          <View className="mt-3">
+            <ProgressBar
+              progress={total === 0 ? 0 : doneCount / total}
+              color={allDone ? COLORS.statusGood : COLORS.primaryLight}
+              height={10}
+            />
+          </View>
+
+          <Text variant="micro" tone="soft" className="mt-3 capitalize">
+            Each box, family of {familySize}: {recipe}
           </Text>
         </View>
-      </View>
+      </FadeInUp>
 
-      <Text style={styles.sectionHeader}>Items to Grab from Shelves (Expiration Order)</Text>
+      {plan.packingChecklist.map((group, groupIndex) => {
+        return (
+          <FadeInUp key={group.category} index={groupIndex + 1}>
+            <Card className="gap-1">
+              <View className="mb-2 flex-row items-center gap-3">
+                <CategoryIcon category={group.category} />
+                <Text variant="heading" className="flex-1 capitalize">
+                  {group.category}
+                </Text>
+                <Text variant="micro" tone="soft">
+                  {group.allocatedCount} total · {group.neededPerBox} per box
+                </Text>
+              </View>
 
-      {plan.packingChecklist.map(group => (
-        <View key={group.category} style={styles.categoryCard}>
-          <View style={styles.categoryHeader}>
-            <View style={styles.categoryBadge}>
-              <Text style={styles.categoryBadgeText}>{group.category.toUpperCase()}</Text>
-            </View>
-            <Text style={styles.groupNeededText}>
-              Need: {group.allocatedCount} total ({group.neededPerBox} / box)
-            </Text>
-          </View>
+              {group.items.map((item, i) => {
+                const key = `${group.category}-${item.id}-${i}`;
+                const isChecked = !!checked[key];
 
-          {group.items.map((item, idx) => {
-            const isChecked = !!checkedIds[`${group.category}-${item.id}-${idx}`];
-            const checkKey = `${group.category}-${item.id}-${idx}`;
+                return (
+                  <Pressable
+                    key={key}
+                    onPress={() => toggle(key)}
+                    accessibilityRole="checkbox"
+                    accessibilityState={{ checked: isChecked }}
+                    // 56px so it can be hit while holding a tin.
+                    className="min-h-[56px] flex-row items-center gap-3 border-b border-hairline py-2"
+                  >
+                    <MaterialCommunityIcons
+                      name={isChecked ? 'check-circle' : 'circle-outline'}
+                      size={28}
+                      color={isChecked ? COLORS.statusGood : COLORS.borderStrong}
+                    />
 
-            return (
-              <TouchableOpacity
-                key={checkKey}
-                style={[styles.itemRow, isChecked && styles.itemRowChecked]}
-                onPress={() => toggleCheck(checkKey)}
-              >
-                <MaterialCommunityIcons
-                  name={isChecked ? 'checkbox-marked-circle' : 'checkbox-blank-circle-outline'}
-                  size={24}
-                  color={isChecked ? COLORS.statusGood : COLORS.textSecondary}
-                />
+                    <View className="flex-1">
+                      <Text
+                        variant="body"
+                        tone={isChecked ? 'soft' : 'default'}
+                        className="font-semibold"
+                        style={isChecked ? { textDecorationLine: 'line-through' } : undefined}
+                      >
+                        {item.name}
+                      </Text>
+                      {item.expiration ? (
+                        <Text variant="micro" tone="soft" className="mt-0.5">
+                          Expires {item.expiration}
+                        </Text>
+                      ) : null}
+                    </View>
 
-                <View style={styles.itemInfo}>
-                  <Text style={[styles.itemName, isChecked && styles.itemNameChecked]}>
-                    {item.name}
-                  </Text>
-                  {item.expiration && (
-                    <Text style={styles.itemExp}>Exp: {item.expiration}</Text>
-                  )}
-                </View>
+                    {item.useFirst && !isChecked ? <Badge label="Use first" tone="warn" /> : null}
 
-                {item.useFirst && (
-                  <View style={styles.useFirstBadge}>
-                    <Text style={styles.useFirstText}>USE FIRST</Text>
-                  </View>
-                )}
+                    {/* The count is what the volunteer is actually reading off
+                        this row, so it gets to be the biggest thing on it. */}
+                    <Text
+                      variant="title"
+                      tone={isChecked ? 'soft' : 'default'}
+                      className="min-w-[32px] text-right"
+                    >
+                      {item.count}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </Card>
+          </FadeInUp>
+        );
+      })}
 
-                <View style={styles.qtyBadge}>
-                  <Text style={styles.qtyText}>Grab {item.count}</Text>
-                </View>
-              </TouchableOpacity>
-            );
-          })}
+      <FadeInUp index={plan.packingChecklist.length + 1}>
+        <View className="gap-3">
+          <Button
+            label={allDone ? 'Finish and update the shelf' : `${total - doneCount} still to pick`}
+            block
+            disabled={!allDone}
+            icon={
+              <MaterialCommunityIcons
+                name="check-all"
+                size={20}
+                color={COLORS.textOnPrimary}
+              />
+            }
+            onPress={handleFinish}
+          />
+          <Text variant="micro" tone="soft" className="text-center">
+            {allDone
+              ? 'This takes what you picked back off the shelf counts.'
+              : 'Tick every line as it goes in the trolley.'}
+          </Text>
         </View>
-      ))}
-
-      {/* Complete Button */}
-      <TouchableOpacity style={styles.finishBtn} onPress={handleFinishPacking}>
-        <MaterialCommunityIcons name="check-all" size={22} color={COLORS.textOnPrimary} />
-        <Text style={styles.finishBtnText}>Finish Packing & Deduct Stock from Inventory</Text>
-      </TouchableOpacity>
-    </ScrollView>
+      </FadeInUp>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    padding: SPACING.md,
-    paddingBottom: SPACING.xl,
-  },
-  headerCard: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    ...CARD_ELEVATION,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  headerTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  headerSub: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  recipeBanner: {
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.sm,
-    padding: SPACING.sm,
-    marginTop: SPACING.sm,
-  },
-  recipeTitle: {
-    fontSize: 10,
-    fontWeight: '700',
-    color: COLORS.textSecondary,
-    letterSpacing: 0.5,
-  },
-  recipeText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.primaryDark,
-    marginTop: 2,
-  },
-  sectionHeader: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
-  },
-  categoryCard: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    ...CARD_ELEVATION,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  categoryHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  categoryBadge: {
-    backgroundColor: COLORS.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: RADII.sm,
-  },
-  categoryBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-  },
-  groupNeededText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  itemRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 10,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.borderSoft,
-  },
-  itemRowChecked: {
-    opacity: 0.6,
-  },
-  itemInfo: {
-    flex: 1,
-    marginLeft: SPACING.xs,
-  },
-  itemName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-  },
-  itemNameChecked: {
-    textDecorationLine: 'line-through',
-  },
-  itemExp: {
-    fontSize: 11,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  useFirstBadge: {
-    backgroundColor: COLORS.statusWarning,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-    borderRadius: RADII.sm,
-    marginRight: 6,
-  },
-  useFirstText: {
-    fontSize: 9,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-  },
-  qtyBadge: {
-    backgroundColor: COLORS.surfaceContainer,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: RADII.sm,
-  },
-  qtyText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  finishBtn: {
-    backgroundColor: COLORS.statusGood,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: SPACING.sm,
-    minHeight: SPACING.touch,
-  },
-  finishBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-    marginLeft: SPACING.xs,
-  },
-});

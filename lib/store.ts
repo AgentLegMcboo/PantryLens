@@ -33,6 +33,19 @@ export const SOURCE_ORG_LABELS: Record<SourceOrg, string> = {
 
 export const isUsableCondition = (c: Condition | undefined) => (c ?? 'ok') === 'ok';
 
+/**
+ * What the barcode scanner found, addressed to the row that opened it.
+ *
+ * `uid` is the review screen's own row id rather than an inventory id, because
+ * none of these rows exist in the database yet.
+ */
+export interface PendingBarcode {
+  uid: string;
+  barcode: string;
+  name: string;
+  category: Category | null;
+}
+
 /** A photo held only for the length of a review, never persisted. */
 export interface ScanPhoto {
   uri: string;
@@ -192,6 +205,15 @@ interface AppState {
   currentDraft: InventoryItem[];
   /** The photos the current draft was read from, so review can point at them. */
   currentScanPhotos: ScanPhoto[];
+  /**
+   * A resolved barcode waiting to be collected by Review & Verify.
+   *
+   * The scanner is a pushed screen, and a pushed screen has no way to hand a
+   * value back to the one that opened it. Parking the result here — keyed by the
+   * row that asked for it — is how the answer finds its way home. Cleared the
+   * moment it is consumed, so a stale hit can never land on a later row.
+   */
+  pendingBarcode: PendingBarcode | null;
 
   // Actions
   initialize: () => Promise<void>;
@@ -215,6 +237,7 @@ interface AppState {
   updateThresholds: (updates: Partial<CategoryThresholds>) => Promise<void>;
   
   setDraft: (items: InventoryItem[], photos?: ScanPhoto[]) => void;
+  setPendingBarcode: (value: PendingBarcode | null) => void;
   addActivity: (text: string, icon?: string) => Promise<void>;
 }
 
@@ -237,6 +260,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
   isLoaded: false,
   currentDraft: [],
   currentScanPhotos: [],
+  pendingBarcode: null,
 
   initialize: async () => {
     if (__DEV__) {
@@ -584,6 +608,10 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
   setDraft: (items: InventoryItem[], photos: ScanPhoto[] = []) => {
     set({ currentDraft: items, currentScanPhotos: photos });
+  },
+
+  setPendingBarcode: (value: PendingBarcode | null) => {
+    set({ pendingBarcode: value });
   },
 
   addActivity: async (text: string, icon = 'information-outline') => {

@@ -1,20 +1,10 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  StyleSheet,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import { CARD_ELEVATION, COLORS, FONTS, RADII, SPACING } from '../constants/theme';
+import { Alert, Pressable, View } from 'react-native';
+import { AuthBackdrop, AuthBrand } from '../components/auth-layout';
 import { KeyboardScreen } from '../components/keyboard-screen';
-import { FadeInUp, PressableScale } from '../components/motion';
-import { cueSuccess, cueTap } from '../lib/feedback';
+import { FadeInUp } from '../components/motion';
+import { Button, Card, Input, Segmented, Text } from '../components/ui';
+import { cueSuccess } from '../lib/feedback';
 import { supabase } from '../lib/supabase';
 import { usePantryStore } from '../lib/store';
 
@@ -23,10 +13,10 @@ type Mode = 'join' | 'create';
 /**
  * The one screen between signing in and using the app.
  *
- * It carries the same pantry-behind-glass treatment as Log In and Sign Up so the
- * hand-off doesn't feel like a different product, and it asks for one thing at a
- * time: two stacked forms made the choice look like paperwork, when it is really
- * a single either/or a volunteer answers once.
+ * It carries the same pantry-behind-glass treatment as Log In and Sign Up — the
+ * shared one now, rather than its own third copy of the photograph and scrim —
+ * and asks for one thing at a time: two stacked forms made the choice look like
+ * paperwork, when it is really a single either/or a volunteer answers once.
  */
 export default function PantrySelectionScreen() {
   const session = usePantryStore(state => state.session);
@@ -46,8 +36,6 @@ export default function PantrySelectionScreen() {
   const trimmedName = pantryName.trim();
 
   const switchMode = (next: Mode) => {
-    if (next === mode) return;
-    cueTap();
     setError(null);
     setMode(next);
   };
@@ -78,7 +66,6 @@ export default function PantrySelectionScreen() {
       cueSuccess();
       // Let the RootLayout routing effect take over by triggering a refresh via store
       usePantryStore.getState().fetchData();
-
     } catch (err: any) {
       setError(err.message);
       Alert.alert('Could not join', err.message);
@@ -107,11 +94,10 @@ export default function PantrySelectionScreen() {
       // than generated and discarded the way it used to be.
       Alert.alert(
         `${trimmedName} is set up`,
-        `Share this invite code with your volunteers:\n\n${data.pantry_code}`
+        `Share this invite code with your volunteers:\n\n${data.pantry_code}`,
       );
 
       usePantryStore.getState().fetchData();
-
     } catch (err: any) {
       setError(err.message);
       Alert.alert('Could not create pantry', err.message);
@@ -119,251 +105,104 @@ export default function PantrySelectionScreen() {
     setLoadingCreate(false);
   };
 
-  const canSubmit = mode === 'join' ? !!trimmedCode : !!trimmedName;
+  const joining = mode === 'join';
+  const canSubmit = joining ? !!trimmedCode : !!trimmedName;
 
   return (
-    <View style={styles.root}>
-      <Image source={require('../assets/images/pantry-bg.jpg')} style={styles.bg} blurRadius={5} />
-      <LinearGradient
-        colors={['rgba(251,246,238,0.55)', 'rgba(251,246,238,0.90)', COLORS.background]}
-        locations={[0, 0.48, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+    <View className="flex-1 bg-canvas">
+      <AuthBackdrop />
 
-      <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
+      <KeyboardScreen className="bg-transparent" contentContainerClassName="justify-center grow">
         <FadeInUp index={0}>
-          <View style={styles.brandBox}>
-            <View style={styles.logoCircle}>
-              <MaterialCommunityIcons name="home-heart" size={34} color={COLORS.textOnPrimary} />
-            </View>
-            <Text style={styles.brandTitle}>One last step</Text>
-            <Text style={styles.brandTagline}>
-              PantryLens keeps a single shared inventory per pantry. Join the one your team already
-              uses, or start a new one.
-            </Text>
-          </View>
+          <AuthBrand
+            icon="home-heart"
+            title="One last step"
+            subtitle="PantryLens keeps one shared inventory per pantry. Join the one your team already uses, or start a new one."
+          />
         </FadeInUp>
 
         <FadeInUp index={1}>
-          <View style={styles.card}>
+          <Card
+            className="gap-5"
+            style={{
+              shadowColor: '#2B2420',
+              shadowOpacity: 0.16,
+              shadowRadius: 28,
+              shadowOffset: { width: 0, height: 14 },
+              elevation: 8,
+            }}
+          >
             {/* One question, two answers — clearer than two forms competing. */}
-            <View style={styles.segment}>
-              {(['join', 'create'] as Mode[]).map(m => {
-                const active = mode === m;
-                return (
-                  <TouchableOpacity
-                    key={m}
-                    style={[styles.segmentTab, active && styles.segmentTabActive]}
-                    onPress={() => switchMode(m)}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected: active }}
-                  >
-                    <MaterialCommunityIcons
-                      name={m === 'join' ? 'account-multiple-plus-outline' : 'plus-box-outline'}
-                      size={16}
-                      color={active ? COLORS.textOnPrimary : COLORS.textSecondary}
-                    />
-                    <Text style={[styles.segmentText, active && styles.segmentTextActive]}>
-                      {m === 'join' ? 'Join a pantry' : 'Start a new one'}
-                    </Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
+            <Segmented
+              value={mode}
+              onChange={switchMode}
+              options={[
+                { value: 'join', label: 'Join a pantry', icon: 'account-multiple-plus-outline' },
+                { value: 'create', label: 'Start a new one', icon: 'plus-box-outline' },
+              ]}
+            />
 
-            {mode === 'join' ? (
-              <>
-                <Text style={styles.fieldLabel}>Invite code</Text>
-                <TextInput
-                  style={[styles.input, styles.codeInput, !!error && styles.inputError]}
-                  value={inviteCode}
-                  onChangeText={txt => {
-                    setInviteCode(txt.toUpperCase());
-                    if (error) setError(null);
-                  }}
-                  placeholder="PANTRY-1A2B3C"
-                  placeholderTextColor={COLORS.borderSoft}
-                  autoCapitalize="characters"
-                  autoCorrect={false}
-                  returnKeyType="go"
-                  onSubmitEditing={handleJoinPantry}
-                  editable={!busy}
-                />
-                <Text style={[styles.hint, !!error && styles.hintError]}>
-                  {error ?? 'Whoever set up your pantry has this code.'}
-                </Text>
-              </>
+            {joining ? (
+              <Input
+                label="Invite code"
+                value={inviteCode}
+                onChangeText={txt => {
+                  setInviteCode(txt.toUpperCase());
+                  if (error) setError(null);
+                }}
+                placeholder="PANTRY-1A2B3C"
+                autoCapitalize="characters"
+                autoCorrect={false}
+                returnKeyType="go"
+                onSubmitEditing={handleJoinPantry}
+                editable={!busy}
+                error={error}
+                hint="Whoever set up your pantry has this code."
+                // A code is read back character by character, so it gets the
+                // spacing to match.
+                className="text-center text-heading font-semibold tracking-[2px]"
+              />
             ) : (
-              <>
-                <Text style={styles.fieldLabel}>Pantry name</Text>
-                <TextInput
-                  style={[styles.input, !!error && styles.inputError]}
-                  value={pantryName}
-                  onChangeText={txt => {
-                    setPantryName(txt);
-                    if (error) setError(null);
-                  }}
-                  placeholder="Grace Community Pantry"
-                  placeholderTextColor={COLORS.borderSoft}
-                  autoCapitalize="words"
-                  returnKeyType="go"
-                  onSubmitEditing={handleCreatePantry}
-                  editable={!busy}
-                />
-                <Text style={[styles.hint, !!error && styles.hintError]}>
-                  {error ?? "You'll be the admin, and get a code to invite your volunteers."}
-                </Text>
-              </>
+              <Input
+                label="Pantry name"
+                value={pantryName}
+                onChangeText={txt => {
+                  setPantryName(txt);
+                  if (error) setError(null);
+                }}
+                placeholder="Grace Community Pantry"
+                autoCapitalize="words"
+                returnKeyType="go"
+                onSubmitEditing={handleCreatePantry}
+                editable={!busy}
+                error={error}
+                hint="You'll be the admin, and get a code to invite your volunteers."
+              />
             )}
 
-            <PressableScale
-              style={[styles.primaryBtn, (!canSubmit || busy) && styles.primaryBtnDisabled] as any}
-              cue="press"
-              disabled={!canSubmit || busy}
-              onPress={mode === 'join' ? handleJoinPantry : handleCreatePantry}
-            >
-              {busy ? (
-                <ActivityIndicator color={COLORS.textOnPrimary} />
-              ) : (
-                <>
-                  <Text style={styles.primaryBtnText}>
-                    {mode === 'join' ? 'Join pantry' : 'Create pantry'}
-                  </Text>
-                  <MaterialCommunityIcons name="arrow-right" size={20} color={COLORS.textOnPrimary} />
-                </>
-              )}
-            </PressableScale>
-          </View>
+            <Button
+              label={joining ? 'Join pantry' : 'Create pantry'}
+              block
+              loading={busy}
+              disabled={!canSubmit}
+              onPress={joining ? handleJoinPantry : handleCreatePantry}
+            />
+          </Card>
         </FadeInUp>
 
         <FadeInUp index={2}>
-          <View style={styles.accountRow}>
-            <Text style={styles.accountText} numberOfLines={1}>
+          <View className="flex-row items-center justify-center gap-2">
+            <Text variant="micro" tone="soft" numberOfLines={1} className="shrink">
               Signed in as {session?.user?.email ?? 'this device'}
             </Text>
-            <TouchableOpacity onPress={signOut} disabled={busy} hitSlop={8}>
-              <Text style={styles.signOutText}>Sign out</Text>
-            </TouchableOpacity>
+            <Pressable onPress={signOut} disabled={busy} hitSlop={8}>
+              <Text variant="micro" tone="brand" className="font-bold">
+                Sign out
+              </Text>
+            </Pressable>
           </View>
         </FadeInUp>
       </KeyboardScreen>
     </View>
   );
 }
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  bg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: 0.55 },
-  container: { flex: 1, backgroundColor: 'transparent' },
-  content: { padding: SPACING.lg, justifyContent: 'center', flexGrow: 1 },
-
-  brandBox: { alignItems: 'center', marginBottom: SPACING.xl },
-  logoCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  brandTitle: { fontSize: 30, fontFamily: FONTS.serifSemi, color: COLORS.textPrimary },
-  brandTagline: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: SPACING.xs,
-    paddingHorizontal: SPACING.sm,
-  },
-
-  card: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.lg,
-    ...CARD_ELEVATION,
-    padding: SPACING.lg,
-    shadowColor: '#2B2420',
-    shadowOpacity: 0.16,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 8,
-  },
-
-  segment: {
-    flexDirection: 'row',
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    padding: 4,
-    gap: 4,
-    marginBottom: SPACING.lg,
-  },
-  segmentTab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: RADII.sm,
-  },
-  segmentTabActive: { backgroundColor: COLORS.primaryLight },
-  segmentText: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
-  segmentTextActive: { color: COLORS.textOnPrimary },
-
-  fieldLabel: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.xs,
-  },
-  input: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.md,
-    height: SPACING.touch,
-    fontSize: 15,
-    color: COLORS.textPrimary,
-  },
-  // A code is read back character by character, so it gets the spacing to match.
-  codeInput: {
-    textAlign: 'center',
-    letterSpacing: 2,
-    fontSize: 17,
-    fontWeight: '600',
-  },
-  inputError: { borderColor: COLORS.statusCritical },
-  hint: {
-    fontSize: 12,
-    lineHeight: 17,
-    color: COLORS.textSecondary,
-    marginTop: SPACING.xs,
-    minHeight: 34,
-  },
-  hintError: { color: COLORS.statusCritical },
-
-  primaryBtn: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.xs,
-    padding: SPACING.md,
-    marginTop: SPACING.sm,
-    minHeight: SPACING.touch,
-  },
-  primaryBtnDisabled: { opacity: 0.45 },
-  primaryBtnText: { fontSize: 16, fontWeight: '700', color: COLORS.textOnPrimary },
-
-  accountRow: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginTop: SPACING.lg,
-  },
-  accountText: { fontSize: 12, color: COLORS.textSecondary, flexShrink: 1 },
-  signOutText: { fontSize: 12, fontWeight: '600', color: COLORS.primaryLight },
-});

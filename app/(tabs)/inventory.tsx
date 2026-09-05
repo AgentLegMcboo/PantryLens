@@ -11,7 +11,17 @@ import {
   View,
 } from 'react-native';
 import { COLORS } from '../../constants/theme';
-import { Badge, Button, Card, Chip, Stepper, Text } from '../../components/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  CategoryIcon,
+  Chip,
+  EmptyState,
+  Input,
+  Stepper,
+  Text,
+} from '../../components/ui';
 import {
   CONDITION_LABELS,
   InventoryItem,
@@ -110,7 +120,6 @@ export default function InventoryScreen() {
   const renderItemRow = ({ item }: { item: InventoryItem }) => {
     const isExpiringSoon = !!item.expiration && item.expiration <= warningStr;
     const damaged = !isUsableCondition(item.condition);
-    const catColor = (COLORS.categories as any)[item.category] || COLORS.categories.unknown;
 
     return (
       <Pressable
@@ -118,9 +127,10 @@ export default function InventoryScreen() {
       >
         <Card className="mb-3">
           <View className="flex-row items-start gap-3">
-            {/* A colour bar instead of an uppercase category chip. It carries the
-                same information without adding a word to the row. */}
-            <View className="mt-1 h-10 w-1 rounded-full" style={{ backgroundColor: catColor }} />
+            {/* The category as a glyph rather than an uppercase word or an
+                arbitrary hue — it identifies the row without adding anything to
+                read, and leaves colour free to mean damaged or expiring. */}
+            <CategoryIcon category={item.category} tone={damaged ? 'critical' : 'brand'} />
 
             <View className="flex-1">
               <Text variant="body" className="font-semibold">
@@ -161,7 +171,7 @@ export default function InventoryScreen() {
     <View className="flex-1 bg-canvas">
       <View className="px-gutter pt-4 gap-4">
         <View className="flex-row items-center gap-3">
-          <View className="flex-1 flex-row items-center gap-2 rounded-md border border-hairline bg-card px-3 h-12">
+          <View className="h-12 flex-1 flex-row items-center gap-2 rounded-md border-[1.5px] border-outline bg-card px-3">
             <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
             <TextInput
               className="flex-1 text-body text-ink"
@@ -180,7 +190,12 @@ export default function InventoryScreen() {
           <Pressable
             onPress={() => setModalVisible(true)}
             accessibilityLabel="Add an item by hand"
-            className="h-12 w-12 items-center justify-center rounded-md bg-brand-light"
+            style={({ pressed }) => ({
+              borderBottomWidth: pressed ? 2 : 4,
+              borderBottomColor: COLORS.primaryDeep,
+              transform: [{ translateY: pressed ? 2 : 0 }],
+            })}
+            className="h-12 w-12 items-center justify-center rounded-md bg-brand"
           >
             <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
           </Pressable>
@@ -230,21 +245,24 @@ export default function InventoryScreen() {
           </View>
         }
         ListEmptyComponent={
-          <View className="items-center px-8 py-16">
-            <MaterialCommunityIcons
-              name="clipboard-text-search-outline"
-              size={44}
-              color={COLORS.textSecondary}
-            />
-            <Text variant="heading" className="mt-4">
-              Nothing here yet
-            </Text>
-            <Text variant="body" tone="soft" className="mt-2 text-center">
-              {search || selectedCategory !== 'all'
+          <EmptyState
+            icon="clipboard-text-search-outline"
+            title="Nothing here yet"
+            body={
+              search || selectedCategory !== 'all'
                 ? 'Try another search, or clear the category filter.'
-                : 'Photograph a donation to fill the shelves.'}
-            </Text>
-          </View>
+                : 'Photograph a donation to fill the shelves.'
+            }
+            actionLabel={search || selectedCategory !== 'all' ? 'Clear the filters' : undefined}
+            onAction={
+              search || selectedCategory !== 'all'
+                ? () => {
+                    setSearch('');
+                    setSelectedCategory('all');
+                  }
+                : undefined
+            }
+          />
         }
       />
 
@@ -267,18 +285,12 @@ export default function InventoryScreen() {
                 </Pressable>
               </View>
 
-              <View className="gap-2">
-                <Text variant="label" tone="soft">
-                  Name
-                </Text>
-                <TextInput
-                  className="h-12 rounded-md border border-hairline bg-card px-3 text-body text-ink"
-                  placeholder="Canned black beans 15 oz"
-                  value={newName}
-                  onChangeText={setNewName}
-                  placeholderTextColor={COLORS.textSecondary}
-                />
-              </View>
+              <Input
+                label="Name"
+                placeholder="Canned black beans 15 oz"
+                value={newName}
+                onChangeText={setNewName}
+              />
 
               <View className="gap-2">
                 <Text variant="label" tone="soft">
@@ -303,16 +315,12 @@ export default function InventoryScreen() {
                   </Text>
                   <Stepper value={newCount} min={1} onChange={setNewCount} />
                 </View>
-                <View className="flex-1 gap-2">
-                  <Text variant="label" tone="soft">
-                    Expires (optional)
-                  </Text>
-                  <TextInput
-                    className="h-12 rounded-md border border-hairline bg-card px-3 text-body text-ink"
+                <View className="flex-1">
+                  <Input
+                    label="Expires (optional)"
                     placeholder="YYYY-MM-DD"
                     value={newExp}
                     onChangeText={setNewExp}
-                    placeholderTextColor={COLORS.textSecondary}
                   />
                 </View>
               </View>

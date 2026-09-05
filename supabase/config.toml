@@ -435,6 +435,13 @@ enabled = true
 # JSON string passed through to pg-delta SQL formatting.
 # format_options = "{\"keywordCase\":\"upper\",\"indent\":2,\"maxWidth\":80,\"commaStyle\":\"trailing\"}"
 
+[functions.lookup-barcode]
+enabled = true
+# Same reasoning as the scanner: a lookup spends a USDA quota and writes to the
+# shared barcode cache, so it is signed-in volunteers only.
+verify_jwt = true
+import_map = "./functions/lookup-barcode/deno.json"
+
 [functions.analyze-donation]
 enabled = true
 # Every call spends Gemini quota, so it is signed-in volunteers only. The app

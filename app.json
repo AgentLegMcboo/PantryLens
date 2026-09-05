@@ -26,6 +26,12 @@
           "photosPermission": "PantryLens uses your photos to read donation labels and count items.",
           "cameraPermission": "PantryLens uses the camera to photograph donations and read their labels."
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "PantryLens uses the camera to read the barcode on a package and identify it exactly."
+        }
       ]
     ]
   }

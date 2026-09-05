@@ -132,7 +132,9 @@ export default function LogDonationScreen() {
     setIsAnalyzing(true);
 
     try {
-      const candidates = await processImageScan(shots.map(s => s.base64));
+      const { candidates, photosRead, photosSent } = await processImageScan(
+        shots.map(s => s.base64),
+      );
       log.debug('scan', `navigating to review with ${candidates.length} draft row(s)`);
       // The photos travel with the draft: review draws the detection boxes back
       // onto them, so the item and the thing on the shelf stay connected.
@@ -140,6 +142,20 @@ export default function LogDonationScreen() {
         candidates as any,
         shots.map(s => ({ uri: s.uri, width: s.width, height: s.height })),
       );
+
+      // A photo that failed on its own must be said out loud. The rows from the
+      // others are still worth having, but a volunteer who is not told will
+      // assume everything in the pile made it onto the list.
+      if (photosRead < photosSent) {
+        cueWarn();
+        Alert.alert(
+          `Read ${photosRead} of ${photosSent} photos`,
+          'One or more photos could not be read. Check the list, and re-shoot anything missing.',
+          [{ text: 'Review the list', onPress: () => router.push('/review-verify') }],
+        );
+        return;
+      }
+
       router.push('/review-verify');
     } catch (err) {
       log.error('scan', 'scan failed', err);

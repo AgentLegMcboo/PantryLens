@@ -137,6 +137,11 @@ export default function RootLayout() {
         <Stack.Screen name="item-detail" options={{ title: 'Item Details', presentation: 'modal' }} />
         <Stack.Screen name="packing-checklist" options={{ title: 'Packing Checklist', presentation: 'card' }} />
         <Stack.Screen name="expiring-soon" options={{ title: 'Expiring Soon', presentation: 'card' }} />
+        {/* Full-bleed camera, so no header and no cream background behind it. */}
+        <Stack.Screen
+          name="barcode-scan"
+          options={{ headerShown: false, presentation: 'modal', contentStyle: { backgroundColor: '#000' } }}
+        />
         <Stack.Screen name="onboarding" options={{ headerShown: false, animation: 'fade' }} />
         <Stack.Screen name="login" options={{ title: 'Log In', headerShown: false }} />
         <Stack.Screen name="sign-up" options={{ title: 'Sign Up', headerShown: false }} />

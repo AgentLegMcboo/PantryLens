@@ -2,44 +2,50 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import {
-  ActivityIndicator,
-  Alert,
-  Image,
-  ScrollView,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View
-} from 'react-native';
-import { CARD_ELEVATION, COLORS, RADII, SPACING } from '../constants/theme';
+import { Alert, Image, Pressable, View } from 'react-native';
+import { COLORS } from '../constants/theme';
+import { FadeInUp } from '../components/motion';
+import { Button, Card, CardHeader, Panel, Screen, Text } from '../components/ui';
 import { processImageScan, ScanError } from '../lib/ai_vision';
 import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { usePantryStore } from '../lib/store';
 
-const SHOT_LABELS = ['Left view', 'Center view', 'Right view'];
 const MAX_SHOTS = 6;
 
+const SECTIONS = [
+  'Canned goods (Shelf A)',
+  'Dry grains & rice (Shelf B)',
+  'Breakfast & cereals (Shelf C)',
+  'Proteins & beans (Shelf D)',
+  'Hygiene & baby products',
+];
+
+/**
+ * Re-counting a shelf.
+ *
+ * Built to look and work like Log Donation, because it is the same act: point
+ * the camera at food, check what came back, write it down. It used to be a
+ * different screen entirely — a green header block, chunky shelf rows with
+ * their own card shadow, and three "Left / Center / Right" slots that showed a
+ * green tick before a single photo had been taken.
+ *
+ * The photo grid is now the one from Log Donation, so a volunteer who has
+ * scanned a donation already knows how this works.
+ */
 export default function ShelfAuditScreen() {
   const router = useRouter();
   const setDraft = usePantryStore(state => state.setDraft);
 
-  const [section, setSection] = useState('Canned Goods (Shelf A)');
+  const [section, setSection] = useState(SECTIONS[0]);
   const [shots, setShots] = useState<PreparedPhoto[]>([]);
   const [isAuditing, setIsAuditing] = useState(false);
 
-  const sections = [
-    'Canned Goods (Shelf A)',
-    'Dry Grains & Rice (Shelf B)',
-    'Breakfast & Cereals (Shelf C)',
-    'Proteins & Beans (Shelf D)',
-    'Hygiene & Baby Products'
-  ];
+  const atLimit = shots.length >= MAX_SHOTS;
 
   const handleTakePhoto = async () => {
-    if (shots.length >= MAX_SHOTS) return;
+    if (atLimit) return;
 
     const permission = await ImagePicker.requestCameraPermissionsAsync();
     if (!permission.granted) {
@@ -74,6 +80,11 @@ export default function ShelfAuditScreen() {
     setShots(prev => [...prev, ...prepared].slice(0, MAX_SHOTS));
   };
 
+  const removeShot = (index: number) => {
+    cueTap();
+    setShots(prev => prev.filter((_, i) => i !== index));
+  };
+
   /**
    * Runs the same analyzer as a donation, then hands the result to the review
    * screen tagged as an audit.
@@ -95,13 +106,31 @@ export default function ShelfAuditScreen() {
     setIsAuditing(true);
 
     try {
-      const candidates = await processImageScan(shots.map(s => s.base64));
+      const { candidates, photosRead, photosSent } = await processImageScan(
+        shots.map(s => s.base64),
+      );
       log.debug('scan', `audit produced ${candidates.length} draft row(s)`);
       setDraft(
         candidates as any,
         shots.map(s => ({ uri: s.uri, width: s.width, height: s.height })),
       );
-      router.push({ pathname: '/review-verify', params: { source: 'shelf_audit' } });
+
+      const toReview = () =>
+        router.push({ pathname: '/review-verify', params: { source: 'shelf_audit' } });
+
+      // On an audit this matters more than on an intake: an unread photo means a
+      // whole section of shelf silently missing from the re-count.
+      if (photosRead < photosSent) {
+        cueWarn();
+        Alert.alert(
+          `Read ${photosRead} of ${photosSent} photos`,
+          'One or more photos could not be read, so part of the shelf is missing from this count. Re-shoot it before you save.',
+          [{ text: 'Review the counts', onPress: toReview }],
+        );
+        return;
+      }
+
+      toReview();
     } catch (err) {
       log.error('scan', 'audit scan failed', err);
       cueWarn();
@@ -119,225 +148,135 @@ export default function ShelfAuditScreen() {
   };
 
   return (
-    <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <View style={styles.headerBox}>
-        <MaterialCommunityIcons name="format-list-checks" size={32} color={COLORS.secondary} />
-        <Text style={styles.headerTitle}>Shelf Audit Mode</Text>
-        <Text style={styles.headerSub}>
-          Photograph a shelf to re-count what is actually on it. You'll check every line before it
-          is written, and rows land tagged as an audit so you can tell a re-count from an intake.
-        </Text>
-      </View>
+    <Screen>
+      <FadeInUp index={0}>
+        <Card>
+          <CardHeader
+            title="Which shelf?"
+            subtitle="Rows land tagged as an audit, so you can tell a re-count from an intake."
+          />
 
-      <Text style={styles.sectionTitle}>Select Shelf Section</Text>
-      {sections.map(sec => (
-        <TouchableOpacity
-          key={sec}
-          style={[styles.secChip, section === sec && styles.secChipActive]}
-          onPress={() => setSection(sec)}
-        >
-          <Text style={[styles.secChipText, section === sec && styles.secChipTextActive]}>{sec}</Text>
-          {section === sec && (
-            <MaterialCommunityIcons name="check-circle" size={18} color={COLORS.primaryLight} />
-          )}
-        </TouchableOpacity>
-      ))}
-
-      <Text style={styles.sectionTitle}>Guided Multi-Photo Capture</Text>
-      <View style={styles.guidanceBox}>
-        <Text style={styles.guidanceText}>
-          Take 3 overlapping photos (Left, Middle, Right) so hidden cans behind front rows aren't missed:
-        </Text>
-        {/* The three slots fill as photos are actually taken. They used to show
-            a green tick from the moment the screen opened, before anything had
-            been photographed. */}
-        <View style={styles.photoRow}>
-          {SHOT_LABELS.map((stepName, i) => {
-            const shot = shots[i];
+          {SECTIONS.map((sec, i) => {
+            const active = sec === section;
             return (
-              <TouchableOpacity
-                key={stepName}
-                style={styles.photoStepCard}
-                onPress={handleTakePhoto}
-                disabled={isAuditing}
+              <Pressable
+                key={sec}
+                accessibilityRole="radio"
+                accessibilityState={{ selected: active }}
+                onPress={() => {
+                  cueTap();
+                  setSection(sec);
+                }}
+                className={`min-h-[56px] flex-row items-center gap-3 py-2 ${
+                  i === SECTIONS.length - 1 ? '' : 'border-b border-hairline'
+                }`}
               >
-                {shot ? (
-                  <Image source={{ uri: shot.uri }} style={styles.photoThumb} />
-                ) : (
-                  <MaterialCommunityIcons name="camera-outline" size={24} color={COLORS.primaryLight} />
-                )}
-                <Text style={styles.photoStepText}>{stepName}</Text>
                 <MaterialCommunityIcons
-                  name={shot ? 'check' : 'circle-outline'}
-                  size={16}
-                  color={shot ? COLORS.statusGood : COLORS.borderSoft}
+                  name={active ? 'radiobox-marked' : 'radiobox-blank'}
+                  size={24}
+                  color={active ? COLORS.primaryLight : COLORS.borderStrong}
                 />
-              </TouchableOpacity>
+                <Text
+                  variant="body"
+                  tone={active ? 'default' : 'soft'}
+                  className={active ? 'flex-1 font-semibold' : 'flex-1'}
+                >
+                  {sec}
+                </Text>
+              </Pressable>
             );
           })}
-        </View>
+        </Card>
+      </FadeInUp>
 
-        <TouchableOpacity
-          style={styles.addShotBtn}
-          onPress={handleTakePhoto}
-          disabled={shots.length >= MAX_SHOTS || isAuditing}
-        >
-          <MaterialCommunityIcons name="camera-plus-outline" size={18} color={COLORS.primaryDark} />
-          <Text style={styles.addShotText}>
-            {shots.length === 0
-              ? 'Take the first photo'
-              : shots.length >= MAX_SHOTS
-                ? `${MAX_SHOTS} photos — that's the limit`
-                : `Add another (${shots.length} taken)`}
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <TouchableOpacity
-        style={[styles.auditBtn, (shots.length === 0 || isAuditing) && { opacity: 0.45 }]}
-        onPress={handleRunAudit}
-        // Dimmed without photos but still pressable, so the tap explains itself.
-        disabled={isAuditing}
-      >
-        {isAuditing ? (
-          <ActivityIndicator color={COLORS.textOnPrimary} />
+      {/* Same grid as Log Donation. Two screens that do the same thing should
+          not need to be learned twice. */}
+      <FadeInUp index={1}>
+        {shots.length === 0 ? (
+          <Pressable onPress={handleTakePhoto}>
+            <View className="h-56 items-center justify-center rounded-lg border-2 border-dashed border-brand-light bg-subtle px-8">
+              <MaterialCommunityIcons name="camera-outline" size={40} color={COLORS.primaryLight} />
+              <Text variant="heading" className="mt-3">
+                Photograph the shelf
+              </Text>
+              <Text variant="label" tone="soft" className="mt-2 text-center">
+                Three overlapping shots — left, middle, right — so cans hiding behind the front
+                row still get counted.
+              </Text>
+            </View>
+          </Pressable>
         ) : (
-          <MaterialCommunityIcons name="check-decagram" size={22} color={COLORS.textOnPrimary} />
+          <View className="flex-row flex-wrap gap-3">
+            {shots.map((shot, i) => (
+              <View key={`${shot.uri}-${i}`} className="aspect-square w-[30%]">
+                <Image source={{ uri: shot.uri }} className="h-full w-full rounded-md bg-muted" />
+                <Pressable
+                  onPress={() => removeShot(i)}
+                  hitSlop={8}
+                  accessibilityLabel={`Remove photo ${i + 1}`}
+                  className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full bg-ink"
+                >
+                  <MaterialCommunityIcons name="close" size={14} color={COLORS.textOnPrimary} />
+                </Pressable>
+              </View>
+            ))}
+
+            {!atLimit && (
+              <Pressable
+                onPress={handleTakePhoto}
+                accessibilityLabel="Take another photo"
+                className="aspect-square w-[30%] items-center justify-center rounded-md border-2 border-dashed border-brand-light bg-subtle"
+              >
+                <MaterialCommunityIcons
+                  name="camera-plus-outline"
+                  size={24}
+                  color={COLORS.primaryLight}
+                />
+              </Pressable>
+            )}
+          </View>
         )}
-        <Text style={styles.auditBtnText}>
-          {isAuditing ? 'Reading the shelf…' : 'Read Shelf & Review Counts'}
-        </Text>
-      </TouchableOpacity>
-    </ScrollView>
+      </FadeInUp>
+
+      <FadeInUp index={2}>
+        <View className="gap-3">
+          <Button
+            label={isAuditing ? 'Reading the shelf…' : 'Read the shelf'}
+            block
+            loading={isAuditing}
+            disabled={shots.length === 0}
+            icon={
+              <MaterialCommunityIcons
+                name="check-decagram"
+                size={20}
+                color={COLORS.textOnPrimary}
+              />
+            }
+            onPress={handleRunAudit}
+          />
+
+          <Text variant="micro" tone="soft" className="text-center">
+            {shots.length === 0
+              ? `Up to ${MAX_SHOTS} photos of ${section.toLowerCase()}.`
+              : atLimit
+                ? `${MAX_SHOTS} photos — that's the limit for one shelf.`
+                : `${shots.length} of ${MAX_SHOTS} attached.`}
+          </Text>
+        </View>
+      </FadeInUp>
+
+      <FadeInUp index={3}>
+        <Panel className="flex-row gap-3">
+          <MaterialCommunityIcons
+            name="information-outline"
+            size={18}
+            color={COLORS.textSecondary}
+          />
+          <Text variant="micro" tone="soft" className="flex-1">
+            Nothing is written yet — you check every count before it replaces what is on the shelf.
+          </Text>
+        </Panel>
+      </FadeInUp>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  content: {
-    padding: SPACING.md,
-    paddingBottom: SPACING.xl,
-  },
-  headerBox: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    ...CARD_ELEVATION,
-    padding: SPACING.md,
-    marginBottom: SPACING.md,
-  },
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: 4,
-  },
-  headerSub: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-    lineHeight: 18,
-  },
-  sectionTitle: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-    marginTop: SPACING.sm,
-    marginBottom: SPACING.xs,
-  },
-  secChip: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    ...CARD_ELEVATION,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: SPACING.xs,
-  },
-  secChipActive: {
-    borderColor: COLORS.primaryLight,
-    backgroundColor: '#FFF9F6',
-  },
-  secChipText: {
-    fontSize: 14,
-    color: COLORS.textPrimary,
-  },
-  secChipTextActive: {
-    fontWeight: '700',
-    color: COLORS.primaryDark,
-  },
-  guidanceBox: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.md,
-    ...CARD_ELEVATION,
-    padding: SPACING.md,
-    marginBottom: SPACING.lg,
-  },
-  guidanceText: {
-    fontSize: 13,
-    color: COLORS.textPrimary,
-    marginBottom: SPACING.sm,
-  },
-  photoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  photoStepCard: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    padding: 8,
-    alignItems: 'center',
-    marginHorizontal: 2,
-  },
-  photoThumb: {
-    width: 34,
-    height: 34,
-    borderRadius: RADII.sm,
-    backgroundColor: COLORS.surfaceVariant,
-  },
-  addShotBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: SPACING.xs,
-    backgroundColor: COLORS.surfaceContainer,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingVertical: SPACING.sm,
-    marginTop: SPACING.sm,
-    minHeight: 44,
-  },
-  addShotText: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.primaryDark,
-  },
-  photoStepText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginVertical: 4,
-  },
-  auditBtn: {
-    backgroundColor: COLORS.secondary,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: SPACING.touch,
-  },
-  auditBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-    marginLeft: SPACING.xs,
-  },
-});

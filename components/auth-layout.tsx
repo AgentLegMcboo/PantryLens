@@ -1,10 +1,79 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
-import { ActivityIndicator, Image, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
-import { CARD_ELEVATION, COLORS, FONTS, RADII, SPACING } from '../constants/theme';
+import { Image, StyleSheet, View } from 'react-native';
+import { COLORS, FONTS } from '../constants/theme';
 import { GoogleLogo } from './google-logo';
 import { KeyboardScreen } from './keyboard-screen';
+import { Button, Card, Text } from './ui';
+
+/**
+ * The pantry behind the glass.
+ *
+ * Log In, Sign Up, Join a Pantry and the intro each drew this same photograph
+ * and this same three-stop scrim by hand, and had already drifted — the scrim
+ * ended on the OLD cream (#FBF6EE) while the app's canvas had moved to white, so
+ * every one of them had a faint horizontal seam near the bottom of the screen.
+ * One copy, ending on the real canvas colour.
+ */
+export function AuthBackdrop({ blurRadius = 5 }: { blurRadius?: number }) {
+  return (
+    <>
+      <Image
+        source={require('../assets/images/pantry-bg.jpg')}
+        style={[StyleSheet.absoluteFillObject, { opacity: 0.55 }]}
+        blurRadius={blurRadius}
+      />
+      <LinearGradient
+        colors={['rgba(255,255,255,0.55)', 'rgba(255,255,255,0.90)', COLORS.background]}
+        locations={[0, 0.48, 1]}
+        style={StyleSheet.absoluteFill}
+      />
+    </>
+  );
+}
+
+/** The wordmark, at the size the entry screens use it. */
+export function AuthBrand({
+  icon = 'camera-iris',
+  title,
+  subtitle,
+}: {
+  icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  title: string;
+  subtitle?: string;
+}) {
+  return (
+    <View className="mb-8 items-center">
+      <View className="mb-3 h-16 w-16 items-center justify-center rounded-full bg-brand">
+        <MaterialCommunityIcons name={icon} size={34} color={COLORS.textOnPrimary} />
+      </View>
+      {/* Newsreader, and the only place in the app that gets it at this size.
+          The working UI stays in the system sans; the front door is allowed a
+          voice.
+
+          lineHeight is NOT optional here. `Text` defaults to the `body` variant,
+          which carries a 22px line box from the type scale — so a 32px glyph set
+          without one gets its ascenders sheared off. Any custom fontSize on this
+          component has to bring its own lineHeight. */}
+      <Text
+        style={{
+          fontFamily: FONTS.serifSemi,
+          fontSize: 32,
+          lineHeight: 40,
+          color: COLORS.textPrimary,
+        }}
+      >
+        {title}
+      </Text>
+      {subtitle ? (
+        <Text variant="label" tone="soft" className="mt-1.5 px-4 text-center">
+          {subtitle}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
 
 /**
  * Shared chrome for Log In and Sign Up.
@@ -35,150 +104,59 @@ export function AuthLayout({
   footer: React.ReactNode;
 }) {
   return (
-    <View style={styles.root}>
-      {/* A pantry behind the glass: enough to say where you are, dimmed far
-          enough that the form stays the only thing competing for attention. */}
-      <Image source={require('../assets/images/pantry-bg.jpg')} style={styles.bg} blurRadius={5} />
-      <LinearGradient
-        colors={['rgba(251,246,238,0.55)', 'rgba(251,246,238,0.90)', COLORS.background]}
-        locations={[0, 0.48, 1]}
-        style={StyleSheet.absoluteFill}
-      />
+    <View className="flex-1 bg-canvas">
+      <AuthBackdrop />
 
-      <KeyboardScreen style={styles.container} contentContainerStyle={styles.content}>
-        <View style={styles.brandBox}>
-          <View style={styles.logoCircle}>
-            <MaterialCommunityIcons name="camera-iris" size={40} color={COLORS.textOnPrimary} />
+      <KeyboardScreen
+        className="bg-transparent"
+        contentContainerClassName="justify-center grow gap-0"
+      >
+        <AuthBrand title={title} subtitle={subtitle} />
+
+        {/* A deeper shadow than an ordinary card: this one is lifted off a
+            photograph rather than off the cream page. */}
+        <Card
+          className="gap-5"
+          style={{
+            shadowColor: '#2B2420',
+            shadowOpacity: 0.16,
+            shadowRadius: 28,
+            shadowOffset: { width: 0, height: 14 },
+            elevation: 8,
+          }}
+        >
+          <View>
+            <Text variant="title">{cardTitle}</Text>
+            {cardSubtitle ? (
+              <Text variant="label" tone="soft" className="mt-1">
+                {cardSubtitle}
+              </Text>
+            ) : null}
           </View>
-          <Text style={styles.brandTitle}>{title}</Text>
-          {subtitle ? <Text style={styles.brandTagline}>{subtitle}</Text> : null}
-        </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{cardTitle}</Text>
-          {cardSubtitle ? <Text style={styles.cardSub}>{cardSubtitle}</Text> : null}
-
-          <TouchableOpacity
-            style={styles.googleBtn}
+          <Button
+            label="Continue with Google"
+            variant="secondary"
+            block
+            loading={googleLoading}
+            disabled={disabled}
+            icon={<GoogleLogo size={20} />}
             onPress={onGooglePress}
-            disabled={googleLoading || disabled}
-          >
-            {googleLoading ? (
-              <ActivityIndicator color={COLORS.textPrimary} />
-            ) : (
-              <>
-                <GoogleLogo size={20} />
-                <Text style={styles.googleBtnText}>Continue with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
+          />
 
-          <View style={styles.dividerBox}>
-            <View style={styles.divider} />
-            <Text style={styles.dividerText}>or</Text>
-            <View style={styles.divider} />
+          <View className="flex-row items-center gap-3">
+            <View className="h-px flex-1 bg-hairline" />
+            <Text variant="micro" tone="soft">
+              or
+            </Text>
+            <View className="h-px flex-1 bg-hairline" />
           </View>
 
           {children}
 
-          <View style={styles.footer}>{footer}</View>
-        </View>
+          <View className="flex-row items-center justify-center gap-1">{footer}</View>
+        </Card>
       </KeyboardScreen>
     </View>
   );
 }
-
-export const authStyles = StyleSheet.create({
-  label: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
-    marginTop: SPACING.sm,
-    marginBottom: 4,
-  },
-  input: {
-    backgroundColor: COLORS.background,
-    borderRadius: RADII.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    paddingHorizontal: SPACING.sm,
-    height: SPACING.touch,
-    fontSize: 15,
-    color: COLORS.textPrimary,
-  },
-  primaryBtn: {
-    backgroundColor: COLORS.primaryLight,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: SPACING.lg,
-    minHeight: SPACING.touch,
-  },
-  primaryBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.textOnPrimary,
-    marginRight: SPACING.xs,
-  },
-  footerText: { color: COLORS.textSecondary, fontSize: 14 },
-  devHint: { fontSize: 11, color: COLORS.textSecondary, textAlign: 'center', marginTop: 12 },
-  footerLink: { color: COLORS.primaryLight, fontSize: 14, fontWeight: '600' },
-});
-
-const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: COLORS.background },
-  bg: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%', opacity: 0.55 },
-  container: { flex: 1, backgroundColor: 'transparent' },
-  content: { padding: SPACING.lg, justifyContent: 'center', flexGrow: 1 },
-  brandBox: { alignItems: 'center', marginBottom: SPACING.xl },
-  logoCircle: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: COLORS.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: SPACING.sm,
-  },
-  brandTitle: { fontSize: 34, fontFamily: FONTS.serifSemi, color: COLORS.textPrimary },
-  brandTagline: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textAlign: 'center',
-    marginTop: 4,
-  },
-  card: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.lg,
-    ...CARD_ELEVATION,
-    padding: SPACING.lg,
-    // Lifts the form off the shelves behind it.
-    shadowColor: '#2B2420',
-    shadowOpacity: 0.16,
-    shadowRadius: 28,
-    shadowOffset: { width: 0, height: 14 },
-    elevation: 8,
-  },
-  cardTitle: { fontSize: 21, fontFamily: FONTS.serifSemi, color: COLORS.textPrimary },
-  cardSub: { fontSize: 12, color: COLORS.textSecondary, marginBottom: SPACING.md, marginTop: 2 },
-  googleBtn: {
-    backgroundColor: COLORS.background,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    borderRadius: RADII.md,
-    padding: SPACING.md,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: SPACING.sm,
-    marginTop: SPACING.sm,
-    minHeight: SPACING.touch,
-  },
-  googleBtnText: { fontSize: 16, fontWeight: '600', color: COLORS.textPrimary },
-  dividerBox: { flexDirection: 'row', alignItems: 'center', marginVertical: SPACING.lg },
-  divider: { flex: 1, height: 1, backgroundColor: COLORS.borderSoft },
-  dividerText: { marginHorizontal: SPACING.md, color: COLORS.textSecondary, fontSize: 14 },
-  footer: { flexDirection: 'row', justifyContent: 'center', marginTop: SPACING.lg },
-});
