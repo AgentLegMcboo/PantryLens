@@ -261,7 +261,7 @@ const styles = StyleSheet.create({
   cBL: { bottom: 8, left: 8, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 6 },
   cBR: { bottom: 8, right: 8, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 6 },
   scanLine: { position: 'absolute', left: 10, right: 10, height: 2, backgroundColor: COLORS.primaryLight },
-  vfPhoto: { ...StyleSheet.absoluteFillObject, width: '100%', height: '100%' },
+  vfPhoto: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
   vfPhotoInner: { width: '100%', height: '100%' },
 
   detectPill: {

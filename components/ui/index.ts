@@ -9,4 +9,4 @@ export { Input } from './input';
 export { EmptyState } from './empty-state';
 export { Row, Toggle } from './row';
 export { Segmented } from './segmented';
-export { CategoryIcon, CATEGORY_ICONS, categoryIcon } from './category-icon';
+export { CategoryIcon, ItemThumb, CATEGORY_ICONS, categoryIcon } from './category-icon';

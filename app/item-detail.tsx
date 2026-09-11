@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { Alert, View } from 'react-native';
+import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { FadeInUp } from '../components/motion';
@@ -12,11 +13,13 @@ import {
   Chip,
   EmptyState,
   Input,
+  ItemThumb,
   Panel,
   Stepper,
   Text,
 } from '../components/ui';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
+import { renderItemPhoto, storeItemPhoto } from '../lib/item-photos';
 import {
   Category,
   Condition,
@@ -50,7 +53,7 @@ const CATEGORIES: Category[] = [
 export default function ItemDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
-  const { getItem, updateItem, deleteItem } = usePantryStore();
+  const { getItem, updateItem, deleteItem, locations, settings } = usePantryStore();
 
   const item = getItem(id as string);
 
@@ -63,6 +66,8 @@ export default function ItemDetailScreen() {
   const [count, setCount] = useState(item?.count ?? 1);
   const [expiration, setExpiration] = useState(item?.expiration || '');
   const [condition, setCondition] = useState<Condition>(item?.condition ?? 'ok');
+  const [locationId, setLocationId] = useState<string | null>(item?.location_id ?? null);
+  const [photoBusy, setPhotoBusy] = useState(false);
 
   if (!item) {
     return (
@@ -78,12 +83,17 @@ export default function ItemDetailScreen() {
     );
   }
 
+  const report = (title: string) => (err: any) => {
+    cueWarn();
+    Alert.alert(title, err?.message ?? 'Please try again.');
+  };
+
   const handleSave = () => {
     // The stepper goes to zero and the hint says so, so zero has to actually
     // mean gone — the same thing it means on the shelf list. Saving a 0-count
     // item would otherwise leave a row nothing can ever be packed from.
     if (count === 0) {
-      deleteItem(item.id);
+      deleteItem(item.id).catch(report('Could not remove that item'));
       cueSuccess();
       router.back();
       return;
@@ -95,7 +105,8 @@ export default function ItemDetailScreen() {
       count,
       expiration: expiration.trim() || null,
       condition,
-    });
+      location_id: locationId,
+    }).catch(report('Could not save your changes'));
     cueSuccess();
     router.back();
   };
@@ -107,11 +118,98 @@ export default function ItemDetailScreen() {
         text: 'Remove',
         style: 'destructive',
         onPress: () => {
-          deleteItem(item.id);
+          deleteItem(item.id).catch(report('Could not remove that item'));
           router.back();
         },
       },
     ]);
+  };
+
+  /**
+   * Putting a picture on an item by hand.
+   *
+   * Scanning attaches photos going forward, but it can do nothing for stock that
+   * was already on the shelf when that arrived — and a pantry's whole existing
+   * inventory is exactly that. This is how those rows get a picture: point the
+   * camera at the tin, or pick a shot already on the phone.
+   *
+   * It also covers the cases scanning never will — something typed in by hand,
+   * a crop the model boxed badly, a product whose pack shot is not what is
+   * actually in the bag.
+   */
+  const setPhotoFrom = async (
+    launch: () => Promise<ImagePicker.ImagePickerResult>,
+  ) => {
+    if (!settings.pantryId) return;
+    const result = await launch();
+    if (result.canceled || !result.assets?.[0]?.uri) return;
+
+    setPhotoBusy(true);
+    try {
+      const jpeg = await renderItemPhoto(result.assets[0].uri);
+      if (!jpeg) throw new Error('That photo could not be read.');
+
+      const url = await storeItemPhoto(item.id, settings.pantryId, jpeg);
+      if (!url) throw new Error('The photo could not be saved. Check your connection.');
+
+      // Straight into the store, so the shelf list behind this screen updates
+      // without waiting for a refetch.
+      await updateItem(item.id, { image_url: url });
+      cueSuccess();
+    } catch (err: any) {
+      cueWarn();
+      Alert.alert('Could not add that photo', err?.message ?? 'Please try again.');
+    } finally {
+      setPhotoBusy(false);
+    }
+  };
+
+  const handlePhotoPress = () => {
+    cueTap();
+    const options: any[] = [
+      {
+        text: 'Take a photo',
+        onPress: () =>
+          setPhotoFrom(async () => {
+            const permission = await ImagePicker.requestCameraPermissionsAsync();
+            if (!permission.granted) {
+              Alert.alert(
+                'Camera access needed',
+                'Turn it on in Settings › PantryLens to photograph this item.',
+              );
+              return { canceled: true } as ImagePicker.ImagePickerResult;
+            }
+            return ImagePicker.launchCameraAsync({ mediaTypes: ['images'], quality: 0.6 });
+          }),
+      },
+      {
+        text: 'Choose from photos',
+        onPress: () =>
+          setPhotoFrom(() =>
+            ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.6 }),
+          ),
+      },
+    ];
+
+    if (item.image_url) {
+      options.push({
+        text: 'Remove photo',
+        style: 'destructive',
+        // The stored file is left alone: a replacement overwrites it at the same
+        // path, and a delete would take a pack shot's URL with it for no reason.
+        onPress: () =>
+          updateItem(item.id, { image_url: null }).catch(
+            report('Could not remove that photo'),
+          ),
+      });
+    }
+    options.push({ text: 'Cancel', style: 'cancel' });
+
+    Alert.alert(
+      item.image_url ? 'Change the photo' : 'Add a photo',
+      'A picture makes this item findable at a glance on the shelf list.',
+      options,
+    );
   };
 
   const usable = isUsableCondition(condition);
@@ -120,7 +218,41 @@ export default function ItemDetailScreen() {
     <KeyboardScreen>
       <FadeInUp index={0}>
         <Card className="gap-5">
-          <Input label="What is it?" value={name} onChangeText={setName} placeholder="Canned black beans 15 oz" />
+          <View className="flex-row items-center gap-4">
+            <Pressable
+              onPress={handlePhotoPress}
+              disabled={photoBusy}
+              accessibilityLabel={item.image_url ? 'Change the photo' : 'Add a photo'}
+            >
+              <ItemThumb
+                imageUrl={item.image_url}
+                category={category}
+                size="md"
+                className="h-16 w-16"
+              />
+              {/* A small camera badge, because a thumbnail does not otherwise
+                  look like something you can press. */}
+              <View className="absolute -bottom-1 -right-1 h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-brand">
+                {photoBusy ? (
+                  <ActivityIndicator size="small" color={COLORS.textOnPrimary} />
+                ) : (
+                  <MaterialCommunityIcons
+                    name={item.image_url ? 'pencil' : 'camera-plus-outline'}
+                    size={12}
+                    color={COLORS.textOnPrimary}
+                  />
+                )}
+              </View>
+            </Pressable>
+            <View className="flex-1">
+              <Input
+                label="What is it?"
+                value={name}
+                onChangeText={setName}
+                placeholder="Canned black beans 15 oz"
+              />
+            </View>
+          </View>
 
           <View className="gap-2">
             <Text variant="label" tone="soft" className="font-semibold">
@@ -161,6 +293,33 @@ export default function ItemDetailScreen() {
             placeholder="YYYY-MM-DD"
             hint="Leave it blank if there is no date to read."
           />
+
+          {locations.length > 0 ? (
+            <View className="gap-2">
+              <Text variant="label" tone="soft" className="font-semibold">
+                Where does it live?
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {locations.map(loc => (
+                  <Chip
+                    key={loc.id}
+                    label={loc.name}
+                    selected={locationId === loc.id}
+                    onPress={() => setLocationId(locationId === loc.id ? null : loc.id)}
+                  />
+                ))}
+              </View>
+              <Text variant="micro" tone="soft">
+                {locationId
+                  ? 'Saved with the rest of your changes.'
+                  : 'Not filed anywhere yet.'}
+              </Text>
+            </View>
+          ) : (
+            <Text variant="micro" tone="soft">
+              Add shelves and bins in Settings to file this somewhere.
+            </Text>
+          )}
         </Card>
       </FadeInUp>
 

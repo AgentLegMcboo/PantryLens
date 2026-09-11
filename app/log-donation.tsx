@@ -4,12 +4,12 @@ import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
-import { Button, Screen, Text } from '../components/ui';
+import { Button, Chip, Screen, Text } from '../components/ui';
 import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { processImageScan, ScanError } from '../lib/ai_vision';
-import { usePantryStore } from '../lib/store';
+import { SOURCE_ORG_LABELS, type SourceOrg, usePantryStore } from '../lib/store';
 
 /**
  * Photographing a donation.
@@ -29,12 +29,26 @@ const PICKER_QUALITY = 0.6;
  *  overlay needs them to place detection boxes. */
 type Shot = PreparedPhoto;
 
+/** The same list bulk intake offers, so a donation reads the same either way in. */
+const SOURCES: SourceOrg[] = ['grocery', 'food_bank', 'drive', 'individual', 'other'];
+
 export default function LogDonationScreen() {
   const router = useRouter();
   const setDraft = usePantryStore(state => state.setDraft);
+  const setDraftSource = usePantryStore(state => state.setDraftSource);
 
   const [shots, setShots] = useState<Shot[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  /**
+   * Who it came from.
+   *
+   * The pantry's process starts with "we receive donations from local groceries
+   * or food banks", and bulk intake has always asked — but photographing a
+   * donation, the path actually used most, threw that away. Grocery rescue and a
+   * school food drive are different things to report on and different things to
+   * thank.
+   */
+  const [sourceOrg, setSourceOrg] = useState<SourceOrg | null>(null);
 
   const addShots = async (assets: ImagePicker.ImagePickerAsset[]) => {
     // Shrunk before it ever reaches state, so what is held in memory and what is
@@ -142,6 +156,7 @@ export default function LogDonationScreen() {
         candidates as any,
         shots.map(s => ({ uri: s.uri, width: s.width, height: s.height })),
       );
+      setDraftSource(sourceOrg);
 
       // A photo that failed on its own must be said out loud. The rows from the
       // others are still worth having, but a volunteer who is not told will
@@ -217,6 +232,22 @@ export default function LogDonationScreen() {
           )}
         </View>
       )}
+
+      <View className="gap-2">
+        <Text variant="label" tone="soft" className="font-semibold">
+          Where did this come from?
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          {SOURCES.map(src => (
+            <Chip
+              key={src}
+              label={SOURCE_ORG_LABELS[src]}
+              selected={sourceOrg === src}
+              onPress={() => setSourceOrg(sourceOrg === src ? null : src)}
+            />
+          ))}
+        </View>
+      </View>
 
       <View className="flex-row gap-3">
         <Button

@@ -405,6 +405,8 @@ Deno.serve(async (req) => {
           // Filled in below when a provider recognises the barcode, so the app
           // can say WHY a row is trustworthy rather than just showing a number.
           resolved_by: null as string | null,
+          // The manufacturer's pack shot, when a barcode found one.
+          image_url: null as string | null,
           image_index: imageIndex,
           box_2d: normaliseBox(item.box_2d),
         }))
@@ -433,6 +435,7 @@ Deno.serve(async (req) => {
           if (hit.category) item.category = hit.category
           item.confidence = 1
           item.resolved_by = 'barcode'
+          item.image_url = hit.imageUrl ?? null
         }
       }
     } catch (err) {

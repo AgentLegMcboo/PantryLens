@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as React from 'react';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { cn } from '../../lib/cn';
 
@@ -44,12 +44,15 @@ export function CategoryIcon({
   category,
   size = 'sm',
   tone = 'brand',
+  shape = 'circle',
   className,
 }: {
   category: string;
   size?: keyof typeof SIZES;
   /** 'brand' for an ordinary row; 'critical' where the row is the problem. */
   tone?: 'brand' | 'critical';
+  /** Square where it shares a column with photographs, so the list stays even. */
+  shape?: 'circle' | 'square';
   className?: string;
 }) {
   const { box, glyph } = SIZES[size];
@@ -59,9 +62,66 @@ export function CategoryIcon({
     <View
       accessibilityElementsHidden
       importantForAccessibility="no"
-      className={cn('items-center justify-center rounded-full bg-subtle', box, className)}
+      className={cn(
+        'items-center justify-center bg-subtle',
+        shape === 'square' ? 'rounded-md' : 'rounded-full',
+        box,
+        className,
+      )}
     >
       <MaterialCommunityIcons name={categoryIcon(category)} size={glyph} color={colour} />
     </View>
+  );
+}
+
+/**
+ * The picture of an item, or the next best thing.
+ *
+ * Three sources in order, and the order is the point:
+ *
+ *  1. The manufacturer's pack shot, when a barcode identified the product.
+ *  2. A crop of the pantry's own scan photo — the actual tin on the actual
+ *     shelf.
+ *  3. The category glyph, for anything typed in by hand or weighed in bulk.
+ *
+ * Both of the first two arrive as a URL on the row, so this only has to decide
+ * between "there is a picture" and "there is not". Squares throughout: a
+ * photograph in a circle loses its corners, and a list where some rows are round
+ * and others are not looks broken rather than varied.
+ */
+export function ItemThumb({
+  imageUrl,
+  category,
+  size = 'md',
+  tone = 'brand',
+  className,
+}: {
+  imageUrl?: string | null;
+  category: string;
+  size?: keyof typeof SIZES;
+  tone?: 'brand' | 'critical';
+  className?: string;
+}) {
+  if (!imageUrl) {
+    return (
+      <CategoryIcon
+        category={category}
+        size={size}
+        tone={tone}
+        shape="square"
+        className={className}
+      />
+    );
+  }
+
+  return (
+    <Image
+      source={{ uri: imageUrl }}
+      accessibilityIgnoresInvertColors
+      resizeMode="cover"
+      // The subtle fill shows through while a remote pack shot loads, so the row
+      // does not jump from empty space to picture.
+      className={cn('rounded-md bg-subtle', SIZES[size].box, className)}
+    />
   );
 }

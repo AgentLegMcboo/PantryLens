@@ -60,6 +60,7 @@ Deno.serve(async (req) => {
       name: hit.name,
       brand: hit.brand,
       category: hit.category,
+      imageUrl: hit.imageUrl,
       source: hit.source,
     })
   } catch (error) {

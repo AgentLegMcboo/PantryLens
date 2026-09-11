@@ -325,7 +325,7 @@ function FallingItem({ cfg }: { cfg: Falling }) {
 
 const styles = StyleSheet.create({
   root: { backgroundColor: COLORS.primary, zIndex: 999, elevation: 999 },
-  fallLayer: { ...StyleSheet.absoluteFillObject, overflow: "hidden" },
+  fallLayer: { ...StyleSheet.absoluteFill, overflow: "hidden" },
   can: { position: "absolute", top: 0 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
   mark: {

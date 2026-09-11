@@ -97,6 +97,15 @@ export function AppHeader({ title }: { title: string }) {
             <View className="mb-4 h-1 w-10 self-center rounded-full bg-hairline" />
 
             <MenuRow
+              icon="chart-box-outline"
+              label="Reports"
+              hint="Food given out, food wasted, and CSV export"
+              onPress={() => {
+                close();
+                router.push('/reports');
+              }}
+            />
+            <MenuRow
               icon="cog-outline"
               label="Pantry settings"
               hint="Box rules, thresholds, feel & sound"

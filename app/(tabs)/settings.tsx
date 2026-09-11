@@ -47,6 +47,7 @@ export default function SettingsScreen() {
     signOut,
   } = usePantryStore();
 
+
   const [pantryName, setPantryName] = useState(settings.pantryName);
   const [savingName, setSavingName] = useState(false);
 

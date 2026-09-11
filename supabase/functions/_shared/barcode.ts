@@ -21,6 +21,12 @@ export interface BarcodeProduct {
   name: string | null
   brand: string | null
   category: string | null
+  /**
+   * The manufacturer's pack shot. Open Food Facts has one for most products it
+   * knows; USDA has none at all, which is worth remembering when weighing the
+   * two providers.
+   */
+  imageUrl: string | null
   source: 'usda' | 'openfoodfacts' | 'miss' | 'cache'
 }
 
@@ -172,6 +178,8 @@ async function lookupUsda(barcode: string, apiKey: string): Promise<BarcodeProdu
     name: composeName(brand, description),
     brand,
     category: mapCategory(`${hit.foodCategory ?? ''} ${description}`),
+    // FoodData Central serves no product imagery.
+    imageUrl: null,
     source: 'usda',
   }
 }
@@ -180,7 +188,7 @@ async function lookupUsda(barcode: string, apiKey: string): Promise<BarcodeProdu
 async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeProduct | null> {
   const url =
     `https://world.openfoodfacts.org/api/v2/product/${barcode}.json` +
-    `?fields=product_name,brands,quantity,categories_tags`
+    `?fields=product_name,brands,quantity,categories_tags,image_front_small_url,image_front_url`
 
   const data = await getJson(url, {
     'User-Agent': 'PantryLens/1.0 (food pantry inventory; https://github.com/pantrylens)',
@@ -194,11 +202,17 @@ async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeProduct | nu
   const quantity = String(product?.quantity ?? '').trim()
   const tags: string[] = Array.isArray(product?.categories_tags) ? product.categories_tags : []
 
+  // The small variant on purpose: this is rendered at 44px in a list, and the
+  // full-size original is often over a megabyte.
+  const image =
+    String(product?.image_front_small_url ?? product?.image_front_url ?? '').trim() || null
+
   return {
     barcode,
     name: composeName(brand, name, quantity),
     brand,
     category: mapCategory(`${tags.join(' ')} ${name}`),
+    imageUrl: image,
     source: 'openfoodfacts',
   }
 }
@@ -210,14 +224,17 @@ async function readCache(barcodes: string[], supabaseUrl: string, serviceKey: st
 
   const list = barcodes.map((b) => `"${b}"`).join(',')
   const data = await getJson(
-    `${supabaseUrl}/rest/v1/barcode_cache?barcode=in.(${list})&select=barcode,name,brand,category,source`,
+    `${supabaseUrl}/rest/v1/barcode_cache?barcode=in.(${list})&select=barcode,name,brand,category,image_url,source`,
     { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
   )
 
   for (const row of Array.isArray(data) ? data : []) {
     found.set(row.barcode, {
-      ...row,
+      barcode: row.barcode,
       name: row.name ? tidyName(row.name) : row.name,
+      brand: row.brand,
+      category: row.category,
+      imageUrl: row.image_url ?? null,
       source: row.source === 'miss' ? 'miss' : 'cache',
     })
   }
@@ -246,6 +263,7 @@ async function writeCache(
           name: r.name,
           brand: r.brand,
           category: r.category && CATEGORIES.includes(r.category) ? r.category : null,
+          image_url: r.imageUrl,
           source: r.source === 'cache' ? 'openfoodfacts' : r.source,
         })),
       ),
@@ -289,6 +307,7 @@ export async function resolveBarcodes(barcodes: string[]): Promise<Map<string, B
             name: null,
             brand: null,
             category: null,
+            imageUrl: null,
             source: 'miss',
           }
         )

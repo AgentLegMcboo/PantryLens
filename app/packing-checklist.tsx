@@ -28,7 +28,7 @@ export default function PackingChecklistScreen() {
   const targetBoxes = parseInt(params.targetBoxes as string, 10) || 12;
   const familySize = parseInt(params.familySize as string, 10) || 4;
 
-  const { inventory, bulkLots, boxRules, deductItems } = usePantryStore();
+  const { inventory, bulkLots, boxRules, locations, deductItems } = usePantryStore();
   const plan = computeAllocation(inventory, boxRules, targetBoxes, familySize, bulkLots);
 
   const [checked, setChecked] = useState<Record<string, boolean>>({});
@@ -125,6 +125,11 @@ export default function PackingChecklistScreen() {
               {group.items.map((item, i) => {
                 const key = `${group.category}-${item.id}-${i}`;
                 const isChecked = !!checked[key];
+                // Where to walk. A pick list that says what but not where sends a
+                // volunteer round the room once per line.
+                const place = locations.find(
+                  l => l.id === inventory.find(inv => inv.id === item.id)?.location_id,
+                )?.name;
 
                 return (
                   <Pressable
@@ -150,11 +155,13 @@ export default function PackingChecklistScreen() {
                       >
                         {item.name}
                       </Text>
-                      {item.expiration ? (
+                      {(place || item.expiration) && (
                         <Text variant="micro" tone="soft" className="mt-0.5">
-                          Expires {item.expiration}
+                          {[place, item.expiration && `expires ${item.expiration}`]
+                            .filter(Boolean)
+                            .join(' · ')}
                         </Text>
-                      ) : null}
+                      )}
                     </View>
 
                     {item.useFirst && !isChecked ? <Badge label="Use first" tone="warn" /> : null}

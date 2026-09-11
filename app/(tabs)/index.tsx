@@ -4,7 +4,6 @@ import React from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../../constants/theme";
-import { computeAllocation } from "../../lib/allocation";
 import { AnimatedCounter, FadeInUp } from "../../components/motion";
 import { Badge, Button, Panel, Screen, Text } from "../../components/ui";
 import { InventoryItem, usePantryStore } from "../../lib/store";
@@ -48,22 +47,9 @@ function formatActivityTime(iso: string): string {
   });
 }
 
-/** The dashboard's headline figure, and what Build Boxes opens on. */
-const DASHBOARD_TARGET_BOXES = 12;
-
 export default function DashboardScreen() {
   const router = useRouter();
-  const { inventory, bulkLots, boxRules, settings, activities, thresholds } =
-    usePantryStore();
-
-  const plan = computeAllocation(
-    inventory,
-    boxRules,
-    DASHBOARD_TARGET_BOXES,
-    settings.defaultFamilySize,
-    bulkLots,
-  );
-  const isShort = plan.shortfallPerCategory[plan.limitingCategory] > 0;
+  const { inventory, settings, activities, thresholds } = usePantryStore();
 
   const warningLimit = new Date();
   warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
@@ -89,46 +75,51 @@ export default function DashboardScreen() {
 
   return (
     <Screen>
-      {/* The hero is the brand colour, not another white card.
-          A screen made entirely of pale rectangles on a pale ground has no
-          anchor and no shape — this is what your eye lands on first, and it
-          carries the one number the whole app exists to produce. */}
+      {/* THE HERO IS THE CAMERA.
+          It used to be a repeat of Build's headline figure — the same "balanced
+          boxes ready now" number, on the screen right next to the tab that
+          exists to compute it. Two screens saying the same thing means one of
+          them is wasting the best space it has, and the dashboard was the one
+          with something better to put there.
+
+          Photographing a donation is what this app is FOR, and it was a card
+          you had to scroll past the answer to reach. It is the answer now. */}
       <FadeInUp index={0}>
-        <View
-          className="overflow-hidden rounded-lg"
-          style={{
+        <Pressable
+          onPress={() => {
+            cuePress();
+            router.push("/log-donation");
+          }}
+          style={({ pressed }) => ({
             // The same lip the buttons carry, so the hero reads as part of the
-            // same physical family rather than as a flat coloured rectangle.
-            borderBottomWidth: 6,
+            // same physical family — and as something you press, which the old
+            // one was not.
+            borderBottomWidth: pressed ? 3 : 7,
             borderBottomColor: COLORS.primaryDeep,
+            transform: [{ translateY: pressed ? 4 : 0 }],
             shadowColor: COLORS.shadow,
-            shadowOpacity: 0.18,
+            shadowOpacity: 0.2,
             shadowRadius: 14,
             shadowOffset: { width: 0, height: 5 },
-            elevation: 4,
-          }}
+            elevation: 5,
+          })}
+          className="overflow-hidden rounded-lg"
         >
-          {/* A real pantry behind the number. The flat brand block fixed
-              "everything is a white rectangle" but was still a rectangle; a
-              photograph of the actual thing says what this app is for before a
-              word is read.
-
-              Photo: Unsplash (unsplash.com/license — free to use, no
-              attribution required). Cropped to 2.4:1 and recompressed so the
-              bundle carries ~100KB rather than the ~260KB original. */}
+          {/* A real donation box behind the words. A photograph of the actual
+              thing says what this app is for before a word is read. */}
           <Image
-            source={require("../../assets/images/pantry-banner.jpg")}
+            source={require("../../assets/images/donation-scan.jpg")}
             style={StyleSheet.absoluteFill}
             resizeMode="cover"
           />
-          {/* Scrim: dense where the type sits, thinning toward the top-right so
-              the shelves stay visible. White text over a busy illustration needs
-              this everywhere, not just behind the words. */}
+          {/* Dense where the type sits, thinning toward the top-right so the box
+              stays visible. White text over a photograph needs this everywhere,
+              not just behind the words. */}
           <LinearGradient
             colors={[
-              "rgba(156,66,38,0.98)",
-              "rgba(156,66,38,0.90)",
-              "rgba(156,66,38,0.60)",
+              "rgba(156,66,38,0.97)",
+              "rgba(156,66,38,0.88)",
+              "rgba(156,66,38,0.45)",
             ]}
             locations={[0, 0.55, 1]}
             start={{ x: 0, y: 1 }}
@@ -136,62 +127,41 @@ export default function DashboardScreen() {
             style={StyleSheet.absoluteFill}
           />
 
-          <View className="p-card">
-            <Text variant="label" className="text-ink-on/70">
-              Balanced boxes ready now
-            </Text>
-
-            <View className="mt-1 flex-row items-baseline gap-3">
-              <AnimatedCounter
-                value={plan.achievableBoxes}
-                style={{
-                  fontSize: 60,
-                  fontWeight: "800",
-                  color: COLORS.textOnPrimary,
-                  letterSpacing: -2,
-                }}
+          <View className="p-card pb-5 pt-6">
+            <View className="h-12 w-12 items-center justify-center rounded-full bg-white/20">
+              <MaterialCommunityIcons
+                name="camera-outline"
+                size={26}
+                color={COLORS.textOnPrimary}
               />
-              <Text variant="body" className="text-ink-on/70">
-                family of {settings.defaultFamilySize}
-              </Text>
             </View>
 
-            {/* Hairline in the brand block, not on the page. */}
+            <Text variant="headline" className="mt-4 text-ink-on">
+              Photograph a donation
+            </Text>
+            <Text variant="body" className="mt-1.5 max-w-[85%] text-ink-on/75">
+              Point, shoot, and every label is read for you.
+            </Text>
+
             <View className="my-4 h-px bg-white/20" />
 
             <View className="flex-row items-center justify-between gap-3">
               <Text variant="label" className="flex-1 text-ink-on/85">
-                {isShort ? (
-                  <>
-                    <Text
-                      variant="label"
-                      className="font-bold capitalize text-ink-on"
-                    >
-                      {plan.limitingCategory}
-                    </Text>{" "}
-                    short by {plan.shortfallPerCategory[plan.limitingCategory]}
-                  </>
-                ) : (
-                  "Every category has enough"
-                )}
+                Nothing is saved until you check it
               </Text>
-
-              <Pressable
-                onPress={() => router.push("/(tabs)/build")}
-                className="flex-row items-center gap-1 rounded-full bg-white/15 px-4 py-2"
-              >
-                <Text variant="label" className="font-semibold text-ink-on">
-                  Build
+              <View className="flex-row items-center gap-1 rounded-full bg-white/15 px-4 py-2">
+                <Text variant="label" className="font-bold text-ink-on">
+                  Start
                 </Text>
                 <MaterialCommunityIcons
                   name="arrow-right"
-                  size={14}
+                  size={15}
                   color={COLORS.textOnPrimary}
                 />
-              </Pressable>
+              </View>
             </View>
           </View>
-        </View>
+        </Pressable>
       </FadeInUp>
 
       {/* Two figures sitting directly on the canvas. Wrapping every number in
@@ -241,68 +211,8 @@ export default function DashboardScreen() {
         </View>
       </FadeInUp>
 
-      {/* The app's whole reason for existing, given the weight to match.
-          As one of three identical buttons it read as a peer of "Weigh bulk";
-          as a picture of a donation box with a camera on it, it reads as the
-          thing you came here to do. */}
+      {/* The other two intakes stay quiet beneath it. */}
       <FadeInUp index={2}>
-        <Pressable
-          onPress={() => {
-            cuePress();
-            router.push("/log-donation");
-          }}
-          style={({ pressed }) => ({
-            borderBottomWidth: pressed ? 2 : 7,
-            borderBottomColor: COLORS.primaryDeep,
-            transform: [{ translateY: pressed ? 5 : 0 }],
-            shadowColor: COLORS.shadow,
-            shadowOpacity: 0.2,
-            shadowRadius: 12,
-            shadowOffset: { width: 0, height: 5 },
-            elevation: 5,
-            borderRadius: 16,
-          })}
-          className="flex-row items-center overflow-hidden rounded-lg bg-brand"
-        >
-          <View className="flex-1 py-5 pl-5 pr-3">
-            <View className="flex-row items-center gap-2">
-              <View className="h-8 w-8 items-center justify-center rounded-full bg-white/20">
-                <MaterialCommunityIcons
-                  name="camera-outline"
-                  size={18}
-                  color={COLORS.textOnPrimary}
-                />
-              </View>
-              <Text variant="heading" className="font-bold text-ink-on">
-                Photograph a donation
-              </Text>
-            </View>
-            <Text variant="label" className="mt-2 text-ink-on/75">
-              Point, shoot, and every label is read for you.
-            </Text>
-          </View>
-
-          {/* The donation box, fading in from the right rather than sitting in
-              a hard-edged panel — the gradient is what keeps it part of the
-              button instead of a picture glued to one. */}
-          <View className="h-full w-28">
-            <Image
-              source={require("../../assets/images/donation-scan.jpg")}
-              style={StyleSheet.absoluteFill}
-              resizeMode="cover"
-            />
-            <LinearGradient
-              colors={["rgba(156,66,38,1)", "rgba(156,66,38,0.35)"]}
-              start={{ x: 0, y: 0.5 }}
-              end={{ x: 1, y: 0.5 }}
-              style={StyleSheet.absoluteFill}
-            />
-          </View>
-        </Pressable>
-      </FadeInUp>
-
-      {/* The other two intakes stay quiet beside it. */}
-      <FadeInUp index={3}>
         <View className="flex-row gap-2">
           <Button
             label="Weigh bulk"

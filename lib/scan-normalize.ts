@@ -129,6 +129,8 @@ export type ScanCandidate = Partial<InventoryItem> & {
    * guess — and from each other.
    */
   resolvedBy?: 'barcode' | 'catalogue' | null;
+  /** The manufacturer's pack shot, when a barcode lookup found one. */
+  imageUrl?: string | null;
   /** Null when the model gave no usable box — the item is still verifiable. */
   box: DetectionBox | null;
 };
@@ -180,6 +182,7 @@ export function normaliseItem(raw: any): ScanCandidate | null {
     imageIndex: Number.isFinite(imageIndex) && imageIndex >= 0 ? imageIndex : 0,
     barcode: barcode || null,
     resolvedBy: raw?.resolved_by === 'barcode' ? 'barcode' : null,
+    imageUrl: typeof raw?.image_url === 'string' && raw.image_url ? raw.image_url : null,
     box: normaliseBox(raw?.box_2d),
   };
 }
@@ -214,6 +217,7 @@ function combine(existing: ScanCandidate, item: ScanCandidate, count: number): S
     // One frame reading the barcode is enough for both.
     barcode: existing.barcode ?? item.barcode,
     resolvedBy: existing.resolvedBy ?? item.resolvedBy,
+    imageUrl: existing.imageUrl ?? item.imageUrl,
   };
 }
 

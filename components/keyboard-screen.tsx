@@ -1,4 +1,10 @@
-import { HeaderHeightContext } from '@react-navigation/elements';
+// Not from '@react-navigation/elements' directly: since SDK 56, Expo Router
+// vendors React Navigation and no longer supports application code importing the
+// external packages. The runtime API is identical — only the module specifier
+// moved. It was always the more honest import anyway, since
+// @react-navigation/elements was a transitive dependency this project never
+// declared.
+import { HeaderHeightContext } from 'expo-router/react-navigation';
 import React, { useContext } from 'react';
 import {
   KeyboardAvoidingView,

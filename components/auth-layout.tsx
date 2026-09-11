@@ -21,7 +21,7 @@ export function AuthBackdrop({ blurRadius = 5 }: { blurRadius?: number }) {
     <>
       <Image
         source={require('../assets/images/pantry-bg.jpg')}
-        style={[StyleSheet.absoluteFillObject, { opacity: 0.55 }]}
+        style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
         blurRadius={blurRadius}
       />
       <LinearGradient

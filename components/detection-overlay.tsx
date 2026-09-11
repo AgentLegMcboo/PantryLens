@@ -396,7 +396,7 @@ const styles = StyleSheet.create({
 
   boxRoot: { position: 'absolute' },
   halo: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: 3,
     borderRadius: RADII.md,
     shadowOpacity: 0.9,
@@ -405,7 +405,7 @@ const styles = StyleSheet.create({
     elevation: 10,
   },
   box: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderWidth: 2,
     borderRadius: RADII.md,
     backgroundColor: 'rgba(255,255,255,0.10)',
@@ -444,7 +444,7 @@ const styles = StyleSheet.create({
     borderColor: COLORS.primaryDark,
   },
 
-  drawLayer: { ...StyleSheet.absoluteFillObject },
+  drawLayer: { ...StyleSheet.absoluteFill },
   drawPreview: {
     position: 'absolute',
     borderWidth: 2.5,

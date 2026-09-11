@@ -67,6 +67,7 @@ export default function BarcodeScanScreen() {
       barcode: result.barcode ?? data,
       name: result.name ?? '',
       category: (result.category as any) ?? null,
+      imageUrl: (result as any).imageUrl ?? null,
     });
     router.back();
   };

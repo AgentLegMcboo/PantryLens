@@ -44,6 +44,8 @@ export interface PendingBarcode {
   barcode: string;
   name: string;
   category: Category | null;
+  /** The manufacturer's pack shot, if the provider had one. */
+  imageUrl: string | null;
 }
 
 /** A photo held only for the length of a review, never persisted. */
@@ -67,6 +69,13 @@ export interface InventoryItem {
   source_org?: SourceOrg | null;
   source_name?: string | null;
   bulk_lot_id?: string | null;
+  /** Which shelf or bin this sits on. Null is a normal state, not an error. */
+  location_id?: string | null;
+  /**
+   * A pack shot from a barcode lookup, or a crop of the scan photo living in the
+   * item-photos bucket. Null means the row shows its category icon instead.
+   */
+  image_url?: string | null;
 }
 
 /**
@@ -85,6 +94,41 @@ export interface BulkLot {
   source_name?: string | null;
   notes?: string | null;
 }
+
+/**
+ * A place in the room: "Shelf A", "Freezer", "Back room", "Bin 3".
+ *
+ * MESA's process sorts donations onto tables and into bins, then shelves them.
+ * Category says what a thing IS; this says where to walk to find it, and the two
+ * are genuinely different questions.
+ */
+export interface PantryLocation {
+  id: string;
+  pantry_id: string;
+  name: string;
+  sort_order: number;
+  /**
+   * What belongs here. A pantry's bins are labelled by what goes in them, so
+   * this is a rule rather than a note: a scan uses it to file itself. Empty
+   * means the place takes anything.
+   */
+  categories: Category[];
+}
+
+/**
+ * Why stock left.
+ *
+ * "Given to a family", "thrown out mouldy" and "I typed this in twice" used to
+ * be the same event — a row disappearing. They are three different facts, and
+ * two of them are numbers a pantry has to report.
+ */
+export type ExitReason = 'given_out' | 'discarded' | 'correction';
+
+export const EXIT_LABELS: Record<ExitReason, string> = {
+  given_out: 'Given out',
+  discarded: 'Thrown away',
+  correction: 'Removed',
+};
 
 export type LbsPerUnit = Record<Category, number>;
 
@@ -134,6 +178,24 @@ export interface Activity {
   icon: string;
 }
 
+/** Where crops of the pantry's own scan photos live. */
+export const ITEM_PHOTO_BUCKET = 'item-photos';
+
+/**
+ * The object path inside our bucket, or null if this URL is not ours.
+ *
+ * Public bucket URLs look like
+ * .../storage/v1/object/public/item-photos/<pantry>/<item>.jpg
+ */
+export function ownedPhotoPath(url: string | null | undefined): string | null {
+  if (!url) return null;
+  const marker = `/${ITEM_PHOTO_BUCKET}/`;
+  const at = url.indexOf(marker);
+  if (at < 0) return null;
+  const path = url.slice(at + marker.length).split('?')[0];
+  return path || null;
+}
+
 const DEFAULT_BOX_RULES: BoxRules = { grain: 2, vegetable: 2, protein: 2, breakfast: 1, snack: 1, hygiene: 1, baby: 0 };
 const DEFAULT_THRESHOLDS: CategoryThresholds = { grain: 15, vegetable: 15, protein: 15, breakfast: 10, snack: 10, hygiene: 8, baby: 5 };
 
@@ -164,6 +226,7 @@ function subscribeToPantry(pantryId: string, onChange: () => void) {
     // watched — a lot logged on one phone stayed invisible on another.
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bulk_lots', filter }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'activities', filter }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'locations', filter }, onChange)
     .subscribe();
 }
 
@@ -201,6 +264,7 @@ interface AppState {
   thresholds: CategoryThresholds;
   settings: Settings;
   activities: Activity[];
+  locations: PantryLocation[];
   isLoaded: boolean;
   currentDraft: InventoryItem[];
   /** The photos the current draft was read from, so review can point at them. */
@@ -214,6 +278,8 @@ interface AppState {
    * moment it is consumed, so a stale hit can never land on a later row.
    */
   pendingBarcode: PendingBarcode | null;
+  /** Who the draft being reviewed came from, carried from the intake screen. */
+  draftSource: SourceOrg | null;
 
   // Actions
   initialize: () => Promise<void>;
@@ -226,9 +292,19 @@ interface AppState {
   deleteBulkLot: (id: string) => Promise<void>;
   updateLbsPerUnit: (updates: Partial<LbsPerUnit>) => Promise<void>;
 
+  addLocation: (name: string) => Promise<void>;
+  renameLocation: (id: string, name: string) => Promise<void>;
+  setLocationCategories: (id: string, categories: Category[]) => Promise<void>;
+  /** Where a freshly scanned item of this category should be filed. */
+  defaultLocationFor: (category: Category) => string | null;
+  recordExit: (ids: string[], reason: ExitReason) => Promise<void>;
+  deleteLocation: (id: string) => Promise<void>;
+
   addItems: (items: Partial<InventoryItem>[], source?: 'donation' | 'shelf_audit' | 'manual') => Promise<void>;
   updateItem: (id: string, updates: Partial<InventoryItem>) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
+  deleteItems: (ids: string[]) => Promise<void>;
+  updateItems: (ids: string[], updates: Partial<InventoryItem>) => Promise<void>;
   getItem: (id: string) => InventoryItem | undefined;
   deductItems: (itemsToDeduct: { id: string; count: number }[]) => Promise<void>;
   
@@ -238,6 +314,7 @@ interface AppState {
   
   setDraft: (items: InventoryItem[], photos?: ScanPhoto[]) => void;
   setPendingBarcode: (value: PendingBarcode | null) => void;
+  setDraftSource: (value: SourceOrg | null) => void;
   addActivity: (text: string, icon?: string) => Promise<void>;
 }
 
@@ -257,10 +334,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
     userRole: 'volunteer'
   },
   activities: [],
+  locations: [],
   isLoaded: false,
   currentDraft: [],
   currentScanPhotos: [],
   pendingBarcode: null,
+  draftSource: null,
 
   initialize: async () => {
     if (__DEV__) {
@@ -294,6 +373,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
           inventory: [],
           bulkLots: [],
           activities: [],
+          locations: [],
           settings: { ...get().settings, pantryId: null, pantryName: '' },
           isLoaded: true,
           // Signing out in development drops you back at the intro too, so it is
@@ -354,6 +434,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
           { data: invData },
           { data: lotData },
           { data: actData },
+          { data: locData },
         ] = await Promise.all([
           supabase
             .from('inventory')
@@ -371,6 +452,14 @@ export const usePantryStore = create<AppState>((set, get) => ({
             .eq('pantry_id', pantryId)
             .order('created_at', { ascending: false })
             .limit(20),
+          supabase
+            .from('locations')
+            .select('*')
+            .eq('pantry_id', pantryId)
+            // The order a volunteer walks the room in, which is rarely
+            // alphabetical.
+            .order('sort_order', { ascending: true })
+            .order('name', { ascending: true }),
         ]);
 
         log.debug(
@@ -383,6 +472,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
           inventory: (invData as InventoryItem[]) || [],
           bulkLots: (lotData as BulkLot[]) || [],
           activities: (actData as Activity[]) || [],
+          locations: (locData as PantryLocation[]) || [],
           isLoaded: true
         });
 
@@ -427,8 +517,15 @@ export const usePantryStore = create<AppState>((set, get) => ({
   },
 
   deleteBulkLot: async (id: string) => {
-    await supabase.from('bulk_lots').delete().eq('id', id);
-    await get().fetchData();
+    const previous = get().bulkLots;
+    set({ bulkLots: previous.filter(l => l.id !== id) });
+
+    const { error } = await supabase.from('bulk_lots').delete().eq('id', id);
+    if (error) {
+      log.error('store', `could not delete bulk lot ${id}`, error);
+      set({ bulkLots: previous });
+      throw error;
+    }
   },
 
   updateLbsPerUnit: async (updates: Partial<LbsPerUnit>) => {
@@ -446,6 +543,139 @@ export const usePantryStore = create<AppState>((set, get) => ({
     get().fetchData();
   },
 
+  addLocation: async (name: string) => {
+    const { settings, locations } = get();
+    const trimmed = name.trim();
+    if (!settings.pantryId || !trimmed) return;
+
+    const { data, error } = await supabase
+      .from('locations')
+      .insert({
+        pantry_id: settings.pantryId,
+        name: trimmed,
+        // New places go at the end of the walk, not the front of it.
+        sort_order: locations.length,
+        categories: [],
+      })
+      .select()
+      .single();
+
+    if (error) {
+      log.error('store', 'could not add location', error);
+      throw error;
+    }
+    set({ locations: [...locations, data as PantryLocation] });
+  },
+
+  setLocationCategories: async (id: string, categories: Category[]) => {
+    const previous = get().locations;
+    set({ locations: previous.map(l => (l.id === id ? { ...l, categories } : l)) });
+
+    const { error } = await supabase.from('locations').update({ categories }).eq('id', id);
+    if (error) {
+      log.error('store', 'could not set location categories', error);
+      set({ locations: previous });
+      throw error;
+    }
+  },
+
+  /**
+   * The first place that says it holds this category, in the order a volunteer
+   * walks the room. Null when nothing claims it, which leaves the item
+   * unassigned rather than guessing.
+   */
+  defaultLocationFor: (category: Category) => {
+    const match = get().locations.find(l => l.categories?.includes(category));
+    return match?.id ?? null;
+  },
+
+  /**
+   * Stock leaving, with a reason attached.
+   *
+   * Writes the exit BEFORE removing the rows, so a failure leaves the shelf
+   * intact rather than leaving food deleted and unaccounted for. Of the two
+   * possible half-states that is much the better one: an exit row with the stock
+   * still present is a visible discrepancy, whereas missing stock with no record
+   * is simply lost.
+   */
+  recordExit: async (ids: string[], reason: ExitReason) => {
+    const { settings, inventory } = get();
+    if (!settings.pantryId || ids.length === 0) return;
+
+    const leaving = inventory.filter(i => ids.includes(i.id));
+    if (leaving.length === 0) return;
+
+    const { error } = await supabase.from('stock_exits').insert(
+      leaving.map(i => ({
+        pantry_id: settings.pantryId,
+        item_name: i.name,
+        category: i.category,
+        count: i.count,
+        reason,
+        recorded_by: get().session?.user?.id ?? null,
+      })),
+    );
+    if (error) {
+      log.error('store', 'could not record the stock exit', error);
+      throw error;
+    }
+
+    await get().deleteItems(ids);
+
+    const units = leaving.reduce((sum, i) => sum + i.count, 0);
+    await get().addActivity(
+      reason === 'given_out'
+        ? `Gave out ${units} item${units === 1 ? '' : 's'}`
+        : reason === 'discarded'
+          ? `Threw away ${units} item${units === 1 ? '' : 's'}`
+          : `Corrected ${leaving.length} row${leaving.length === 1 ? '' : 's'}`,
+      reason === 'given_out'
+        ? 'hand-heart-outline'
+        : reason === 'discarded'
+          ? 'delete-alert-outline'
+          : 'pencil-outline',
+    );
+  },
+
+  renameLocation: async (id: string, name: string) => {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    const previous = get().locations;
+    set({ locations: previous.map(l => (l.id === id ? { ...l, name: trimmed } : l)) });
+
+    const { error } = await supabase.from('locations').update({ name: trimmed }).eq('id', id);
+    if (error) {
+      log.error('store', 'could not rename location', error);
+      set({ locations: previous });
+      throw error;
+    }
+  },
+
+  /**
+   * Removes a place, never the food that was in it.
+   *
+   * The column is ON DELETE SET NULL, so the stock survives and simply becomes
+   * unassigned — which is the honest outcome. Renaming a room does not make its
+   * contents disappear.
+   */
+  deleteLocation: async (id: string) => {
+    const previous = get().locations;
+    const previousInventory = get().inventory;
+    set({
+      locations: previous.filter(l => l.id !== id),
+      inventory: previousInventory.map(i =>
+        i.location_id === id ? { ...i, location_id: null } : i,
+      ),
+    });
+
+    const { error } = await supabase.from('locations').delete().eq('id', id);
+    if (error) {
+      log.error('store', 'could not delete location', error);
+      set({ locations: previous, inventory: previousInventory });
+      throw error;
+    }
+  },
+
   addItems: async (items: Partial<InventoryItem>[], source = 'donation') => {
     const { settings } = get();
     if (!settings.pantryId) {
@@ -456,6 +686,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
     }
 
     const newItems = items.map(item => ({
+      // Supplied by the caller when it intends to attach a photo afterwards.
+      // Knowing the id BEFORE the insert is what lets the upload run in the
+      // background: without it the only way to find the row again would be to
+      // trust that Postgres returned the inserted rows in the order they were
+      // sent, which it does not promise.
+      ...(item.id ? { id: item.id } : {}),
       pantry_id: settings.pantryId,
       name: item.name?.trim() || 'Unlabeled Item',
       category: item.category || 'unknown',
@@ -470,6 +706,8 @@ export const usePantryStore = create<AppState>((set, get) => ({
       condition: item.condition || 'ok',
       source_org: item.source_org ?? null,
       source_name: item.source_name ?? null,
+      image_url: item.image_url ?? null,
+      location_id: item.location_id ?? null,
     }));
 
     log.debug('store', `inserting ${newItems.length} item(s) into pantry ${settings.pantryId}`, newItems);
@@ -490,15 +728,108 @@ export const usePantryStore = create<AppState>((set, get) => ({
     await get().fetchData();
   },
 
+  /**
+   * Edits an item, on screen first.
+   *
+   * These two used to write to Supabase and then simply stop — no local state
+   * change, no refetch, no look at the error. The list was left waiting on the
+   * realtime channel to tell it what had happened, which for a DELETE it never
+   * did (see the publication migration), so deleting an item removed the row
+   * from the database and changed absolutely nothing a volunteer could see. It
+   * looked exactly like a broken button.
+   *
+   * A volunteer's own action must never depend on a round trip through
+   * replication to become visible. State moves now; if the write is rejected the
+   * store re-reads the truth and the caller is told.
+   */
   updateItem: async (id: string, updates: Partial<InventoryItem>) => {
-    await supabase.from('inventory').update(updates).eq('id', id);
+    const previous = get().inventory;
+    set({ inventory: previous.map(i => (i.id === id ? { ...i, ...updates } : i)) });
+
+    const { error } = await supabase.from('inventory').update(updates).eq('id', id);
+    if (error) {
+      log.error('store', `could not update item ${id}`, error);
+      set({ inventory: previous });
+      throw error;
+    }
   },
 
   deleteItem: async (id: string) => {
-    const item = get().inventory.find(i => i.id === id);
-    await supabase.from('inventory').delete().eq('id', id);
-    if (item) {
-      await get().addActivity(`Removed "${item.name}" from inventory`, 'trash-can-outline');
+    const previous = get().inventory;
+    const item = previous.find(i => i.id === id);
+    if (!item) return;
+
+    set({ inventory: previous.filter(i => i.id !== id) });
+
+    const { error } = await supabase.from('inventory').delete().eq('id', id);
+    if (error) {
+      log.error('store', `could not delete item ${id}`, error);
+      set({ inventory: previous });
+      throw error;
+    }
+
+    // Take the photograph with it. Only ours — a pack shot lives on Open Food
+    // Facts' servers and is shared by every pantry that ever scanned that
+    // barcode. Without this the bucket fills for ever with pictures of tins that
+    // left the building months ago.
+    const path = ownedPhotoPath(item.image_url);
+    if (path) {
+      await supabase.storage.from(ITEM_PHOTO_BUCKET).remove([path]).catch(() => {});
+    }
+
+    await get().addActivity(`Removed "${item.name}" from inventory`, 'trash-can-outline');
+  },
+
+  /**
+   * Removes several items at once.
+   *
+   * One statement rather than a loop of them: clearing forty expired tins should
+   * be one round trip and one undoable moment, not forty chances to half-fail
+   * and leave the shelf in a state nobody chose.
+   */
+  deleteItems: async (ids: string[]) => {
+    if (ids.length === 0) return;
+    const previous = get().inventory;
+    const doomed = previous.filter(i => ids.includes(i.id));
+    if (doomed.length === 0) return;
+
+    set({ inventory: previous.filter(i => !ids.includes(i.id)) });
+
+    const { error } = await supabase.from('inventory').delete().in('id', ids);
+    if (error) {
+      log.error('store', `could not delete ${ids.length} item(s)`, error);
+      set({ inventory: previous });
+      throw error;
+    }
+
+    const paths = doomed
+      .map(i => ownedPhotoPath(i.image_url))
+      .filter((p): p is string => !!p);
+    if (paths.length > 0) {
+      await supabase.storage.from(ITEM_PHOTO_BUCKET).remove(paths).catch(() => {});
+    }
+
+    await get().addActivity(
+      doomed.length === 1
+        ? `Removed "${doomed[0].name}" from inventory`
+        : `Removed ${doomed.length} items from inventory`,
+      'trash-can-outline',
+    );
+  },
+
+  /** The same edit applied to several items — recategorising a whole shelf. */
+  updateItems: async (ids: string[], updates: Partial<InventoryItem>) => {
+    if (ids.length === 0) return;
+    const previous = get().inventory;
+    set({
+      inventory: previous.map(i => (ids.includes(i.id) ? { ...i, ...updates } : i)),
+    });
+
+    const { error } = await supabase.from('inventory').update(updates).in('id', ids);
+    if (error) {
+      log.error('store', `could not update ${ids.length} item(s)`, error);
+      set({ inventory: previous });
+      throw error;
     }
   },
 
@@ -612,6 +943,10 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
   setPendingBarcode: (value: PendingBarcode | null) => {
     set({ pendingBarcode: value });
+  },
+
+  setDraftSource: (value: SourceOrg | null) => {
+    set({ draftSource: value });
   },
 
   addActivity: async (text: string, icon = 'information-outline') => {

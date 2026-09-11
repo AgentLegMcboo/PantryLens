@@ -32,7 +32,12 @@
         {
           "cameraPermission": "PantryLens uses the camera to read the barcode on a package and identify it exactly."
         }
-      ]
+      ],
+      "expo-font",
+      "expo-secure-store",
+      "expo-status-bar",
+      "expo-web-browser",
+      "expo-sharing"
     ]
   }
 }

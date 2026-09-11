@@ -6,7 +6,9 @@ import { COLORS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
 import { Badge, Button, Card, Chip, Input, Stepper, Text } from '../components/ui';
+import * as Crypto from 'expo-crypto';
 import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
+import { attachItemPhotos, type PhotoJob } from '../lib/item-photos';
 import type { DetectionBox, ScanCandidate } from '../lib/scan-normalize';
 import {
   Condition,
@@ -63,15 +65,44 @@ export default function ReviewVerifyScreen() {
     currentScanPhotos,
     addItems,
     settings,
+    locations,
+    draftSource,
+    defaultLocationFor,
     pendingBarcode,
     setPendingBarcode,
   } = usePantryStore();
+
+  /**
+   * Where this whole intake is going.
+   *
+   * The pantry's process sorts a donation onto a table or into a bin and then
+   * shelves it — and that decision is made once, for the batch, by the person
+   * carrying it. Asking per item would be nonsense; asking once here is exactly
+   * when they know the answer.
+   */
+  const [batchLocation, setBatchLocation] = useState<string | null>(null);
+
+  /**
+   * Whether the pantry has told the app what its bins are for.
+   *
+   * When it has, sorting stops being a step: each item files itself under the
+   * place that claims its category, and the batch picker becomes an override for
+   * the odd load that all goes one place.
+   */
+  const autoFiles = locations.some(l => l.categories?.length > 0);
 
   const source: 'donation' | 'shelf_audit' =
     params.source === 'shelf_audit' ? 'shelf_audit' : 'donation';
 
   const [draftItems, setDraftItems] = useState<DraftRow[]>(() =>
-    currentDraft.map(item => ({ ...item, uid: nextUid(), rawName: item.name ?? '' })),
+    currentDraft.map(item => ({
+      ...item,
+      uid: nextUid(),
+      rawName: item.name ?? '',
+      // normaliseItem hands this over as imageUrl; the row stores it the way the
+      // database does.
+      image_url: (item as any).imageUrl ?? null,
+    })),
   );
   const [saving, setSaving] = useState(false);
   // Which photo is on screen, when the scan covered more than one.
@@ -189,6 +220,7 @@ export default function ReviewVerifyScreen() {
         category: (pendingBarcode.category ?? next[index].category) as any,
         barcode: pendingBarcode.barcode,
         resolvedBy: 'barcode',
+        image_url: pendingBarcode.imageUrl ?? next[index].image_url ?? null,
         // The manufacturer said so. Nothing in this pipeline is more certain.
         confidence: 1,
       };
@@ -203,7 +235,23 @@ export default function ReviewVerifyScreen() {
   const commit = async () => {
     setSaving(true);
     try {
-      await addItems(draftItems, source);
+      /**
+       * Ids are minted here, before the insert, so the background photo upload
+       * knows which row each crop belongs to. Letting Postgres assign them would
+       * mean matching rows back by position afterwards, which it does not
+       * promise to preserve.
+       */
+      const rows = draftItems.map(row => ({
+        ...row,
+        id: row.id ?? Crypto.randomUUID(),
+        // An explicit choice for the batch wins; otherwise each item goes to
+        // whichever bin claims its category. Null when nothing claims it, which
+        // leaves it unfiled rather than guessing.
+        location_id:
+          batchLocation ?? defaultLocationFor((row.category ?? 'unknown') as any),
+        source_org: draftSource,
+      }));
+      await addItems(rows, source);
 
       /**
        * Teach the catalogue what this pantry just agreed to.
@@ -228,6 +276,34 @@ export default function ReviewVerifyScreen() {
             row.rawName.trim().toLowerCase() !== row.name!.trim().toLowerCase(),
         }));
       await recordConfirmations(settings.pantryId, lessons);
+
+      /**
+       * Photographs, after the fact.
+       *
+       * A row whose name came from a barcode already has the manufacturer's pack
+       * shot and needs nothing; everything else with a detection box gets a crop
+       * of the pantry's own photo. Deliberately NOT awaited — the volunteer is
+       * done, the stock is written, and twenty crops and uploads have no business
+       * standing between them and the confirmation.
+       */
+      if (settings.pantryId) {
+        const jobs: PhotoJob[] = rows.flatMap(row => {
+          if (row.image_url) return [];
+          const photo = currentScanPhotos[row.imageIndex ?? 0];
+          if (!row.box || !photo?.uri || !photo.width || !photo.height) return [];
+          return [{
+            id: row.id!,
+            pantryId: settings.pantryId!,
+            box: row.box,
+            uri: photo.uri,
+            width: photo.width,
+            height: photo.height,
+          }];
+        });
+        attachItemPhotos(jobs).catch(err =>
+          log.error('store', 'the photo attach threw', err),
+        );
+      }
 
       cueSuccess();
       Alert.alert(
@@ -400,6 +476,33 @@ export default function ReviewVerifyScreen() {
               />
             );
           })}
+        </View>
+      )}
+
+      {locations.length > 0 && (
+        <View className="gap-2">
+          <Text variant="label" tone="soft" className="font-semibold">
+            {autoFiles ? 'Send the whole batch to one place?' : 'Where is this going?'}
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {locations.map(loc => (
+              <Chip
+                key={loc.id}
+                label={loc.name}
+                selected={batchLocation === loc.id}
+                onPress={() =>
+                  setBatchLocation(batchLocation === loc.id ? null : loc.id)
+                }
+              />
+            ))}
+          </View>
+          <Text variant="micro" tone="soft">
+            {batchLocation
+              ? 'Every item in this scan is filed there, whatever its category.'
+              : autoFiles
+                ? 'Leave this off and each item goes to the bin that holds its category.'
+                : 'Optional — leave it off and these land unfiled. Set up which bin holds what in Settings and they will file themselves.'}
+          </Text>
         </View>
       )}
 
