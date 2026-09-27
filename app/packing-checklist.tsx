@@ -1,13 +1,15 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
-import { computeAllocation } from '../lib/allocation';
+import { computeAllocation, isBulkUnit } from '../lib/allocation';
+import { normaliseRules } from '../lib/box-presets';
 import { FadeInUp, ProgressBar } from '../components/motion';
 import { Badge, Button, Card, CategoryIcon, EmptyState, Screen, Text } from '../components/ui';
-import { cueSuccess, cueTap } from '../lib/feedback';
-import { usePantryStore } from '../lib/store';
+import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
+import { type PackLine, usePantryStore } from '../lib/store';
 
 /**
  * The pick list, walked one shelf at a time.
@@ -25,11 +27,45 @@ import { usePantryStore } from '../lib/store';
 export default function PackingChecklistScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const targetBoxes = parseInt(params.targetBoxes as string, 10) || 12;
+  const { inventory, bulkLots, boxRules, locations, settings, packBoxes } = usePantryStore();
+  // Build always passes this. The fallback only matters if the screen is opened
+  // some other way, and then the pantry's own target beats an invented one.
+  const targetBoxes = parseInt(params.targetBoxes as string, 10) || settings.boxTarget;
   const familySize = parseInt(params.familySize as string, 10) || 4;
 
-  const { inventory, bulkLots, boxRules, locations, deductItems } = usePantryStore();
-  const plan = computeAllocation(inventory, boxRules, targetBoxes, familySize, bulkLots);
+  // The box chosen on Build. Carried in the route rather than looked up, because
+  // a preset used once was never saved to look up. Anything unreadable falls
+  // back to the pantry default rather than packing an empty box.
+  const boxName = typeof params.boxName === 'string' && params.boxName ? params.boxName : null;
+  const scales = params.scales !== '0';
+  let routeRules: ReturnType<typeof normaliseRules> | null = null;
+  try {
+    routeRules = typeof params.rules === 'string' ? normaliseRules(JSON.parse(params.rules)) : null;
+  } catch {
+    routeRules = null;
+  }
+
+  /**
+   * The pick list is a snapshot taken when the screen opens, not a live view.
+   *
+   * It used to be recomputed on every render, so when another volunteer's
+   * changes arrived over realtime the rows could shift under your finger mid-
+   * pick, and ticks keyed by position could land on a different item. The
+   * server reconciles against the real stock when you finish, and reports any
+   * line that ran short, so the list doesn't need to chase the database.
+   */
+  const [plan] = useState(() =>
+    computeAllocation(inventory, routeRules ?? boxRules, targetBoxes, familySize, bulkLots, {
+      warningDays: settings.expirationWarningDays,
+    }),
+  );
+
+  /**
+   * One id per checklist. If "Finish" is retried after a dropped connection,
+   * the server recognises the same pack and doesn't deduct the shelf twice.
+   */
+  const [runId] = useState(() => Crypto.randomUUID());
+  const [packing, setPacking] = useState(false);
 
   const [checked, setChecked] = useState<Record<string, boolean>>({});
 
@@ -50,14 +86,66 @@ export default function PackingChecklistScreen() {
     setChecked(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleFinish = () => {
-    deductItems(plan.allocatedItems.map(a => ({ id: a.item.id, count: a.countToGrab })));
-    cueSuccess();
-    Alert.alert(
-      'Boxes packed',
-      `${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? 'box is' : 'boxes are'} ready, and the shelf counts have come down to match.`,
-      [{ text: 'Done', onPress: () => router.replace('/(tabs)') }],
-    );
+  const handleFinish = async () => {
+    if (packing) return;
+
+    const lines: PackLine[] = plan.allocatedItems.map(a => ({
+      kind: isBulkUnit(a.item) ? 'lot' : 'item',
+      id: a.item.id,
+      count: a.countToGrab,
+    }));
+    // Captured now: once the refetch lands, those rows may no longer exist.
+    const nameOf = new Map(plan.allocatedItems.map(a => [a.item.id, a.item.name]));
+
+    setPacking(true);
+    try {
+      // Awaited. This used to be fired and forgotten, so the success alert
+      // below appeared whether or not the shelf was ever updated.
+      const result = await packBoxes({
+        runId,
+        boxCount: plan.achievableBoxes,
+        lines,
+        boxName: boxName ?? 'Standard family box',
+        perBox: plan.perBoxNeeds,
+      });
+
+      const boxes = `${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? 'box is' : 'boxes are'}`;
+
+      if (result.shortfalls.length > 0) {
+        cueWarn();
+        const detail = result.shortfalls
+          .map(sf => `• ${nameOf.get(sf.id) ?? 'An item'}: needed ${sf.wanted}, records had ${sf.taken}`)
+          .join('\n');
+        Alert.alert(
+          'Packed, but some counts were short',
+          `${boxes} done and the shelf is updated. The records had less than you picked for:\n\n${detail}\n\nSomeone may have packed from the same stock. Worth a look at those shelves.`,
+          [{ text: 'Done', onPress: () => router.replace('/(tabs)') }],
+        );
+        return;
+      }
+
+      cueSuccess();
+      Alert.alert(
+        'Boxes packed',
+        `${boxes} off the shelf and waiting in Ready to go. They count as given out once families pick them up.`,
+        [
+          { text: 'Done', style: 'cancel', onPress: () => router.replace('/(tabs)') },
+          { text: 'See ready boxes', onPress: () => router.replace('/ready-boxes') },
+        ],
+      );
+    } catch (err: any) {
+      cueWarn();
+      Alert.alert(
+        'Could not update the shelf',
+        `${err?.message ?? 'The connection dropped.'}\n\nYour boxes are still packed. It's safe to try again: the same pack can't be counted twice.`,
+        [
+          { text: 'Not now', style: 'cancel' },
+          { text: 'Try again', onPress: () => handleFinish() },
+        ],
+      );
+    } finally {
+      setPacking(false);
+    }
   };
 
   const recipe = Object.entries(plan.perBoxNeeds)
@@ -103,7 +191,7 @@ export default function PackingChecklistScreen() {
           </View>
 
           <Text variant="micro" tone="soft" className="mt-3 capitalize">
-            Each box, family of {familySize}: {recipe}
+            {boxName ?? 'Each box'}{scales ? `, family of ${familySize}` : ''}: {recipe}
           </Text>
         </View>
       </FadeInUp>
@@ -188,7 +276,8 @@ export default function PackingChecklistScreen() {
           <Button
             label={allDone ? 'Finish and update the shelf' : `${total - doneCount} still to pick`}
             block
-            disabled={!allDone}
+            loading={packing}
+            disabled={!allDone || packing}
             icon={
               <MaterialCommunityIcons
                 name="check-all"

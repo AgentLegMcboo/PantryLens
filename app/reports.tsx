@@ -50,7 +50,15 @@ const sinceFor = (days: number): string | null => {
 };
 
 export default function ReportsScreen() {
-  const { inventory, bulkLots, locations, settings } = usePantryStore();
+  const { inventory, bulkLots, locations, settings, readyBoxes } = usePantryStore();
+
+  // Packed but not collected. Not "given out" yet, and worth saying so, or a
+  // pantry that packed ahead of distribution day reads its numbers as a drop.
+  const waitingBoxes = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
+  const waitingUnits = readyBoxes.reduce(
+    (sum, r) => sum + Math.round((r.units_taken * (r.boxes - r.boxes_collected)) / Math.max(1, r.boxes)),
+    0,
+  );
 
   const [days, setDays] = useState<number>(30);
   const [exits, setExits] = useState<StockExit[]>([]);
@@ -165,6 +173,15 @@ export default function ReportsScreen() {
               {rescuedPct}% of everything that left the shelf reached a household.
             </Text>
           </View>
+        </FadeInUp>
+      )}
+
+      {waitingBoxes > 0 && (
+        <FadeInUp index={2}>
+          <Text variant="micro" tone="soft" className="px-1">
+            Not counted yet: {waitingBoxes} packed {waitingBoxes === 1 ? 'box' : 'boxes'} (about{' '}
+            {waitingUnits} units) waiting for pickup. They count as given out once collected.
+          </Text>
         </FadeInUp>
       )}
 

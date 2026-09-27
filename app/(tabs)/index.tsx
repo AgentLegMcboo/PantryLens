@@ -6,6 +6,8 @@ import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../../constants/theme";
 import { AnimatedCounter, FadeInUp } from "../../components/motion";
 import { Badge, Button, Panel, Screen, Text } from "../../components/ui";
+import { buildStockUnits } from "../../lib/allocation";
+import { isExpiringSoon } from "../../lib/expiry";
 import { InventoryItem, usePantryStore } from "../../lib/store";
 import { cuePress } from "../../lib/feedback";
 
@@ -49,16 +51,15 @@ function formatActivityTime(iso: string): string {
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { inventory, settings, activities, thresholds } = usePantryStore();
+  const { inventory, bulkLots, settings, activities, thresholds, readyBoxes } =
+    usePantryStore();
+  const readyCount = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
 
-  const warningLimit = new Date();
-  warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
-
+  // Was comparing a Date parsed from "2026-09-20" — which is UTC midnight —
+  // against a local Date, so the count was wrong by a day for part of every
+  // day. Plain date strings compare exactly. See lib/expiry.ts.
   const expiringCount = inventory
-    .filter(
-      (i: InventoryItem) =>
-        !!i.expiration && new Date(i.expiration) <= warningLimit,
-    )
+    .filter((i: InventoryItem) => isExpiringSoon(i.expiration, settings.expirationWarningDays))
     .reduce((sum: number, item: InventoryItem) => sum + item.count, 0);
 
   const totalStockCount = inventory.reduce(
@@ -66,8 +67,17 @@ export default function DashboardScreen() {
     0,
   );
 
+  /**
+   * Low-stock is measured against what can actually be given out.
+   *
+   * It counted everything on the shelf, so twenty out-of-date tins of protein
+   * held the alert off while the pantry had nothing to pack — and weighed bulk
+   * lots counted for nothing, so a 60 lb protein drop left the category
+   * reading as empty. The same pool box building draws from answers both.
+   */
+  const givable = buildStockUnits(inventory, bulkLots);
   const lowCategories = Object.keys(thresholds).filter((cat: string) => {
-    const total = inventory
+    const total = givable
       .filter((i: InventoryItem) => i.category === cat)
       .reduce((sum: number, i: InventoryItem) => sum + i.count, 0);
     return total < (thresholds as any)[cat];
@@ -178,8 +188,14 @@ export default function DashboardScreen() {
                 color: COLORS.textPrimary,
               }}
             />
+            {/* Says what it counts. Packing takes stock out of inventory, so a
+                pantry that has just boxed half its food sees this number drop,
+                and "items" alone read as though that food had vanished. */}
             <Text variant="micro" tone="soft" className="mt-0.5">
-              items · {inventory.length} products
+              items on the shelf · {inventory.length} products
+            </Text>
+            <Text variant="micro" tone="soft">
+              not counting packed boxes
             </Text>
           </View>
 
@@ -209,6 +225,25 @@ export default function DashboardScreen() {
             </Text>
           </Pressable>
         </View>
+
+        {/* The other half of "not counting packed boxes": where they went. */}
+        {readyCount > 0 && (
+          <Pressable
+            onPress={() => router.push("/ready-boxes")}
+            accessibilityRole="button"
+            className="mt-4 flex-row items-center gap-3 rounded-md border-[1.5px] border-hairline bg-subtle px-4 py-3"
+          >
+            <MaterialCommunityIcons
+              name="package-variant-closed"
+              size={20}
+              color={COLORS.primaryLight}
+            />
+            <Text variant="label" className="flex-1 font-semibold">
+              {readyCount} {readyCount === 1 ? "box" : "boxes"} packed and ready to go
+            </Text>
+            <MaterialCommunityIcons name="chevron-right" size={18} color={COLORS.textSecondary} />
+          </Pressable>
+        )}
       </FadeInUp>
 
       {/* The other two intakes stay quiet beneath it. */}

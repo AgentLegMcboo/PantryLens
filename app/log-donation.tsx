@@ -9,6 +9,7 @@ import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { processImageScan, ScanError } from '../lib/ai_vision';
+import { startScan, uploadScanPhotos } from '../lib/scan-history';
 import { SOURCE_ORG_LABELS, type SourceOrg, usePantryStore } from '../lib/store';
 
 /**
@@ -36,6 +37,8 @@ export default function LogDonationScreen() {
   const router = useRouter();
   const setDraft = usePantryStore(state => state.setDraft);
   const setDraftSource = usePantryStore(state => state.setDraftSource);
+  const setCurrentScan = usePantryStore(state => state.setCurrentScan);
+  const settings = usePantryStore(state => state.settings);
 
   const [shots, setShots] = useState<Shot[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -146,10 +149,26 @@ export default function LogDonationScreen() {
     setIsAnalyzing(true);
 
     try {
+      const startedAt = Date.now();
       const { candidates, photosRead, photosSent } = await processImageScan(
         shots.map(s => s.base64),
       );
       log.debug('scan', `navigating to review with ${candidates.length} draft row(s)`);
+
+      // Opened BEFORE the review, so a scan the volunteer walks away from is
+      // still recorded — an abandoned scan says as much about the model as a
+      // saved one. Best-effort throughout: a null record changes nothing about
+      // the intake that follows.
+      const record = await startScan({
+        pantryId: settings.pantryId,
+        mode: 'donation',
+        photosSent,
+        photosRead,
+        durationMs: Date.now() - startedAt,
+        candidates,
+      });
+      setCurrentScan(record);
+      uploadScanPhotos(settings.pantryId, record?.scanId ?? null, shots);
       // The photos travel with the draft: review draws the detection boxes back
       // onto them, so the item and the thing on the shelf stay connected.
       setDraft(

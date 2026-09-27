@@ -131,13 +131,16 @@ export default function RootLayout() {
             nothing at all. Anything that pushes onward must stay in the stack. */}
         <Stack.Screen name="log-donation" options={{ title: 'Log Donation' }} />
         <Stack.Screen name="review-verify" options={{ title: 'Review & Verify' }} />
-        <Stack.Screen name="shelf-audit" options={{ title: 'Shelf Audit Mode' }} />
+        <Stack.Screen name="shelf-audit" options={{ title: 'Count a Shelf' }} />
+        <Stack.Screen name="audit-review" options={{ title: 'Check the Count' }} />
         {/* Self-contained — these only ever go back, so a modal is right. */}
         <Stack.Screen name="bulk-intake" options={{ title: 'Bulk Donation', presentation: 'modal' }} />
         <Stack.Screen name="item-detail" options={{ title: 'Item Details', presentation: 'modal' }} />
         <Stack.Screen name="packing-checklist" options={{ title: 'Packing Checklist', presentation: 'card' }} />
         <Stack.Screen name="expiring-soon" options={{ title: 'Expiring Soon', presentation: 'card' }} />
         <Stack.Screen name="reports" options={{ title: 'Reports', presentation: 'card' }} />
+        <Stack.Screen name="team" options={{ title: 'Team', presentation: 'card' }} />
+        <Stack.Screen name="ready-boxes" options={{ title: 'Ready to go', presentation: 'card' }} />
         {/* Full-bleed camera, so no header and no cream background behind it. */}
         <Stack.Screen
           name="barcode-scan"

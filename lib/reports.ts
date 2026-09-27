@@ -2,7 +2,7 @@ import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import { log } from './log';
 import { supabase } from './supabase';
-import type { BulkLot, ExitReason, InventoryItem, PantryLocation } from './store';
+import type { BulkLot, InventoryItem, PantryLocation, StockExitReason } from './store';
 
 /**
  * The numbers a pantry has to report, and a way to get them out.
@@ -19,7 +19,7 @@ export interface StockExit {
   item_name: string;
   category: string;
   count: number;
-  reason: ExitReason;
+  reason: StockExitReason;
   occurred_at: string;
 }
 

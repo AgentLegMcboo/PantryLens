@@ -1,6 +1,8 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import type { ImagePickerAsset } from 'expo-image-picker';
+import { cropRect } from './box-geometry';
 import { describeImage, log } from './log';
+import type { DetectionBox } from './scan-normalize';
 
 /**
  * Gets a camera photo down to something worth uploading.
@@ -83,4 +85,35 @@ export async function preparePhoto(asset: ImagePickerAsset): Promise<PreparedPho
     log.error('scan', 'resize failed, using the original photo', err);
     return fallback(asset);
   }
+}
+
+/**
+ * Cuts one detection box out of a photo and returns it as base64 JPEG.
+ *
+ * `edge` is the long edge of the result. With `allowUpscale` off, a crop that is
+ * already smaller is left alone: enlarging adds bytes, not detail. That matters
+ * when the crop goes to the model, and doesn't when it becomes a 44px thumbnail.
+ */
+export async function cropRegion(
+  source: { uri: string; width: number; height: number },
+  box: DetectionBox,
+  options: { padding: number; edge: number; allowUpscale: boolean; quality: number },
+): Promise<string | null> {
+  const rect = cropRect(box, source.width, source.height, options.padding);
+  if (!rect) return null;
+
+  const context = ImageManipulator.manipulate(source.uri);
+  context.crop(rect);
+
+  if (options.allowUpscale || Math.max(rect.width, rect.height) > options.edge) {
+    context.resize(rect.width >= rect.height ? { width: options.edge } : { height: options.edge });
+  }
+
+  const rendered = await context.renderAsync();
+  const result = await rendered.saveAsync({
+    base64: true,
+    compress: options.quality,
+    format: SaveFormat.JPEG,
+  });
+  return result.base64 ?? null;
 }

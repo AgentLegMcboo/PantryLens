@@ -149,3 +149,45 @@ export function toPixels(box: DetectionBox, frame: Frame): Rect {
     h: box.height * frame.height,
   };
 }
+
+/** Below this a crop has nothing worth reading, and the manipulator may refuse it. */
+const MIN_CROP_PX = 8;
+
+/**
+ * Where to cut a detection box out of its photo, in whole pixels.
+ *
+ * Shared by item thumbnails and by identifying a hand-drawn box. Both hand the
+ * result straight to expo-image-manipulator, which rejects a crop that runs even
+ * one pixel past the image. So the four EDGES are clamped and then floored or
+ * ceiled, instead of rounding origin and size separately. The old thumbnail code
+ * did the latter, where 100.5 rounds to 101 and 1179.5 to 1180, a 1281px crop
+ * of a 1280px photo.
+ *
+ * `padding` is a fraction of the box's own size added on every side, so a label
+ * running past the box edge is still in the crop. Returns null when what is left
+ * is too small to use.
+ */
+export function cropRect(
+  box: DetectionBox,
+  photoWidth: number,
+  photoHeight: number,
+  padding = 0,
+): { originX: number; originY: number; width: number; height: number } | null {
+  const W = Math.floor(photoWidth);
+  const H = Math.floor(photoHeight);
+  const clamp = (v: number, max: number) => Math.min(max, Math.max(0, v));
+
+  const padX = box.width * padding;
+  const padY = box.height * padding;
+
+  const x0 = Math.floor(clamp((box.left - padX) * W, W));
+  const y0 = Math.floor(clamp((box.top - padY) * H, H));
+  const x1 = Math.ceil(clamp((box.left + box.width + padX) * W, W));
+  const y1 = Math.ceil(clamp((box.top + box.height + padY) * H, H));
+
+  const width = x1 - x0;
+  const height = y1 - y0;
+  if (width < MIN_CROP_PX || height < MIN_CROP_PX) return null;
+
+  return { originX: x0, originY: y0, width, height };
+}

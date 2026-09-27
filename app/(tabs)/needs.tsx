@@ -1,5 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { COLORS } from "../../constants/theme";
@@ -40,13 +41,25 @@ const EXAMPLES: Record<string, string> = {
 };
 
 export default function NeedsScreen() {
+  const router = useRouter();
   const { inventory, bulkLots, boxRules, thresholds, settings } = usePantryStore();
+
+  // The pantry's own drop-off details. This line used to be hardcoded, so every
+  // pantry's message sent donors to the same invented rear entrance. With
+  // nothing set it is left out: no address beats a wrong one.
+  const dropoff = [settings.dropoffLocation.trim(), settings.dropoffHours.trim()]
+    .filter(Boolean)
+    .join(", ");
+  // The pantry's own target, not the number 12 that used to sit here. Every
+  // "stopping boxes going out" figure below is measured against it, so a pantry
+  // serving sixty families no longer asks donors for enough food for twelve.
   const plan = computeAllocation(
     inventory,
     boxRules,
-    12,
+    settings.boxTarget,
     settings.defaultFamilySize,
     bulkLots,
+    { warningDays: settings.expirationWarningDays },
   );
 
   const [flyerOpen, setFlyerOpen] = useState(false);
@@ -65,9 +78,11 @@ export default function NeedsScreen() {
 
   Object.keys(thresholds).forEach((cat) => {
     if (cat === plan.limitingCategory) return;
-    const current = inventory
-      .filter((i) => i.category === cat)
-      .reduce((s, i) => s + i.count, 0);
+    // The allocator's own totals, not a fresh count of the shelf. Counting the
+    // shelf raw asked donors for food the pantry already had in a weighed bulk
+    // lot, and stayed quiet about categories whose only stock was out of date
+    // or waiting on an inspection.
+    const current = plan.categoryTotals[cat as keyof typeof plan.categoryTotals] ?? 0;
     const min = (thresholds as any)[cat];
     if (current < min) {
       deficits.push({
@@ -81,7 +96,9 @@ export default function NeedsScreen() {
   const flyerText = `🛒 MOST NEEDED ITEMS — ${settings.pantryName.toUpperCase()}
 ${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
 
-Our pantry is short on:
+Our pantry is short on the food for ${settings.boxTarget} family box${
+    settings.boxTarget === 1 ? "" : "es"
+  }:
 
 ${deficits
   .map(
@@ -90,8 +107,7 @@ ${deficits
   )
   .join("\n\n")}
 
-Drop-off: Pantry rear entrance, Mon–Fri 9am–4pm
-Thank you for helping feed our neighbours ❤️`;
+${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbours ❤️`;
 
   const handleCopy = async () => {
     await Clipboard.setStringAsync(flyerText);
@@ -137,6 +153,25 @@ Thank you for helping feed our neighbours ❤️`;
               Built from what is actually on your shelves, so donors bring what
               you need instead of what they guess.
             </Text>
+            {/* The assumption behind every "stopping boxes going out" figure,
+                said out loud. It was the number 12, hardcoded, and a pantry
+                reading these amounts had no way to know what they were for. */}
+            <Pressable
+              onPress={() => router.push("/(tabs)/settings")}
+              accessibilityRole="button"
+              className="mt-3 flex-row items-center gap-2"
+            >
+              <MaterialCommunityIcons
+                name="package-variant-closed"
+                size={14}
+                color={COLORS.textSecondary}
+              />
+              <Text variant="micro" tone="soft" className="flex-1">
+                Amounts are for {settings.boxTarget} box
+                {settings.boxTarget === 1 ? "" : "es"} of {settings.defaultFamilySize}
+                . Change that in Settings.
+              </Text>
+            </Pressable>
           </View>
         </FadeInUp>
 
@@ -206,6 +241,25 @@ Thank you for helping feed our neighbours ❤️`;
             {flyerText}
           </Text>
         </Panel>
+        {!dropoff && (
+          <Pressable
+            onPress={() => {
+              setFlyerOpen(false);
+              router.push("/(tabs)/settings");
+            }}
+            accessibilityRole="button"
+            className="flex-row items-center gap-2 px-1 py-1"
+          >
+            <MaterialCommunityIcons
+              name="map-marker-plus-outline"
+              size={16}
+              color={COLORS.primaryDark}
+            />
+            <Text variant="micro" tone="brand" className="flex-1 font-semibold">
+              Add your drop-off location and hours in Settings so donors know where to go.
+            </Text>
+          </Pressable>
+        )}
         <Button
           label={copied ? "Copied" : "Copy it"}
           block

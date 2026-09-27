@@ -13,6 +13,7 @@ import {
   View,
 } from 'react-native';
 import { COLORS } from '../../constants/theme';
+import { isPastDate, windowEndISO } from '../../lib/expiry';
 import { cueTap, cueWarn } from '../../lib/feedback';
 import { PlacesManager } from '../../components/places-manager';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -181,15 +182,25 @@ export default function InventoryScreen() {
   const [newCount, setNewCount] = useState(1);
   const [newExp, setNewExp] = useState('');
 
-  const warningLimit = new Date();
-  warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
-  const warningStr = warningLimit.toISOString().split('T')[0];
+  const warningStr = windowEndISO(settings.expirationWarningDays);
+
+  /**
+   * Stock that cannot go into a box as things stand.
+   *
+   * Box building excludes damaged AND out-of-date stock, so this filter has to
+   * mean the same thing or the two screens disagree in front of the volunteer:
+   * Build refusing to use a tin it can see, Inventory showing that tin as
+   * ordinary stock. Past dates used to be invisible here — only the condition
+   * flag counted, and that flag is written at intake and never revisited.
+   */
+  const needsAttention = (item: InventoryItem) =>
+    !isUsableCondition(item.condition) || isPastDate(item.expiration);
 
   const filteredItems = inventory
     .filter(item => {
       const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
       const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
-      const matchFlag = !onlyFlagged || !isUsableCondition(item.condition);
+      const matchFlag = !onlyFlagged || needsAttention(item);
       return matchCat && matchSearch && matchFlag;
     })
     .sort((a, b) => {
@@ -206,7 +217,7 @@ export default function InventoryScreen() {
       return byDate !== 0 ? byDate : (a.date_added || '').localeCompare(b.date_added || '');
     });
 
-  const flaggedCount = inventory.filter(i => !isUsableCondition(i.condition)).length;
+  const flaggedCount = inventory.filter(needsAttention).length;
 
   /**
    * The list, cut into sections.
@@ -339,8 +350,11 @@ export default function InventoryScreen() {
   };
 
   const renderItemRow = ({ item }: { item: InventoryItem }) => {
-    const isExpiringSoon = !!item.expiration && item.expiration <= warningStr;
+    const pastDate = isPastDate(item.expiration);
+    const expiringSoon = !pastDate && !!item.expiration && item.expiration <= warningStr;
     const damaged = !isUsableCondition(item.condition);
+    // Both keep it out of the boxes, so both get the red treatment.
+    const blocked = damaged || pastDate;
     const placeName = locations.find(l => l.id === item.location_id)?.name;
 
     const isSelected = !!selected[item.id];
@@ -375,7 +389,7 @@ export default function InventoryScreen() {
             <ItemThumb
               imageUrl={item.image_url}
               category={item.category}
-              tone={damaged ? 'critical' : 'brand'}
+              tone={blocked ? 'critical' : 'brand'}
             />
 
             <View className="flex-1">
@@ -399,14 +413,18 @@ export default function InventoryScreen() {
                 </View>
               ) : null}
 
-              {/* At most one badge. Damage outranks expiry — it blocks packing. */}
+              {/* At most one badge, worst first. "Use first" and "Out of date"
+                  had been the same badge, which is the difference between food
+                  to pack this week and food that will never go in a box. */}
               {damaged ? (
                 <Badge
                   label={CONDITION_LABELS[item.condition || 'ok']}
                   tone="critical"
                   className="mt-2"
                 />
-              ) : isExpiringSoon ? (
+              ) : pastDate ? (
+                <Badge label="Out of date" tone="critical" className="mt-2" />
+              ) : expiringSoon ? (
                 <Badge label="Use first" tone="warn" className="mt-2" />
               ) : null}
             </View>
@@ -603,7 +621,8 @@ export default function InventoryScreen() {
               tone={onlyFlagged ? 'on' : 'default'}
               className="flex-1 font-semibold"
             >
-              {flaggedCount} {flaggedCount === 1 ? 'item needs' : 'items need'} a look
+              {flaggedCount} {flaggedCount === 1 ? 'item is' : 'items are'} out of date or
+              damaged
             </Text>
             <Text variant="micro" tone={onlyFlagged ? 'on' : 'soft'} className="font-bold">
               {onlyFlagged ? 'Show all' : 'Show them'}

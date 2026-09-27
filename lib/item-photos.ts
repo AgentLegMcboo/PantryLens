@@ -1,5 +1,6 @@
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { log } from './log';
+import { cropRegion } from './photo';
 import { supabase } from './supabase';
 import { ITEM_PHOTO_BUCKET } from './store';
 import type { DetectionBox } from './scan-normalize';
@@ -94,37 +95,14 @@ function base64ToArrayBuffer(input: string): ArrayBuffer {
 
 /** Crops one item out of its photo and returns a small JPEG as bytes. */
 async function renderThumb(job: PhotoJob): Promise<ArrayBuffer | null> {
-  const { box, width, height } = job;
-
-  // The box arrives as fractions; the manipulator works in pixels.
-  const padX = box.width * PADDING;
-  const padY = box.height * PADDING;
-
-  const originX = Math.max(0, (box.left - padX) * width);
-  const originY = Math.max(0, (box.top - padY) * height);
-  const cropW = Math.min(width - originX, (box.width + padX * 2) * width);
-  const cropH = Math.min(height - originY, (box.height + padY * 2) * height);
-
-  // A box that came back degenerate would make the manipulator throw.
-  if (cropW < 8 || cropH < 8) return null;
-
-  const context = ImageManipulator.manipulate(job.uri);
-  context.crop({
-    originX: Math.round(originX),
-    originY: Math.round(originY),
-    width: Math.round(cropW),
-    height: Math.round(cropH),
-  });
-  context.resize(cropW >= cropH ? { width: THUMB_EDGE } : { height: THUMB_EDGE });
-
-  const rendered = await context.renderAsync();
-  const result = await rendered.saveAsync({
-    base64: true,
-    compress: THUMB_QUALITY,
-    format: SaveFormat.JPEG,
-  });
-
-  return result.base64 ? base64ToArrayBuffer(result.base64) : null;
+  // Always resized to the thumbnail edge, small crops included: a thumbnail is
+  // for looking at, and a consistent size is what the list renders best.
+  const base64 = await cropRegion(
+    { uri: job.uri, width: job.width, height: job.height },
+    job.box,
+    { padding: PADDING, edge: THUMB_EDGE, allowUpscale: true, quality: THUMB_QUALITY },
+  );
+  return base64 ? base64ToArrayBuffer(base64) : null;
 }
 
 /**

@@ -18,11 +18,19 @@ export function Segmented<T extends string | number>({
   options,
   value,
   onChange,
+  disabled,
   className,
 }: {
   options: { value: T; label: string; icon?: keyof typeof MaterialCommunityIcons.glyphMap }[];
   value: T;
   onChange: (next: T) => void;
+  /**
+   * Shows the answer without offering to change it — for a setting somebody is
+   * allowed to see but not to set. Deliberately not dimmed: the chosen option
+   * is still information, and greying it out would make a live setting look
+   * broken.
+   */
+  disabled?: boolean;
   className?: string;
 }) {
   return (
@@ -33,7 +41,8 @@ export function Segmented<T extends string | number>({
           <Pressable
             key={String(option.value)}
             accessibilityRole="tab"
-            accessibilityState={{ selected: active }}
+            accessibilityState={{ selected: active, disabled: !!disabled }}
+            disabled={disabled}
             onPress={() => {
               if (active) return;
               cueTap();

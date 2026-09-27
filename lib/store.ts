@@ -1,6 +1,10 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
+import type { AuditWrite, CountedRow } from './audit';
+import type { StartedScan } from './scan-history';
+import { itemsPerBox, normaliseRules } from './box-presets';
 import { log } from './log';
+import { ADMIN_ONLY_MESSAGE, asRole, canEditPantry, type PantryRole } from './permissions';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 
@@ -124,11 +128,114 @@ export interface PantryLocation {
  */
 export type ExitReason = 'given_out' | 'discarded' | 'correction';
 
+/**
+ * Every reason a stock_exits row can carry. 'packed' is written by pack_boxes,
+ * never chosen by a volunteer, which is why it isn't part of ExitReason.
+ */
+export type StockExitReason = ExitReason | 'packed';
+
+/**
+ * What the server did with a counted shelf.
+ *
+ * `skipped` and `conflicts` are the lines it refused to apply because the row
+ * had changed since the count was reconciled — somebody shelving a donation
+ * onto that shelf while the volunteer walked back. `untouched` is rows on the
+ * shelf the count never mentioned, which are deliberately left alone.
+ */
+export interface AuditResult {
+  audit_id: string;
+  location_name: string;
+  units_before: number;
+  units_after: number;
+  corrected: number;
+  added: number;
+  removed: number;
+  unchanged: number;
+  skipped: number;
+  untouched: number;
+  conflicts: { name: string; reason: 'changed' | 'gone'; expected?: number; actual?: number }[];
+}
+
+/** One line of a packed checklist: a real item, or units from a weighed lot. */
+export interface PackLine {
+  kind: 'item' | 'lot';
+  id: string;
+  count: number;
+}
+
+/** What the server did with a pack. See supabase/migrations/..._pack_boxes.sql. */
+export interface PackResult {
+  units_taken: number;
+  /**
+   * Lines the shelf could not fully cover because the stock was already gone
+   * (usually because someone else packed it first). `taken` is what was
+   * actually deducted.
+   */
+  shortfalls: { id: string; wanted: number; taken: number }[];
+  /** True when this run id had already been packed and nothing new happened. */
+  replayed: boolean;
+}
+
+/** A packed batch still waiting, in whole or in part, for families to collect. */
+export interface PackRun {
+  id: string;
+  box_name: string | null;
+  boxes: number;
+  boxes_collected: number;
+  units_taken: number;
+  /** What one box holds, by category. Null for packs made by an older build. */
+  per_box: BoxRules | null;
+  created_at: string;
+  /** The batch's own name ("Garcia family"). Null means show the box type. */
+  label: string | null;
+  /** A batch folder, or null for unfiled. */
+  folder_id: string | null;
+}
+
+export interface CollectResult {
+  /** False when the batch had already moved on; nothing was recorded. */
+  applied: boolean;
+  boxes: number;
+  boxes_collected: number;
+}
+
 export const EXIT_LABELS: Record<ExitReason, string> = {
   given_out: 'Given out',
   discarded: 'Thrown away',
   correction: 'Removed',
 };
+
+/**
+ * A named, reusable box: what goes in it, and whether that scales with the
+ * household. See supabase/migrations/..._box_templates.sql.
+ */
+export interface BoxTemplate {
+  id: string;
+  pantry_id: string;
+  name: string;
+  rules: BoxRules;
+  /** Amounts are for a family of 4 and scale with household size. Off for per-person kits. */
+  scales_with_family: boolean;
+  /** The pantry's default: what Needs, the dashboard and Build start from. */
+  is_default: boolean;
+  /** A box-type folder, or null for unfiled. */
+  folder_id: string | null;
+}
+
+/**
+ * Box types and packed batches each have their own folders. They are separate
+ * jobs (organising recipes vs organising what's waiting at the door) and the
+ * database refuses to mix them.
+ */
+export type BoxFolderKind = 'template' | 'packed';
+
+export interface BoxFolder {
+  id: string;
+  pantry_id: string;
+  kind: BoxFolderKind;
+  name: string;
+  sort_order: number;
+}
 
 export type LbsPerUnit = Record<Category, number>;
 
@@ -163,12 +270,51 @@ export interface CategoryThresholds {
   baby: number;
 }
 
+/**
+ * Boxes per distribution, before a pantry says otherwise.
+ *
+ * 12 because that is the number the code has always assumed. It is a starting
+ * point now rather than a fact.
+ */
+export const DEFAULT_BOX_TARGET = 12;
+
 export interface Settings {
   pantryId: string | null;
   pantryName: string;
   expirationWarningDays: number;
   defaultFamilySize: number;
-  userRole: string;
+  /**
+   * How many boxes this pantry expects to send out in a distribution.
+   *
+   * Needs measures every "stopping boxes going out" shortfall against it, and
+   * Build opens on it. It was the literal number 12 in three separate files —
+   * so every flyer a pantry printed asked donors for enough food for twelve
+   * families, whether they served six or sixty, and nobody had chosen that.
+   */
+  boxTarget: number;
+  /** What this signed-in person may do here. Enforced by the database, not by this. */
+  userRole: PantryRole;
+  /** The code new volunteers type to join. Read-only; only create_pantry sets it. */
+  inviteCode: string;
+  /** Where donors bring food ("Rear entrance, 12 Main St"). Empty until set. */
+  dropoffLocation: string;
+  /** When they can bring it ("Mon–Fri, 9am–4pm"). Empty until set. */
+  dropoffHours: string;
+}
+
+/**
+ * One person on the pantry's roster.
+ *
+ * Comes from list_pantry_members, not from a table read: pantry_members holds
+ * user ids, and the email that makes an id a person lives in auth.users, which
+ * no client can read. The function joins the two for members of that pantry
+ * only, so a roster never becomes a directory.
+ */
+export interface PantryMember {
+  user_id: string;
+  email: string;
+  role: PantryRole;
+  joined_at: string;
 }
 
 export interface Activity {
@@ -209,6 +355,13 @@ const DEFAULT_THRESHOLDS: CategoryThresholds = { grain: 15, vegetable: 15, prote
  * and gives sign-out something to close.
  */
 let pantryChannel: ReturnType<typeof supabase.channel> | null = null;
+
+/**
+ * Hand-outs go to the server one at a time, in the order they were tapped.
+ * Each one says how many boxes it expects are already collected, and that only
+ * holds if the tap before it has landed.
+ */
+let collectQueue: Promise<unknown> = Promise.resolve();
 let subscribedPantryId: string | null = null;
 
 function subscribeToPantry(pantryId: string, onChange: () => void) {
@@ -227,6 +380,9 @@ function subscribeToPantry(pantryId: string, onChange: () => void) {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'bulk_lots', filter }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'activities', filter }, onChange)
     .on('postgres_changes', { event: '*', schema: 'public', table: 'locations', filter }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'box_templates', filter }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'pack_runs', filter }, onChange)
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'box_folders', filter }, onChange)
     .subscribe();
 }
 
@@ -265,8 +421,14 @@ interface AppState {
   settings: Settings;
   activities: Activity[];
   locations: PantryLocation[];
+  boxTemplates: BoxTemplate[];
+  /** Packed boxes that families haven't collected yet. */
+  readyBoxes: PackRun[];
+  boxFolders: BoxFolder[];
   isLoaded: boolean;
   currentDraft: InventoryItem[];
+  /** The pantry's roster. Empty until Team is opened or a refresh fills it. */
+  members: PantryMember[];
   /** The photos the current draft was read from, so review can point at them. */
   currentScanPhotos: ScanPhoto[];
   /**
@@ -280,6 +442,21 @@ interface AppState {
   pendingBarcode: PendingBarcode | null;
   /** Who the draft being reviewed came from, carried from the intake screen. */
   draftSource: SourceOrg | null;
+  /**
+   * The open scan record the current draft belongs to, if one was opened.
+   *
+   * Null is a normal state, not an error: scan history is best-effort, and a
+   * review whose record failed to open still saves exactly as it always did.
+   */
+  currentScan: StartedScan | null;
+  /**
+   * A shelf that has been counted but not yet reconciled.
+   *
+   * Parked here for the same reason a scanned barcode is: the count happens on
+   * one pushed screen and is read on the next, and a pushed screen has no way
+   * to hand a value forward. Cleared once it has been applied or abandoned.
+   */
+  auditDraft: { locationId: string; photos: number; counted: CountedRow[] } | null;
 
   // Actions
   initialize: () => Promise<void>;
@@ -287,6 +464,11 @@ interface AppState {
   signOut: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
   setActivePantry: (pantryId: string, pantryName: string, role: string) => void;
+
+  fetchMembers: () => Promise<void>;
+  setMemberRole: (userId: string, role: 'admin' | 'volunteer') => Promise<void>;
+  transferOwnership: (userId: string) => Promise<void>;
+  removeMember: (userId: string) => Promise<void>;
 
   addBulkLot: (lot: Omit<BulkLot, 'id'>) => Promise<void>;
   deleteBulkLot: (id: string) => Promise<void>;
@@ -298,24 +480,90 @@ interface AppState {
   /** Where a freshly scanned item of this category should be filed. */
   defaultLocationFor: (category: Category) => string | null;
   recordExit: (ids: string[], reason: ExitReason) => Promise<void>;
+  applyShelfAudit: (locationId: string, photos: number, writes: AuditWrite[]) => Promise<AuditResult>;
   deleteLocation: (id: string) => Promise<void>;
 
-  addItems: (items: Partial<InventoryItem>[], source?: 'donation' | 'shelf_audit' | 'manual') => Promise<void>;
+  addItems: (
+    items: Partial<InventoryItem>[],
+    source?: 'donation' | 'shelf_audit' | 'manual',
+    /** The scan record these rows came from, when there is one. */
+    scanId?: string | null,
+  ) => Promise<void>;
   updateItem: (id: string, updates: Partial<InventoryItem>) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   deleteItems: (ids: string[]) => Promise<void>;
   updateItems: (ids: string[], updates: Partial<InventoryItem>) => Promise<void>;
   getItem: (id: string) => InventoryItem | undefined;
-  deductItems: (itemsToDeduct: { id: string; count: number }[]) => Promise<void>;
+  packBoxes: (pack: {
+    runId: string;
+    boxCount: number;
+    lines: PackLine[];
+    boxName?: string | null;
+    perBox?: BoxRules | null;
+  }) => Promise<PackResult>;
+  collectBoxes: (runId: string, count: number) => Promise<CollectResult>;
+  updatePackRun: (id: string, changes: { label: string | null; folderId: string | null }) => Promise<void>;
+  addBoxFolder: (kind: BoxFolderKind, name: string) => Promise<BoxFolder>;
+  renameBoxFolder: (id: string, name: string) => Promise<void>;
+  deleteBoxFolder: (id: string) => Promise<void>;
   
   updateSettings: (updates: Partial<Settings>) => Promise<void>;
-  updateBoxRules: (updates: Partial<BoxRules>) => Promise<void>;
+  saveBoxTemplate: (box: {
+    id?: string;
+    name: string;
+    rules: BoxRules;
+    scalesWithFamily: boolean;
+    folderId?: string | null;
+  }) => Promise<BoxTemplate>;
+  deleteBoxTemplate: (id: string) => Promise<void>;
+  setDefaultBoxTemplate: (id: string) => Promise<void>;
   updateThresholds: (updates: Partial<CategoryThresholds>) => Promise<void>;
   
   setDraft: (items: InventoryItem[], photos?: ScanPhoto[]) => void;
   setPendingBarcode: (value: PendingBarcode | null) => void;
   setDraftSource: (value: SourceOrg | null) => void;
+  setAuditDraft: (value: AppState['auditDraft']) => void;
+  setCurrentScan: (value: StartedScan | null) => void;
   addActivity: (text: string, icon?: string) => Promise<void>;
+}
+
+/**
+ * Writes to the pantry row and insists on knowing whether it landed.
+ *
+ * Only a manager may change a pantry, and PostgREST reports row-level security
+ * refusing an UPDATE as success with zero rows rather than as an error. A plain
+ * `.update()` is therefore indistinguishable from one that worked. Every caller
+ * here sets local state first so the control feels immediate, which means
+ * without this check a volunteer watches their change stick and then vanish at
+ * the next refresh, with nothing ever having said no.
+ *
+ * `revert` puts the optimistic change back. The thrown error is the sentence
+ * the screen shows.
+ */
+async function writePantryRow(
+  patch: Record<string, unknown>,
+  pantryId: string,
+  role: PantryRole,
+  revert: () => void,
+): Promise<void> {
+  // Saves a round trip whose only possible answer is no, and lets the screen
+  // say why instead of "please try again".
+  if (!canEditPantry(role)) {
+    revert();
+    throw new Error(ADMIN_ONLY_MESSAGE);
+  }
+
+  const { data, error } = await supabase
+    .from('pantries')
+    .update(patch)
+    .eq('id', pantryId)
+    .select('id');
+
+  if (error || !data || data.length === 0) {
+    revert();
+    log.warn('store', `pantry update refused (${Object.keys(patch).join(', ')})`, error ?? 'no rows');
+    throw error ?? new Error(ADMIN_ONLY_MESSAGE);
+  }
 }
 
 export const usePantryStore = create<AppState>((set, get) => ({
@@ -331,15 +579,25 @@ export const usePantryStore = create<AppState>((set, get) => ({
     pantryName: '',
     expirationWarningDays: 30,
     defaultFamilySize: 4,
-    userRole: 'volunteer'
+    boxTarget: DEFAULT_BOX_TARGET,
+    userRole: 'volunteer',
+    inviteCode: '',
+    dropoffLocation: '',
+    dropoffHours: '',
   },
   activities: [],
+  members: [],
   locations: [],
+  boxTemplates: [],
+  readyBoxes: [],
+  boxFolders: [],
   isLoaded: false,
   currentDraft: [],
   currentScanPhotos: [],
   pendingBarcode: null,
   draftSource: null,
+  auditDraft: null,
+  currentScan: null,
 
   initialize: async () => {
     if (__DEV__) {
@@ -374,7 +632,22 @@ export const usePantryStore = create<AppState>((set, get) => ({
           bulkLots: [],
           activities: [],
           locations: [],
-          settings: { ...get().settings, pantryId: null, pantryName: '' },
+          boxTemplates: [],
+          readyBoxes: [],
+          boxFolders: [],
+          members: [],
+          settings: {
+            ...get().settings,
+            pantryId: null,
+            pantryName: '',
+            // Back to the least access. Signing in as somebody else must never
+            // inherit the last person's controls, even for the moment before
+            // their own pantry loads.
+            userRole: 'volunteer',
+            inviteCode: '',
+            dropoffLocation: '',
+            dropoffHours: '',
+          },
           isLoaded: true,
           // Signing out in development drops you back at the intro too, so it is
           // reachable without relaunching.
@@ -392,7 +665,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
       // 1. Get user's pantry
       const { data: members } = await supabase
         .from('pantry_members')
-        .select('pantry_id, role, pantries(name, box_rules, thresholds, lbs_per_unit, settings)')
+        .select('pantry_id, role, pantries(name, invite_code, box_rules, thresholds, lbs_per_unit, settings)')
         .eq('user_id', session.user.id)
         .limit(1)
         .single();
@@ -409,16 +682,21 @@ export const usePantryStore = create<AppState>((set, get) => ({
         // Stored per pantry so every volunteer sees the same windows, and so the
         // numbers survive a relaunch. Merged over defaults, which means a pantry
         // row written before this column existed still reads sensibly.
-        const stored = (pantry.settings || {}) as Record<string, number>;
+        const stored = (pantry.settings || {}) as Record<string, unknown>;
+        const text = (v: unknown) => (typeof v === 'string' ? v : '');
 
         set(state => ({
           settings: {
             ...state.settings,
             pantryId,
             pantryName: pantry.name,
-            userRole: members.role,
-            expirationWarningDays: stored.expiration_warning_days ?? 30,
-            defaultFamilySize: stored.default_family_size ?? 4,
+            userRole: asRole(members.role),
+            inviteCode: pantry.invite_code ?? '',
+            expirationWarningDays: (stored.expiration_warning_days as number) ?? 30,
+            defaultFamilySize: (stored.default_family_size as number) ?? 4,
+            boxTarget: (stored.box_target as number) ?? DEFAULT_BOX_TARGET,
+            dropoffLocation: text(stored.dropoff_location),
+            dropoffHours: text(stored.dropoff_hours),
           },
           boxRules: (pantry.box_rules as BoxRules) || DEFAULT_BOX_RULES,
           thresholds: (pantry.thresholds as CategoryThresholds) || DEFAULT_THRESHOLDS,
@@ -435,6 +713,9 @@ export const usePantryStore = create<AppState>((set, get) => ({
           { data: lotData },
           { data: actData },
           { data: locData },
+          { data: tplData },
+          { data: runData },
+          { data: folderData },
         ] = await Promise.all([
           supabase
             .from('inventory')
@@ -460,6 +741,24 @@ export const usePantryStore = create<AppState>((set, get) => ({
             // alphabetical.
             .order('sort_order', { ascending: true })
             .order('name', { ascending: true }),
+          supabase
+            .from('box_templates')
+            .select('id, pantry_id, name, rules, scales_with_family, is_default, folder_id')
+            .eq('pantry_id', pantryId)
+            .order('is_default', { ascending: false })
+            .order('name', { ascending: true }),
+          supabase
+            .from('pack_runs')
+            .select('id, box_name, boxes, boxes_collected, units_taken, per_box, created_at, label, folder_id')
+            .eq('pantry_id', pantryId)
+            .eq('ready', true)
+            .order('created_at', { ascending: false }),
+          supabase
+            .from('box_folders')
+            .select('id, pantry_id, kind, name, sort_order')
+            .eq('pantry_id', pantryId)
+            .order('sort_order', { ascending: true })
+            .order('name', { ascending: true }),
         ]);
 
         log.debug(
@@ -468,15 +767,37 @@ export const usePantryStore = create<AppState>((set, get) => ({
             `${lotData?.length ?? 0} bulk lots, ${actData?.length ?? 0} activities`,
         );
 
+        const boxTemplates = ((tplData as any[]) || []).map(t => ({
+          ...t,
+          rules: normaliseRules(t.rules),
+        })) as BoxTemplate[];
+        const defaultBox = boxTemplates.find(t => t.is_default);
+        const readyBoxes = ((runData as any[]) || []).map(r => ({
+          ...r,
+          per_box: r.per_box ? normaliseRules(r.per_box) : null,
+        })) as PackRun[];
+
         set({
           inventory: (invData as InventoryItem[]) || [],
           bulkLots: (lotData as BulkLot[]) || [],
           activities: (actData as Activity[]) || [],
           locations: (locData as PantryLocation[]) || [],
+          boxTemplates,
+          readyBoxes,
+          boxFolders: (folderData as BoxFolder[]) || [],
+          // The default box IS the pantry's box rules now. Everything that
+          // already reads boxRules (Needs, the dashboard) follows it with no
+          // changes. The pantry row's own box_rules stays as the fallback for a
+          // pantry that somehow has no templates.
+          ...(defaultBox ? { boxRules: defaultBox.rules } : null),
           isLoaded: true
         });
 
         subscribeToPantry(pantryId, () => scheduleRefetch(() => get().fetchData()));
+
+        // Not in the batch above: the roster is a function call, it is only
+        // read on the Team screen, and it must not be able to fail the launch.
+        get().fetchMembers().catch(() => {});
 
       } else {
         // User has no pantry yet
@@ -533,14 +854,106 @@ export const usePantryStore = create<AppState>((set, get) => ({
     if (!settings.pantryId) return;
     const next = { ...lbsPerUnit, ...updates };
     set({ lbsPerUnit: next });
-    await supabase.from('pantries').update({ lbs_per_unit: next }).eq('id', settings.pantryId);
+    await writePantryRow({ lbs_per_unit: next }, settings.pantryId, settings.userRole, () =>
+      set({ lbsPerUnit }),
+    );
   },
 
   setActivePantry: (pantryId: string, pantryName: string, role: string) => {
     set(state => ({
-      settings: { ...state.settings, pantryId, pantryName, userRole: role }
+      settings: { ...state.settings, pantryId, pantryName, userRole: asRole(role) }
     }));
     get().fetchData();
+  },
+
+  /**
+   * The roster, with the emails that make user ids into people.
+   *
+   * Never a table read: pantry_members has no name or email in it, and the
+   * emails live in auth.users where no client may look. list_pantry_members
+   * joins them for one pantry, for its own members only.
+   */
+  fetchMembers: async () => {
+    const { settings } = get();
+    if (!settings.pantryId) return;
+
+    const { data, error } = await supabase.rpc('list_pantry_members', {
+      target_pantry: settings.pantryId,
+    });
+    if (error) {
+      log.error('store', 'could not load the pantry roster', error);
+      throw error;
+    }
+
+    const members = ((data as any[]) || []).map(m => ({
+      ...m,
+      role: asRole(m.role),
+    })) as PantryMember[];
+
+    set(state => ({
+      members,
+      // The roster is also the authority on the signed-in user's own role. A
+      // volunteer promoted while the app was open would otherwise keep the
+      // controls they had until the next relaunch — and, worse, someone
+      // demoted would keep seeing controls that now silently fail.
+      settings: {
+        ...state.settings,
+        userRole:
+          members.find(m => m.user_id === state.session?.user?.id)?.role ?? state.settings.userRole,
+      },
+    }));
+  },
+
+  /**
+   * Promote or demote somebody. Owner-only, and the database says so too — the
+   * function raises rather than refusing quietly, so a failure here is an
+   * error with a sentence in it.
+   */
+  setMemberRole: async (userId: string, role: 'admin' | 'volunteer') => {
+    const { settings } = get();
+    if (!settings.pantryId) return;
+
+    const { error } = await supabase.rpc('set_member_role', {
+      target_pantry: settings.pantryId,
+      target_user: userId,
+      new_role: role,
+    });
+    if (error) {
+      log.error('store', 'could not change a role', error);
+      throw error;
+    }
+    await get().fetchMembers();
+  },
+
+  /** Hands the pantry over and steps down to manager, in one transaction. */
+  transferOwnership: async (userId: string) => {
+    const { settings } = get();
+    if (!settings.pantryId) return;
+
+    const { error } = await supabase.rpc('transfer_pantry_ownership', {
+      target_pantry: settings.pantryId,
+      target_user: userId,
+    });
+    if (error) {
+      log.error('store', 'could not transfer the pantry', error);
+      throw error;
+    }
+    await get().fetchMembers();
+  },
+
+  removeMember: async (userId: string) => {
+    const { settings } = get();
+    if (!settings.pantryId) return;
+
+    const { error } = await supabase.rpc('remove_pantry_member', {
+      target_pantry: settings.pantryId,
+      target_user: userId,
+    });
+    if (error) {
+      log.error('store', 'could not remove that member', error);
+      throw error;
+    }
+    await get().fetchMembers();
   },
 
   addLocation: async (name: string) => {
@@ -637,6 +1050,43 @@ export const usePantryStore = create<AppState>((set, get) => ({
     );
   },
 
+  /**
+   * Writes a counted shelf back.
+   *
+   * One server call, not a loop of updates and deletes: an audit is a
+   * replacement over a scope, and a replacement that half-applied would leave
+   * the shelf in a state that is neither the old count nor the new one, with no
+   * way to tell which lines landed. See the apply_shelf_audit migration.
+   */
+  applyShelfAudit: async (locationId: string, photos: number, writes: AuditWrite[]) => {
+    const { settings } = get();
+    if (!settings.pantryId) throw new Error('No pantry is loaded yet. Reopen the app and try again.');
+
+    const { data, error } = await supabase.rpc('apply_shelf_audit', {
+      target_pantry: settings.pantryId,
+      target_location: locationId,
+      photo_count: photos,
+      lines: writes,
+    });
+    if (error) {
+      log.error('store', 'could not apply the shelf audit', error);
+      throw error;
+    }
+
+    const result = data as AuditResult;
+    const net = result.units_after - result.units_before;
+    await get().addActivity(
+      net === 0
+        ? `Counted ${result.location_name} — the books were right`
+        : `Counted ${result.location_name} — ${net > 0 ? '+' : ''}${net} unit${
+            Math.abs(net) === 1 ? '' : 's'
+          }`,
+      'clipboard-check-outline',
+    );
+    await get().fetchData();
+    return result;
+  },
+
   renameLocation: async (id: string, name: string) => {
     const trimmed = name.trim();
     if (!trimmed) return;
@@ -676,7 +1126,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     }
   },
 
-  addItems: async (items: Partial<InventoryItem>[], source = 'donation') => {
+  addItems: async (items: Partial<InventoryItem>[], source = 'donation', scanId = null) => {
     const { settings } = get();
     if (!settings.pantryId) {
       // Silently dropping the write here is how a volunteer ends up believing
@@ -708,6 +1158,9 @@ export const usePantryStore = create<AppState>((set, get) => ({
       source_name: item.source_name ?? null,
       image_url: item.image_url ?? null,
       location_id: item.location_id ?? null,
+      // Where this row came from. Null for anything typed in by hand, and for
+      // every row saved before scan history existed.
+      scan_id: scanId,
     }));
 
     log.debug('store', `inserting ${newItems.length} item(s) into pantry ${settings.pantryId}`, newItems);
@@ -838,55 +1291,194 @@ export const usePantryStore = create<AppState>((set, get) => ({
   },
 
   /**
-   * Draws packed stock back out.
+   * Takes a packed checklist off the shelf, on the server, in one transaction.
    *
-   * An allocation row is either a real inventory item or a synthetic unit from a
-   * weighed bulk lot, and the two live in different tables. Matching only against
-   * `inventory` meant every id that belonged to a lot fell through silently — you
-   * could pack twenty boxes out of a 60 lb protein drop and the lot never moved.
+   * This used to be a loop on the phone that read each count, subtracted, and
+   * wrote the result back: a lost update whenever two volunteers packed at once
+   * (both read 10, one wrote 6, the other 7, and the shelf claimed 7 with 3
+   * left). It also ignored every write error, and the checklist didn't await
+   * it, so "Boxes packed" appeared whether or not anything was saved.
    *
-   * Still client-side arithmetic rather than an atomic RPC: two volunteers
-   * packing at the same moment can both read the same starting count. That is a
-   * real limit, written down here rather than pretended away.
+   * pack_boxes deducts with `count = count - n` against locked rows, records
+   * each line as given out, and is idempotent on `runId`, so a retry after a
+   * dropped connection cannot take the stock twice.
+   *
+   * Throws on failure. Returns shortfalls rather than throwing when stock ran
+   * out, because by then the boxes are already packed.
    */
-  deductItems: async (itemsToDeduct: { id: string; count: number }[]) => {
-    const { inventory, bulkLots } = get();
-
-    for (const deduct of itemsToDeduct) {
-      if (deduct.count <= 0) continue;
-
-      const item = inventory.find(i => i.id === deduct.id);
-      if (item) {
-        const newCount = Math.max(0, item.count - deduct.count);
-        if (newCount === 0) {
-          await supabase.from('inventory').delete().eq('id', deduct.id);
-        } else {
-          await supabase.from('inventory').update({ count: newCount }).eq('id', deduct.id);
-        }
-        continue;
-      }
-
-      // A weighed lot. Units are the estimate; weight is the recorded truth, so
-      // both come down together and stay consistent with each other.
-      const lot = bulkLots.find(l => l.id === deduct.id);
-      if (lot) {
-        const newUnits = Math.max(0, lot.est_units - deduct.count);
-        const perUnit = lot.est_units > 0 ? lot.weight_lbs / lot.est_units : 0;
-        const newWeight = Math.max(0, Number((newUnits * perUnit).toFixed(2)));
-
-        if (newUnits === 0) {
-          await supabase.from('bulk_lots').delete().eq('id', deduct.id);
-        } else {
-          await supabase
-            .from('bulk_lots')
-            .update({ est_units: newUnits, weight_lbs: newWeight })
-            .eq('id', deduct.id);
-        }
-      }
+  packBoxes: async ({ runId, boxCount, lines, boxName, perBox }) => {
+    const { settings } = get();
+    if (!settings.pantryId) {
+      throw new Error('No pantry is loaded yet. Reopen the app and try again.');
     }
 
-    await get().addActivity(`Packed boxes: deducted items from stock`, 'archive-outline');
+    const { data, error } = await supabase.rpc('pack_boxes', {
+      target_pantry: settings.pantryId,
+      run_id: runId,
+      box_count: boxCount,
+      lines,
+      // What the "Ready to go" list shows for this batch.
+      box_name: boxName ?? null,
+      per_box: perBox ?? null,
+    });
+
+    if (error) {
+      log.error('store', 'pack_boxes was rejected', error);
+      throw error;
+    }
+
+    const result = data as PackResult;
+    log.debug(
+      'store',
+      `packed ${boxCount} box(es): ${result.units_taken} unit(s) taken, ` +
+        `${result.shortfalls.length} shortfall(s)${result.replayed ? ' [replayed]' : ''}`,
+    );
+
     await get().fetchData();
+    return result;
+  },
+
+  /**
+   * Records families collecting boxes from a packed batch.
+   *
+   * The count moves on screen immediately, because the person at the door is
+   * tapping once per family and can't wait on the network each time. The server
+   * calls are queued in tap order, each carrying the count it expects to find.
+   * If one fails, or finds the batch already moved on (another volunteer, or a
+   * retry after a dropped connection), the store re-reads the truth. Taps queued
+   * behind it then fail the same check instead of counting against a stale
+   * number.
+   */
+  collectBoxes: (runId: string, count: number) => {
+    const run = get().readyBoxes.find(r => r.id === runId);
+    if (!run || count < 1) {
+      return Promise.resolve({ applied: false, boxes: run?.boxes ?? 0, boxes_collected: run?.boxes_collected ?? 0 });
+    }
+
+    const expected = run.boxes_collected;
+    const target = Math.min(run.boxes, expected + count);
+    if (target === expected) {
+      return Promise.resolve({ applied: false, boxes: run.boxes, boxes_collected: expected });
+    }
+
+    // A finished batch leaves the list straight away.
+    set({
+      readyBoxes: get().readyBoxes.flatMap(r =>
+        r.id !== runId ? [r] : target >= r.boxes ? [] : [{ ...r, boxes_collected: target }],
+      ),
+    });
+
+    const task = collectQueue.then(async (): Promise<CollectResult> => {
+      const { data, error } = await supabase.rpc('collect_boxes', {
+        run_id: runId,
+        box_count: target - expected,
+        expected_collected: expected,
+      });
+
+      const result = data as CollectResult | null;
+      if (error || !result?.applied) {
+        log.warn('store', `collect_boxes did not apply for ${runId}`, error ?? result);
+        await get().fetchData();
+        if (error) throw error;
+      }
+      return result as CollectResult;
+    });
+
+    collectQueue = task.catch(() => undefined);
+    return task;
+  },
+
+  /**
+   * Names a packed batch and files it.
+   *
+   * Only these two things are editable on a batch, and the database enforces
+   * it. The returned row is checked, not just the error: a row-level-security
+   * refusal on an update looks exactly like success, just with no rows.
+   */
+  updatePackRun: async (id, { label, folderId }) => {
+    const previous = get().readyBoxes;
+    const cleanLabel = label?.trim() ? label.trim() : null;
+
+    set({
+      readyBoxes: previous.map(r =>
+        r.id === id ? { ...r, label: cleanLabel, folder_id: folderId } : r,
+      ),
+    });
+
+    const { data, error } = await supabase
+      .from('pack_runs')
+      .update({ label: cleanLabel, folder_id: folderId })
+      .eq('id', id)
+      .select('id');
+
+    if (error || !data || data.length === 0) {
+      log.error('store', 'could not update pack run', error);
+      set({ readyBoxes: previous });
+      throw error ?? new Error('That batch could not be updated.');
+    }
+  },
+
+  addBoxFolder: async (kind, name) => {
+    const { settings, boxFolders } = get();
+    if (!settings.pantryId) throw new Error('No pantry is loaded yet.');
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Give the folder a name.');
+
+    const { data, error } = await supabase
+      .from('box_folders')
+      .insert({
+        pantry_id: settings.pantryId,
+        kind,
+        name: trimmed,
+        // New folders go at the end, not the top.
+        sort_order: boxFolders.filter(f => f.kind === kind).length,
+      })
+      .select('id, pantry_id, kind, name, sort_order')
+      .single();
+
+    if (error) {
+      log.error('store', 'could not add box folder', error);
+      if (error.code === '23505') throw new Error(`You already have a folder called "${trimmed}".`);
+      throw error;
+    }
+    set({ boxFolders: [...get().boxFolders, data as BoxFolder] });
+    return data as BoxFolder;
+  },
+
+  renameBoxFolder: async (id, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Give the folder a name.');
+    const previous = get().boxFolders;
+    set({ boxFolders: previous.map(f => (f.id === id ? { ...f, name: trimmed } : f)) });
+
+    const { error } = await supabase.from('box_folders').update({ name: trimmed }).eq('id', id);
+    if (error) {
+      log.error('store', 'could not rename box folder', error);
+      set({ boxFolders: previous });
+      if (error.code === '23505') throw new Error(`You already have a folder called "${trimmed}".`);
+      throw error;
+    }
+  },
+
+  /**
+   * Deletes a folder, never what's in it. The database unfiles its box types
+   * and batches (ON DELETE SET NULL), and local state does the same straight
+   * away so nothing is left pointing at a folder that's gone.
+   */
+  deleteBoxFolder: async (id) => {
+    const { boxFolders, boxTemplates, readyBoxes } = get();
+    set({
+      boxFolders: boxFolders.filter(f => f.id !== id),
+      boxTemplates: boxTemplates.map(t => (t.folder_id === id ? { ...t, folder_id: null } : t)),
+      readyBoxes: readyBoxes.map(r => (r.folder_id === id ? { ...r, folder_id: null } : r)),
+    });
+
+    const { error } = await supabase.from('box_folders').delete().eq('id', id);
+    if (error) {
+      log.error('store', 'could not delete box folder', error);
+      set({ boxFolders, boxTemplates, readyBoxes });
+      throw error;
+    }
   },
 
   /**
@@ -906,27 +1498,137 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
     const patch: Record<string, unknown> = {};
     if (updates.pantryName !== undefined) patch.name = updates.pantryName.trim();
-    if (updates.expirationWarningDays !== undefined || updates.defaultFamilySize !== undefined) {
+
+    // The settings column is written as a WHOLE object, so every key goes in
+    // every time. Writing only the keys that changed would replace the object
+    // and wipe the rest: changing the expiry window would silently erase the
+    // drop-off address.
+    const settingsKeys: (keyof Settings)[] = [
+      'expirationWarningDays',
+      'defaultFamilySize',
+      'boxTarget',
+      'dropoffLocation',
+      'dropoffHours',
+    ];
+    if (settingsKeys.some(key => updates[key] !== undefined)) {
       patch.settings = {
         expiration_warning_days: next.expirationWarningDays,
         default_family_size: next.defaultFamilySize,
+        box_target: next.boxTarget,
+        dropoff_location: next.dropoffLocation.trim(),
+        dropoff_hours: next.dropoffHours.trim(),
       };
     }
     if (Object.keys(patch).length === 0) return;
 
-    const { error } = await supabase.from('pantries').update(patch).eq('id', next.pantryId);
-    if (error) {
-      set({ settings: previous }); // don't leave the screen showing a value the server rejected
-      throw error;
+    // Don't leave the screen showing a value the server never took.
+    await writePantryRow(patch, next.pantryId, previous.userRole, () =>
+      set({ settings: previous }),
+    );
+  },
+
+  /**
+   * Creates or updates a box template.
+   *
+   * Replaces updateBoxRules, which wrote one shared set of numbers to the
+   * pantry row, a row only admins may update. A volunteer's change showed on
+   * screen, was refused by the database without complaint, and reverted on the
+   * next refresh. Templates have member policies, and every write here checks
+   * its error.
+   */
+  saveBoxTemplate: async ({ id, name, rules, scalesWithFamily, folderId }) => {
+    const { settings, boxTemplates } = get();
+    if (!settings.pantryId) throw new Error('No pantry is loaded yet. Reopen the app and try again.');
+
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Give the box a name.');
+    const clean = normaliseRules(rules);
+    if (itemsPerBox(clean) === 0) throw new Error('A box needs at least one item in it.');
+
+    const fields = {
+      name: trimmed,
+      rules: clean,
+      scales_with_family: scalesWithFamily,
+      folder_id: folderId ?? null,
+    };
+    const columns = 'id, pantry_id, name, rules, scales_with_family, is_default, folder_id';
+
+    let result;
+    if (id) {
+      result = await supabase
+        .from('box_templates')
+        .update({ ...fields, updated_at: new Date().toISOString() })
+        .eq('id', id)
+        .select(columns)
+        .single();
+    } else {
+      result = await supabase
+        .from('box_templates')
+        .insert({ ...fields, pantry_id: settings.pantryId })
+        .select(columns)
+        .single();
+    }
+
+    if (result.error) {
+      log.error('store', 'could not save box template', result.error);
+      if (result.error.code === '23505') {
+        throw new Error(`You already have a box called "${trimmed}".`);
+      }
+      throw result.error;
+    }
+
+    const saved = { ...(result.data as any), rules: normaliseRules((result.data as any).rules) } as BoxTemplate;
+    set({
+      boxTemplates: id
+        ? boxTemplates.map(t => (t.id === id ? saved : t))
+        : [...boxTemplates, saved],
+      ...(saved.is_default ? { boxRules: saved.rules } : null),
+    });
+    return saved;
+  },
+
+  /**
+   * Deletes a box template. Never the default: Needs and the dashboard measure
+   * against it, so a pantry must always have one. The database refuses too,
+   * and does it silently (a delete that matches no rows), which is why the
+   * returned rows are checked rather than trusting a missing error.
+   */
+  deleteBoxTemplate: async (id: string) => {
+    const previous = get().boxTemplates;
+    const target = previous.find(t => t.id === id);
+    if (!target) return;
+    if (target.is_default) {
+      throw new Error('This is your default box. Make another box the default first.');
+    }
+
+    set({ boxTemplates: previous.filter(t => t.id !== id) });
+
+    const { data, error } = await supabase.from('box_templates').delete().eq('id', id).select('id');
+    if (error || !data || data.length === 0) {
+      log.error('store', 'could not delete box template', error);
+      set({ boxTemplates: previous });
+      throw error ?? new Error('That box could not be deleted.');
     }
   },
 
-  updateBoxRules: async (updates: Partial<BoxRules>) => {
-    const { settings, boxRules } = get();
-    if (!settings.pantryId) return;
-    const newRules = { ...boxRules, ...updates };
-    set({ boxRules: newRules });
-    await supabase.from('pantries').update({ box_rules: newRules }).eq('id', settings.pantryId);
+  /** Swaps the pantry default in one server-side transaction. */
+  setDefaultBoxTemplate: async (id: string) => {
+    const previous = get().boxTemplates;
+    const previousRules = get().boxRules;
+    const target = previous.find(t => t.id === id);
+    if (!target || target.is_default) return;
+
+    set({
+      boxTemplates: previous.map(t => ({ ...t, is_default: t.id === id })),
+      boxRules: target.rules,
+    });
+
+    const { error } = await supabase.rpc('set_default_box_template', { template_id: id });
+    if (error) {
+      log.error('store', 'could not change the default box', error);
+      set({ boxTemplates: previous, boxRules: previousRules });
+      throw error;
+    }
   },
 
   updateThresholds: async (updates: Partial<CategoryThresholds>) => {
@@ -934,7 +1636,9 @@ export const usePantryStore = create<AppState>((set, get) => ({
     if (!settings.pantryId) return;
     const newThresholds = { ...thresholds, ...updates };
     set({ thresholds: newThresholds });
-    await supabase.from('pantries').update({ thresholds: newThresholds }).eq('id', settings.pantryId);
+    await writePantryRow({ thresholds: newThresholds }, settings.pantryId, settings.userRole, () =>
+      set({ thresholds }),
+    );
   },
 
   setDraft: (items: InventoryItem[], photos: ScanPhoto[] = []) => {
@@ -943,6 +1647,14 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
   setPendingBarcode: (value: PendingBarcode | null) => {
     set({ pendingBarcode: value });
+  },
+
+  setAuditDraft: (value: AppState['auditDraft']) => {
+    set({ auditDraft: value });
+  },
+
+  setCurrentScan: (value: StartedScan | null) => {
+    set({ currentScan: value });
   },
 
   setDraftSource: (value: SourceOrg | null) => {

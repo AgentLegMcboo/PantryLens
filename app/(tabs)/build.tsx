@@ -1,22 +1,25 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
+import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
+import { BoxPicker, type BoxSelection } from "../../components/box-picker";
 import { AnimatedCounter, FadeInUp } from "../../components/motion";
 import {
   Button,
   Card,
   CategoryIcon,
   Chip,
+  Panel,
   Screen,
   Sheet,
   Stepper,
   Text,
 } from "../../components/ui";
-import { cuePress } from "../../lib/feedback";
+import { cuePress, cueTap } from "../../lib/feedback";
 import { BoxRules, usePantryStore } from "../../lib/store";
 
 /**
@@ -33,21 +36,62 @@ import { BoxRules, usePantryStore } from "../../lib/store";
  */
 export default function BuildBoxesScreen() {
   const router = useRouter();
-  const { inventory, bulkLots, boxRules, settings } = usePantryStore();
+  const { inventory, bulkLots, boxRules, boxTemplates, readyBoxes, settings } = usePantryStore();
+  const readyCount = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
 
-  const [requestedBoxes, setRequestedBoxes] = useState(12);
+  const [requestedBoxes, setRequestedBoxes] = useState(settings.boxTarget);
+  // Build is a tab, so it mounts before the pantry has loaded and seeds itself
+  // from the default. `touched` is what keeps the arriving setting from
+  // yanking the number out from under somebody already adjusting it.
+  const touchedBoxes = useRef(false);
+  useEffect(() => {
+    if (!touchedBoxes.current) setRequestedBoxes(settings.boxTarget);
+  }, [settings.boxTarget]);
   const [familySize, setFamilySize] = useState(settings.defaultFamilySize || 4);
   const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  /**
+   * The box being built. `null` means "the pantry default". That's resolved
+   * on every render rather than copied into state, so a default changed on
+   * another phone shows up here, and a deleted box falls back to the default
+   * instead of leaving Build pointing at nothing.
+   */
+  const [selection, setSelection] = useState<BoxSelection | null>(null);
+
+  const box = (() => {
+    if (selection?.kind === "template") {
+      const t = boxTemplates.find((x) => x.id === selection.id);
+      if (t) {
+        return { key: `template:${t.id}`, name: t.name, rules: t.rules, scales: t.scales_with_family };
+      }
+    }
+    if (selection?.kind === "preset") {
+      const p = BOX_PRESETS.find((x) => x.key === selection.key);
+      if (p) {
+        return { key: `preset:${p.key}`, name: p.name, rules: p.rules, scales: p.scalesWithFamily };
+      }
+    }
+    const fallback = boxTemplates.find((t) => t.is_default);
+    return fallback
+      ? { key: `template:${fallback.id}`, name: fallback.name, rules: fallback.rules, scales: fallback.scales_with_family }
+      : { key: "pantry-default", name: "Standard family box", rules: boxRules, scales: true };
+  })();
+
+  // A box that doesn't scale is sized for the base family of 4, which the
+  // allocator treats as "use the amounts exactly as written".
+  const packingFamilySize = box.scales ? familySize : 4;
 
   const plan = computeAllocation(
     inventory,
-    boxRules,
+    box.rules,
     requestedBoxes,
-    familySize,
+    packingFamilySize,
     bulkLots,
+    { warningDays: settings.expirationWarningDays },
   );
 
-  const categories = Object.keys(boxRules) as (keyof BoxRules)[];
+  const categories = Object.keys(box.rules) as (keyof BoxRules)[];
   const isShort = plan.achievableBoxes < requestedBoxes;
   const canPack = plan.achievableBoxes > 0;
 
@@ -133,9 +177,84 @@ export default function BuildBoxesScreen() {
           </View>
         </FadeInUp>
 
-        {/* Two knobs, plainly labelled as questions. */}
+        {/* Stock a volunteer can see on the shelf but the plan will not use.
+            Left unsaid, this reads as the engine being broken — the shelf has
+            twelve tins of beans and Build insists it has none. */}
+        {(plan.excluded.pastDate.units > 0 || plan.excluded.flagged.units > 0) && (
+          <FadeInUp index={1}>
+            <Panel className="flex-row gap-3">
+              <MaterialCommunityIcons
+                name="alert-outline"
+                size={18}
+                color={COLORS.statusWarning}
+              />
+              <View className="flex-1 gap-1">
+                <Text variant="micro" tone="soft">
+                  {[
+                    plan.excluded.pastDate.units > 0
+                      ? `${plan.excluded.pastDate.units} unit${
+                          plan.excluded.pastDate.units === 1 ? "" : "s"
+                        } past their date`
+                      : "",
+                    plan.excluded.flagged.units > 0
+                      ? `${plan.excluded.flagged.units} unit${
+                          plan.excluded.flagged.units === 1 ? "" : "s"
+                        } flagged for inspection`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" and ")}{" "}
+                  {plan.excluded.pastDate.units + plan.excluded.flagged.units === 1
+                    ? "is"
+                    : "are"}{" "}
+                  on the shelf but left out of this plan.
+                </Text>
+                {plan.excluded.pastDate.units > 0 && (
+                  <Pressable onPress={() => router.push("/expiring-soon")}>
+                    <Text variant="micro" tone="brand" className="font-semibold">
+                      Check what is out of date →
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </Panel>
+          </FadeInUp>
+        )}
+
+        {/* What's being packed, then how many and for whom. */}
         <FadeInUp index={1}>
           <Card className="gap-4">
+            <Pressable
+              onPress={() => {
+                cueTap();
+                setPickerOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Box: ${box.name}. Tap to change.`}
+              className="flex-row items-center gap-3"
+            >
+              <View className="h-11 w-11 items-center justify-center rounded-md bg-subtle">
+                <MaterialCommunityIcons
+                  name="package-variant-closed"
+                  size={22}
+                  color={COLORS.primaryLight}
+                />
+              </View>
+              <View className="flex-1">
+                <Text variant="body" className="font-semibold">
+                  {box.name}
+                </Text>
+                <Text variant="micro" tone="soft" numberOfLines={2} className="mt-0.5">
+                  {describeRules(box.rules)}
+                </Text>
+              </View>
+              <Text variant="label" tone="brand" className="font-bold">
+                Change
+              </Text>
+            </Pressable>
+
+            <View className="h-px bg-hairline" />
+
             <View className="flex-row items-center justify-between gap-3">
               <Text variant="body" className="flex-1">
                 How many boxes do you need?
@@ -144,23 +263,32 @@ export default function BuildBoxesScreen() {
                 value={requestedBoxes}
                 min={1}
                 max={200}
-                onChange={setRequestedBoxes}
+                onChange={next => {
+                  touchedBoxes.current = true;
+                  setRequestedBoxes(next);
+                }}
               />
             </View>
 
-            <View className="gap-2">
-              <Text variant="body">How big are the families?</Text>
-              <View className="flex-row gap-2">
-                {[2, 4, 6].map((size) => (
-                  <Chip
-                    key={size}
-                    label={`${size} people`}
-                    selected={familySize === size}
-                    onPress={() => setFamilySize(size)}
-                  />
-                ))}
+            {box.scales ? (
+              <View className="gap-2">
+                <Text variant="body">How big are the families?</Text>
+                <View className="flex-row gap-2">
+                  {[2, 4, 6].map((size) => (
+                    <Chip
+                      key={size}
+                      label={`${size} people`}
+                      selected={familySize === size}
+                      onPress={() => setFamilySize(size)}
+                    />
+                  ))}
+                </View>
               </View>
-            </View>
+            ) : (
+              <Text variant="micro" tone="soft">
+                This box doesn&apos;t scale: every household gets the same amounts.
+              </Text>
+            )}
           </Card>
         </FadeInUp>
 
@@ -186,7 +314,15 @@ export default function BuildBoxesScreen() {
                 cuePress();
                 router.push({
                   pathname: "/packing-checklist",
-                  params: { targetBoxes: requestedBoxes, familySize },
+                  // The rules travel with the route: a preset used once was
+                  // never saved anywhere for the checklist to look up.
+                  params: {
+                    targetBoxes: requestedBoxes,
+                    familySize: packingFamilySize,
+                    rules: JSON.stringify(box.rules),
+                    boxName: box.name,
+                    scales: box.scales ? "1" : "0",
+                  },
                 });
               }}
             />
@@ -199,14 +335,30 @@ export default function BuildBoxesScreen() {
                 onPress={() => router.push("/(tabs)/needs")}
               />
             )}
+
+            {readyCount > 0 && (
+              <Button
+                label={`${readyCount} packed and waiting for pickup`}
+                variant="ghost"
+                size="compact"
+                icon={
+                  <MaterialCommunityIcons
+                    name="package-variant-closed"
+                    size={17}
+                    color={COLORS.primaryDark}
+                  />
+                }
+                onPress={() => router.push("/ready-boxes")}
+              />
+            )}
           </View>
         </FadeInUp>
 
         {!canPack && (
           <FadeInUp index={3}>
             <Text variant="label" tone="soft" className="px-1">
-              A box needs every category the recipe calls for. Add stock, or
-              lower the per-box amounts in pantry settings.
+              A box needs every category it calls for. Add stock, or choose a
+              smaller box.
             </Text>
           </FadeInUp>
         )}
@@ -217,7 +369,7 @@ export default function BuildBoxesScreen() {
         visible={breakdownOpen}
         onClose={() => setBreakdownOpen(false)}
         title="What's in a box"
-        subtitle={`Per box for a family of ${familySize}, against ${requestedBoxes} boxes`}
+        subtitle={`${box.name}: per box${box.scales ? ` for a family of ${familySize}` : ""}, against ${requestedBoxes} boxes`}
       >
         {categories.map((cat) => {
           const perBox = plan.perBoxNeeds[cat];
@@ -267,6 +419,13 @@ export default function BuildBoxesScreen() {
           Damaged stock and anything past its date is left out of these totals.
         </Text>
       </Sheet>
+
+      <BoxPicker
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        selectedKey={box.key}
+        onSelect={setSelection}
+      />
     </>
   );
 }
