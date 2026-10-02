@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
+import { DIET_TAG_LABELS, EXCLUSION_CAVEAT, type DietTag } from "../../lib/diet";
 import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
 import { BoxPicker, type BoxSelection } from "../../components/box-picker";
 import { AnimatedCounter, FadeInUp } from "../../components/motion";
@@ -63,19 +64,47 @@ export default function BuildBoxesScreen() {
     if (selection?.kind === "template") {
       const t = boxTemplates.find((x) => x.id === selection.id);
       if (t) {
-        return { key: `template:${t.id}`, name: t.name, rules: t.rules, scales: t.scales_with_family };
+        return {
+          key: `template:${t.id}`,
+          name: t.name,
+          rules: t.rules,
+          scales: t.scales_with_family,
+          excludes: t.excludes_tags,
+          requires: t.requires_tags,
+        };
       }
     }
     if (selection?.kind === "preset") {
       const p = BOX_PRESETS.find((x) => x.key === selection.key);
       if (p) {
-        return { key: `preset:${p.key}`, name: p.name, rules: p.rules, scales: p.scalesWithFamily };
+        return {
+          key: `preset:${p.key}`,
+          name: p.name,
+          rules: p.rules,
+          scales: p.scalesWithFamily,
+          excludes: p.excludesTags ?? [],
+          requires: p.requiresTags ?? [],
+        };
       }
     }
     const fallback = boxTemplates.find((t) => t.is_default);
     return fallback
-      ? { key: `template:${fallback.id}`, name: fallback.name, rules: fallback.rules, scales: fallback.scales_with_family }
-      : { key: "pantry-default", name: "Standard family box", rules: boxRules, scales: true };
+      ? {
+          key: `template:${fallback.id}`,
+          name: fallback.name,
+          rules: fallback.rules,
+          scales: fallback.scales_with_family,
+          excludes: fallback.excludes_tags,
+          requires: fallback.requires_tags,
+        }
+      : {
+          key: "pantry-default",
+          name: "Standard family box",
+          rules: boxRules,
+          scales: true,
+          excludes: [] as DietTag[],
+          requires: [] as DietTag[],
+        };
   })();
 
   // A box that doesn't scale is sized for the base family of 4, which the
@@ -88,7 +117,14 @@ export default function BuildBoxesScreen() {
     requestedBoxes,
     packingFamilySize,
     bulkLots,
-    { warningDays: settings.expirationWarningDays },
+    {
+      warningDays: settings.expirationWarningDays,
+      // This box's dietary rules, so the headline figure counts only what can
+      // actually go in it. A wheat-free box that claimed twelve were possible
+      // using bread would be worse than no figure at all.
+      excludes: box.excludes,
+      requires: box.requires,
+    },
   );
 
   const categories = Object.keys(box.rules) as (keyof BoxRules)[];
@@ -180,6 +216,41 @@ export default function BuildBoxesScreen() {
         {/* Stock a volunteer can see on the shelf but the plan will not use.
             Left unsaid, this reads as the engine being broken — the shelf has
             twelve tins of beans and Build insists it has none. */}
+        {/* Food this BOX cannot take, as opposed to food nothing can. Separate
+            panel and separate sentence: nothing is wrong with it, it just is not
+            for this household, and conflating the two would read as waste. */}
+        {plan.excluded.dietary.units > 0 && (
+          <FadeInUp index={1}>
+            <Panel className="flex-row gap-3">
+              <MaterialCommunityIcons
+                name="shield-alert-outline"
+                size={18}
+                color={COLORS.statusWarning}
+              />
+              <View className="flex-1 gap-1">
+                <Text variant="micro" tone="soft">
+                  <Text variant="micro" className="font-bold">
+                    {plan.excluded.dietary.units} good unit
+                    {plan.excluded.dietary.units === 1 ? "" : "s"} held back by this box&apos;s rules.
+                  </Text>{" "}
+                  {box.requires.length > 0
+                    ? `Only food recorded as ${box.requires
+                        .map(t => DIET_TAG_LABELS[t].toLowerCase())
+                        .join(" and ")} can go in, and anything untagged does not qualify.`
+                    : `Anything known to contain ${box.excludes
+                        .map(t => DIET_TAG_LABELS[t].toLowerCase())
+                        .join(" or ")} is left out.`}
+                </Text>
+                {box.excludes.length > 0 && (
+                  <Text variant="micro" tone="soft">
+                    {EXCLUSION_CAVEAT}
+                  </Text>
+                )}
+              </View>
+            </Panel>
+          </FadeInUp>
+        )}
+
         {(plan.excluded.pastDate.units > 0 || plan.excluded.flagged.units > 0) && (
           <FadeInUp index={1}>
             <Panel className="flex-row gap-3">
@@ -322,6 +393,10 @@ export default function BuildBoxesScreen() {
                     rules: JSON.stringify(box.rules),
                     boxName: box.name,
                     scales: box.scales ? "1" : "0",
+                    // Carried through, or the pick list would recompute without
+                    // them and hand a volunteer bread to put in a wheat-free box.
+                    excludes: box.excludes.join(","),
+                    requires: box.requires.join(","),
                   },
                 });
               }}

@@ -5,6 +5,7 @@ import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { computeAllocation, isBulkUnit } from '../lib/allocation';
+import { DIET_TAG_LABELS, normaliseDietTags } from '../lib/diet';
 import { normaliseRules } from '../lib/box-presets';
 import { FadeInUp, ProgressBar } from '../components/motion';
 import { Badge, Button, Card, CategoryIcon, EmptyState, Screen, Text } from '../components/ui';
@@ -32,6 +33,18 @@ export default function PackingChecklistScreen() {
   // some other way, and then the pantry's own target beats an invented one.
   const targetBoxes = parseInt(params.targetBoxes as string, 10) || settings.boxTarget;
   const familySize = parseInt(params.familySize as string, 10) || 4;
+  /**
+   * The box's dietary rules, carried from Build.
+   *
+   * The plan is recomputed here rather than passed whole, so without these the
+   * pick list would be built from a different pool than the figure the
+   * volunteer agreed to — and the difference would be exactly the food the box
+   * exists to keep out.
+   */
+  const parseTags = (raw: unknown) =>
+    normaliseDietTags(String(raw ?? '').split(',').filter(Boolean));
+  const excludes = parseTags(params.excludes);
+  const requires = parseTags(params.requires);
 
   // The box chosen on Build. Carried in the route rather than looked up, because
   // a preset used once was never saved to look up. Anything unreadable falls
@@ -57,6 +70,8 @@ export default function PackingChecklistScreen() {
   const [plan] = useState(() =>
     computeAllocation(inventory, routeRules ?? boxRules, targetBoxes, familySize, bulkLots, {
       warningDays: settings.expirationWarningDays,
+      excludes,
+      requires,
     }),
   );
 
@@ -193,6 +208,38 @@ export default function PackingChecklistScreen() {
           <Text variant="micro" tone="soft" className="mt-3 capitalize">
             {boxName ?? 'Each box'}{scales ? `, family of ${familySize}` : ''}: {recipe}
           </Text>
+
+          {/* Why this list is shorter than the volunteer expects. Said here as
+              well as on Build, because this is the screen they walk the room
+              with and the one where a substitution gets made on the fly. */}
+          {(excludes.length > 0 || requires.length > 0) && (
+            <View className="mt-3 flex-row gap-2">
+              <MaterialCommunityIcons
+                name="shield-alert-outline"
+                size={15}
+                color={COLORS.statusWarning}
+                style={{ marginTop: 1 }}
+              />
+              <Text variant="micro" tone="soft" className="flex-1">
+                {requires.length > 0 && (
+                  <>
+                    Only food recorded as{' '}
+                    {requires.map(t => DIET_TAG_LABELS[t].toLowerCase()).join(' and ')}.{' '}
+                  </>
+                )}
+                {excludes.length > 0 && (
+                  <>
+                    Nothing known to contain{' '}
+                    {excludes
+                      .map(t => DIET_TAG_LABELS[t].toLowerCase().replace(' / gluten', ' or gluten'))
+                      .join(' or ')}
+                    .{' '}
+                  </>
+                )}
+                If you swap something in, check it yourself — the app only knows what it was told.
+              </Text>
+            </View>
+          )}
         </View>
       </FadeInUp>
 

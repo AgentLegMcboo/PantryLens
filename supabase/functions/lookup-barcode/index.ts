@@ -61,6 +61,9 @@ Deno.serve(async (req) => {
       brand: hit.brand,
       category: hit.category,
       imageUrl: hit.imageUrl,
+      // Allergens, diet and usability. Came back in the same Open Food Facts
+      // response the name did; it was simply never asked for before.
+      dietTags: hit.dietTags ?? [],
       source: hit.source,
     })
   } catch (error) {

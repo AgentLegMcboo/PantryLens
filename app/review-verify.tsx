@@ -13,6 +13,7 @@ import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
 import { nextRowToCheck } from '../lib/review-order';
 import { attachItemPhotos, type PhotoJob } from '../lib/item-photos';
 import type { DetectionBox, ScanCandidate } from '../lib/scan-normalize';
+import { describeTags, normaliseDietTags } from '../lib/diet';
 import { finishScan, verdictFor, type DetectedSnapshot } from '../lib/scan-history';
 import {
   Condition,
@@ -372,6 +373,13 @@ export default function ReviewVerifyScreen() {
         barcode: pendingBarcode.barcode,
         resolvedBy: 'barcode',
         image_url: pendingBarcode.imageUrl ?? next[index].image_url ?? null,
+        // Allergens from the product database, merged with anything a volunteer
+        // had already ticked by hand — a scan should add knowledge, never erase
+        // somebody's own observation that the tin has no pull tab.
+        diet_tags: normaliseDietTags([
+          ...(next[index].diet_tags ?? []),
+          ...pendingBarcode.dietTags,
+        ]),
         // The manufacturer said so. Nothing in this pipeline is more certain.
         confidence: 1,
       };
@@ -961,6 +969,25 @@ function ItemEditor({
           </Pressable>
         </View>
       </View>
+
+      {/* What the product database knows about allergens, when a barcode named
+          this. Read-only here — this screen is for getting the item right, and
+          the full set is editable on the item itself. It is shown at all because
+          a volunteer sorting a donation is the last person who can catch a
+          mislabelled tin before it reaches a household that cannot eat it. */}
+      {describeTags(item.diet_tags ?? []) ? (
+        <View className="mt-4 flex-row gap-2 rounded-md bg-subtle px-3 py-2">
+          <MaterialCommunityIcons
+            name="information-outline"
+            size={15}
+            color={COLORS.textSecondary}
+            style={{ marginTop: 1 }}
+          />
+          <Text variant="micro" tone="soft" className="flex-1 capitalize">
+            {describeTags(item.diet_tags ?? [])}
+          </Text>
+        </View>
+      ) : null}
 
       <View className="mt-5">
         <Input

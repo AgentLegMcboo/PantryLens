@@ -12,10 +12,17 @@ import {
   uniqueBoxName,
   type BoxPreset,
 } from '../lib/box-presets';
+import {
+  DIET_TAG_GROUPS,
+  DIET_TAG_LABELS,
+  EXCLUSION_CAVEAT,
+  isAllergenTag,
+  type DietTag,
+} from '../lib/diet';
 import { cueSuccess, cueTap } from '../lib/feedback';
 import { type BoxRules, type BoxTemplate, usePantryStore } from '../lib/store';
 import { FolderChips, FolderManager } from './box-folders';
-import { Button, categoryIcon, Input, Row, Sheet, Stepper, Text, Toggle } from './ui';
+import { Button, categoryIcon, Chip, Input, Row, Sheet, Stepper, Text, Toggle } from './ui';
 
 /** What Build is packing: a saved template, or a preset used as-is. */
 export type BoxSelection = { kind: 'template'; id: string } | { kind: 'preset'; key: string };
@@ -27,6 +34,8 @@ interface Draft {
   rules: BoxRules;
   scalesWithFamily: boolean;
   folderId: string | null;
+  excludesTags: DietTag[];
+  requiresTags: DietTag[];
 }
 
 const title = (category: string) => category.charAt(0).toUpperCase() + category.slice(1);
@@ -89,6 +98,8 @@ export function BoxPicker({
       rules: template.rules,
       scalesWithFamily: template.scales_with_family,
       folderId: template.folder_id ?? null,
+      excludesTags: template.excludes_tags ?? [],
+      requiresTags: template.requires_tags ?? [],
     });
   };
 
@@ -101,8 +112,17 @@ export function BoxPicker({
             rules: { ...preset.rules },
             scalesWithFamily: preset.scalesWithFamily,
             folderId: null,
+            excludesTags: preset.excludesTags ?? [],
+            requiresTags: preset.requiresTags ?? [],
           }
-        : { name: '', rules: normaliseRules({}), scalesWithFamily: true, folderId: null },
+        : {
+            name: '',
+            rules: normaliseRules({}),
+            scalesWithFamily: true,
+            folderId: null,
+            excludesTags: [],
+            requiresTags: [],
+          },
     );
   };
 
@@ -202,6 +222,67 @@ export function BoxPicker({
             />
           }
         />
+
+        {/* Who the box is FOR, as opposed to what is in it.
+            Amounts come next; this comes first because it decides which stock the
+            amounts can be filled from. */}
+        <View className="gap-3 rounded-md bg-subtle p-3">
+          <Text variant="label" className="font-bold">
+            Who can eat it
+          </Text>
+          <Text variant="micro" tone="soft">
+            Most boxes need none of this. Set it for a household that has told you
+            about an allergy, a diet, or having nowhere to cook.
+          </Text>
+
+          {DIET_TAG_GROUPS.map(group => (
+            <View key={group.title} className="gap-2">
+              <Text variant="micro" tone="soft" className="font-bold">
+                {group.title === 'Known to contain' ? 'Leave out anything containing' : group.title}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {group.tags.map(tag => {
+                  // Allergens are a reason to EXCLUDE; diet and usability are a
+                  // reason to REQUIRE. Nobody wants a box that must contain milk.
+                  const excluding = isAllergenTag(tag);
+                  const list = excluding ? draft.excludesTags : draft.requiresTags;
+                  const on = list.includes(tag);
+                  return (
+                    <Chip
+                      key={tag}
+                      label={DIET_TAG_LABELS[tag]}
+                      selected={on}
+                      onPress={() =>
+                        setDraft(prev => {
+                          if (!prev) return prev;
+                          const key = excluding ? 'excludesTags' : 'requiresTags';
+                          const next = on
+                            ? prev[key].filter(t => t !== tag)
+                            : [...prev[key], tag];
+                          return { ...prev, [key]: next };
+                        })
+                      }
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+
+          {draft.excludesTags.length > 0 && (
+            <Text variant="micro" tone="soft">
+              {EXCLUSION_CAVEAT}
+            </Text>
+          )}
+          {draft.requiresTags.length > 0 && (
+            <Text variant="micro" tone="soft">
+              Only food recorded as{' '}
+              {draft.requiresTags.map(t => DIET_TAG_LABELS[t].toLowerCase()).join(' and ')} goes in.
+              A tin nobody has tagged will not be used, so this box draws on less stock than the
+              others.
+            </Text>
+          )}
+        </View>
 
         {BOX_CATEGORIES.map((category, i) => (
           <Row

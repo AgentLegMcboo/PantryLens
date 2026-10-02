@@ -172,6 +172,14 @@ export interface BarcodeLookup {
   name?: string;
   brand?: string | null;
   category?: string | null;
+  /** The manufacturer's pack shot, when the provider had one. */
+  imageUrl?: string | null;
+  /**
+   * Allergens and diet from the product database. Positive claims only — an
+   * empty array means nothing is recorded, not that the food is free of
+   * anything. See lib/diet.ts.
+   */
+  dietTags?: string[];
   /** 'usda' | 'openfoodfacts' | 'cache' when found. */
   source?: string;
   /** 'INVALID' when the digits failed their check digit, 'UNKNOWN' when no

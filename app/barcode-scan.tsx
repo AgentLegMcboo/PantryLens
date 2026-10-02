@@ -7,6 +7,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, EmptyState, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
 import { lookupBarcode } from '../lib/ai_vision';
+import { normaliseDietTags } from '../lib/diet';
 import { cueSuccess, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { usePantryStore } from '../lib/store';
@@ -68,6 +69,7 @@ export default function BarcodeScanScreen() {
       name: result.name ?? '',
       category: (result.category as any) ?? null,
       imageUrl: (result as any).imageUrl ?? null,
+      dietTags: normaliseDietTags((result as any).dietTags),
     });
     router.back();
   };

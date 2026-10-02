@@ -27,7 +27,89 @@ export interface BarcodeProduct {
    * two providers.
    */
   imageUrl: string | null
+  /**
+   * Allergens, diet and whether a person without a kitchen can use it.
+   *
+   * Open Food Facts returns all of this in the SAME request that was already
+   * being made for the name and the pack shot — it was simply not being asked
+   * for, and was thrown away. See mapDietTags.
+   */
+  dietTags: string[]
   source: 'usda' | 'openfoodfacts' | 'miss' | 'cache'
+}
+
+/**
+ * Must match diet_tag_vocabulary() in the migration and DIET_TAGS in lib/diet.ts.
+ * The column has a check constraint against the same list, so an unknown tag is
+ * a rejected insert rather than a silently stored typo.
+ */
+const DIET_TAGS = [
+  'contains-wheat', 'contains-milk', 'contains-eggs', 'contains-peanuts',
+  'contains-tree-nuts', 'contains-soy', 'contains-fish', 'contains-shellfish',
+  'contains-sesame', 'vegan', 'vegetarian', 'no-cook', 'easy-open',
+]
+
+/** Open Food Facts allergen slugs to ours. Their tags are prefixed by language. */
+const ALLERGEN_MAP: Record<string, string> = {
+  gluten: 'contains-wheat',
+  wheat: 'contains-wheat',
+  milk: 'contains-milk',
+  eggs: 'contains-eggs',
+  egg: 'contains-eggs',
+  peanuts: 'contains-peanuts',
+  peanut: 'contains-peanuts',
+  nuts: 'contains-tree-nuts',
+  'tree-nuts': 'contains-tree-nuts',
+  soybeans: 'contains-soy',
+  soy: 'contains-soy',
+  fish: 'contains-fish',
+  crustaceans: 'contains-shellfish',
+  molluscs: 'contains-shellfish',
+  shellfish: 'contains-shellfish',
+  sesame: 'contains-sesame',
+  'sesame-seeds': 'contains-sesame',
+}
+
+/** "en:gluten" -> "gluten". Their tags carry a language prefix that varies. */
+const stripLang = (tag: string) => String(tag).toLowerCase().replace(/^[a-z]{2}:/, '').trim()
+
+/**
+ * Turns an Open Food Facts product into our tags.
+ *
+ * Only POSITIVE claims are recorded. `allergens_tags` listing gluten means we
+ * say so; `allergens_tags` being empty means nobody has filled it in, which is
+ * not the same as the food being free of anything, and nothing here ever writes
+ * a "free from" tag. `traces_tags` ("may contain") is treated as containing:
+ * for somebody with a severe allergy that is the only safe reading, and this
+ * data decides what goes in their box.
+ */
+export function mapDietTags(product: Record<string, unknown>): string[] {
+  const tags = new Set<string>()
+
+  const allergenFields = ['allergens_tags', 'traces_tags']
+  for (const field of allergenFields) {
+    const list = Array.isArray(product[field]) ? (product[field] as unknown[]) : []
+    for (const raw of list) {
+      const mapped = ALLERGEN_MAP[stripLang(String(raw))]
+      if (mapped) tags.add(mapped)
+    }
+  }
+
+  // Their ingredient analysis. Only the positive verdicts: 'maybe-vegan' means
+  // the ingredient list could not be parsed, which is no information at all.
+  const analysis = Array.isArray(product.ingredients_analysis_tags)
+    ? (product.ingredients_analysis_tags as unknown[]).map((t) => stripLang(String(t)))
+    : []
+  if (analysis.includes('vegan')) tags.add('vegan')
+  if (analysis.includes('vegetarian')) tags.add('vegetarian')
+  // Vegan implies vegetarian; the data does not always say both.
+  if (tags.has('vegan')) tags.add('vegetarian')
+
+  // No-cook and easy-open are not fields anybody publishes, so they are left for
+  // a volunteer holding the tin. Guessing them from a category would be guessing
+  // about the one thing a person with no kitchen depends on.
+
+  return DIET_TAGS.filter((t) => tags.has(t))
 }
 
 const CATEGORIES = ['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygiene', 'baby', 'unknown']
@@ -180,6 +262,9 @@ async function lookupUsda(barcode: string, apiKey: string): Promise<BarcodeProdu
     category: mapCategory(`${hit.foodCategory ?? ''} ${description}`),
     // FoodData Central serves no product imagery.
     imageUrl: null,
+    // Nor any allergen or diet data in this response, so nothing is claimed.
+    // Silence here is silence, not a clean bill of health.
+    dietTags: [],
     source: 'usda',
   }
 }
@@ -188,7 +273,9 @@ async function lookupUsda(barcode: string, apiKey: string): Promise<BarcodeProdu
 async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeProduct | null> {
   const url =
     `https://world.openfoodfacts.org/api/v2/product/${barcode}.json` +
-    `?fields=product_name,brands,quantity,categories_tags,image_front_small_url,image_front_url`
+    `?fields=product_name,brands,quantity,categories_tags,image_front_small_url,image_front_url` +
+    // Already in the same response, previously unasked for and discarded.
+    `,allergens_tags,traces_tags,ingredients_analysis_tags`
 
   const data = await getJson(url, {
     'User-Agent': 'PantryLens/1.0 (food pantry inventory; https://github.com/pantrylens)',
@@ -213,6 +300,7 @@ async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeProduct | nu
     brand,
     category: mapCategory(`${tags.join(' ')} ${name}`),
     imageUrl: image,
+    dietTags: mapDietTags(product ?? {}),
     source: 'openfoodfacts',
   }
 }
@@ -224,7 +312,7 @@ async function readCache(barcodes: string[], supabaseUrl: string, serviceKey: st
 
   const list = barcodes.map((b) => `"${b}"`).join(',')
   const data = await getJson(
-    `${supabaseUrl}/rest/v1/barcode_cache?barcode=in.(${list})&select=barcode,name,brand,category,image_url,source`,
+    `${supabaseUrl}/rest/v1/barcode_cache?barcode=in.(${list})&select=barcode,name,brand,category,image_url,diet_tags,source`,
     { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
   )
 
@@ -235,6 +323,7 @@ async function readCache(barcodes: string[], supabaseUrl: string, serviceKey: st
       brand: row.brand,
       category: row.category,
       imageUrl: row.image_url ?? null,
+      dietTags: Array.isArray(row.diet_tags) ? row.diet_tags : [],
       source: row.source === 'miss' ? 'miss' : 'cache',
     })
   }
@@ -264,6 +353,7 @@ async function writeCache(
           brand: r.brand,
           category: r.category && CATEGORIES.includes(r.category) ? r.category : null,
           image_url: r.imageUrl,
+          diet_tags: r.dietTags ?? [],
           source: r.source === 'cache' ? 'openfoodfacts' : r.source,
         })),
       ),
@@ -308,6 +398,7 @@ export async function resolveBarcodes(barcodes: string[]): Promise<Map<string, B
             brand: null,
             category: null,
             imageUrl: null,
+            dietTags: [],
             source: 'miss',
           }
         )

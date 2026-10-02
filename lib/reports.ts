@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { DIET_TAG_LABELS, isAllergenTag, type DietTag } from './diet';
 import { log } from './log';
 import { supabase } from './supabase';
 import type { BulkLot, InventoryItem, PantryLocation, StockExitReason } from './store';
@@ -45,6 +46,56 @@ export async function fetchExits(
 }
 
 /**
+ * What nobody is taking.
+ *
+ * Straight out of a thread of people who rely on food banks: the carrot juice
+ * nobody would touch, the V8, the same three things every week. A pantry cannot
+ * tell a donor "please send something else" without a number, and the number
+ * was already in the database — nothing read it.
+ *
+ * `days_on_shelf` is the age of the OLDEST unit of that product still on the
+ * shelf, which is the honest measure of "this is not moving": a product
+ * restocked weekly and given out weekly never accumulates an old unit.
+ */
+export interface SlowMover {
+  name: string;
+  category: string | null;
+  units_on_shelf: number;
+  days_on_shelf: number | null;
+  units_given_out: number;
+  units_discarded: number;
+  /** Share of everything that LEFT which was binned. Null when nothing has left. */
+  waste_pct: number | null;
+}
+
+/**
+ * The slowest-moving products in a pantry.
+ *
+ * Ordered by how long the oldest unit has sat, because that is the question a
+ * volunteer looking at a full shelf is actually asking. Products with nothing
+ * left on the shelf are excluded — something already gone is not a problem to
+ * solve, however badly it did.
+ */
+export async function fetchSlowMovers(
+  pantryId: string,
+  limit = 12,
+): Promise<SlowMover[]> {
+  const { data, error } = await supabase
+    .from('slow_movers')
+    .select('name, category, units_on_shelf, days_on_shelf, units_given_out, units_discarded, waste_pct')
+    .eq('pantry_id', pantryId)
+    .gt('units_on_shelf', 0)
+    .order('days_on_shelf', { ascending: false, nullsFirst: false })
+    .limit(limit);
+
+  if (error) {
+    log.error('store', 'could not read slow movers', error);
+    throw error;
+  }
+  return (data ?? []) as SlowMover[];
+}
+
+/**
  * One CSV cell.
  *
  * Quoting is not optional here: product names routinely contain commas
@@ -69,7 +120,7 @@ export function inventoryCsv(
 ): string {
   const place = (id?: string | null) => locations.find(l => l.id === id)?.name ?? '';
   return toCsv(
-    ['Item', 'Category', 'Count', 'Expires', 'Received', 'Condition', 'Place', 'Source'],
+    ['Item', 'Category', 'Count', 'Expires', 'Received', 'Condition', 'Place', 'Source', 'Known to contain', 'Notes'],
     inventory.map(i => [
       i.name,
       i.category,
@@ -79,6 +130,38 @@ export function inventoryCsv(
       i.condition ?? 'ok',
       place(i.location_id),
       i.source,
+      // Positive claims only. A blank cell means nobody has checked, and the
+      // header says "known to contain" rather than "allergens" so a spreadsheet
+      // read months later cannot be mistaken for a safety guarantee.
+      (i.diet_tags ?? [])
+        .filter(isAllergenTag)
+        .map(t => DIET_TAG_LABELS[t as DietTag] ?? t)
+        .join('; '),
+      (i.diet_tags ?? [])
+        .filter(t => !isAllergenTag(t))
+        .map(t => DIET_TAG_LABELS[t as DietTag] ?? t)
+        .join('; '),
+    ]),
+  );
+}
+
+/**
+ * The slow movers, as something a pantry can hand a donor.
+ *
+ * Diet tags are in the inventory export rather than here: this sheet is an
+ * argument about what to send, and the argument is the dates and the waste.
+ */
+export function slowMoversCsv(rows: SlowMover[]): string {
+  return toCsv(
+    ['Item', 'Category', 'On shelf', 'Oldest unit (days)', 'Given out', 'Thrown away', 'Waste %'],
+    rows.map(r => [
+      r.name,
+      r.category ?? '',
+      r.units_on_shelf,
+      r.days_on_shelf ?? '',
+      r.units_given_out,
+      r.units_discarded,
+      r.waste_pct ?? '',
     ]),
   );
 }

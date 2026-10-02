@@ -1,3 +1,4 @@
+import type { DietTag } from './diet';
 import type { BoxRules } from './store';
 
 /**
@@ -76,6 +77,10 @@ export interface BoxPreset {
   /** See box_templates.scales_with_family. */
   scalesWithFamily: boolean;
   rules: BoxRules;
+  /** Nothing known to carry these goes in. See lib/diet.ts. */
+  excludesTags?: DietTag[];
+  /** Everything in the box must carry all of these. */
+  requiresTags?: DietTag[];
 }
 
 export const BOX_PRESETS: BoxPreset[] = [
@@ -113,5 +118,39 @@ export const BOX_PRESETS: BoxPreset[] = [
     description: 'One per household, whatever its size.',
     scalesWithFamily: false,
     rules: { grain: 0, vegetable: 0, protein: 0, breakfast: 0, snack: 0, hygiene: 4, baby: 0 },
+  },
+
+  /**
+   * The three below exist because of what people who use food banks say goes
+   * wrong — bread handed to someone who cannot eat it, a pie pumpkin handed to
+   * someone with no stove, a tin handed to someone with no opener. A preset is
+   * how a pantry finds out the app can do this at all; a setting nobody knows
+   * about helps nobody.
+   */
+  {
+    key: 'no-kitchen',
+    name: 'No-kitchen box',
+    description:
+      'Only food that needs no cooking and opens without a tin opener — for someone in a car, a shelter, or a room with no stove.',
+    scalesWithFamily: true,
+    rules: { grain: 1, vegetable: 1, protein: 2, breakfast: 1, snack: 2, hygiene: 1, baby: 0 },
+    requiresTags: ['no-cook', 'easy-open'],
+  },
+  {
+    key: 'wheat-free',
+    name: 'Wheat-free box',
+    description:
+      'Leaves out everything known to contain wheat or gluten. Check anything a coeliac household depends on — plenty of food has never been catalogued.',
+    scalesWithFamily: true,
+    rules: { grain: 1, vegetable: 2, protein: 2, breakfast: 1, snack: 1, hygiene: 1, baby: 0 },
+    excludesTags: ['contains-wheat'],
+  },
+  {
+    key: 'plant-based',
+    name: 'Plant-based box',
+    description: 'Only food recorded as vegan, for a household that has asked.',
+    scalesWithFamily: true,
+    rules: { grain: 2, vegetable: 3, protein: 2, breakfast: 1, snack: 1, hygiene: 1, baby: 0 },
+    requiresTags: ['vegan'],
   },
 ];

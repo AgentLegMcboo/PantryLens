@@ -436,6 +436,10 @@ Deno.serve(async (req) => {
           item.confidence = 1
           item.resolved_by = 'barcode'
           item.image_url = hit.imageUrl ?? null
+          // Allergens and diet, carried onto the row so a volunteer reviewing a
+          // shelf of scanned tins can see what is in them without scanning each
+          // one again. Same response, no extra call.
+          item.diet_tags = hit.dietTags ?? []
         }
       }
     } catch (err) {

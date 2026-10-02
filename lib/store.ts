@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import type { AuditWrite, CountedRow } from './audit';
+import { normaliseDietTags, type DietTag } from './diet';
 import type { StartedScan } from './scan-history';
 import { itemsPerBox, normaliseRules } from './box-presets';
 import { log } from './log';
@@ -50,6 +51,8 @@ export interface PendingBarcode {
   category: Category | null;
   /** The manufacturer's pack shot, if the provider had one. */
   imageUrl: string | null;
+  /** Allergens and diet from the product database. See lib/diet.ts. */
+  dietTags: DietTag[];
 }
 
 /** A photo held only for the length of a review, never persisted. */
@@ -80,6 +83,14 @@ export interface InventoryItem {
    * item-photos bucket. Null means the row shows its category icon instead.
    */
   image_url?: string | null;
+  /**
+   * Allergens, diet and whether somebody without a kitchen can use it.
+   *
+   * `contains-*` entries are positive claims. An EMPTY ARRAY MEANS NOTHING IS
+   * KNOWN, not that the food is free of anything — see lib/diet.ts, where the
+   * whole app's wording about this lives.
+   */
+  diet_tags?: DietTag[];
 }
 
 /**
@@ -216,6 +227,10 @@ export interface BoxTemplate {
   rules: BoxRules;
   /** Amounts are for a family of 4 and scale with household size. Off for per-person kits. */
   scales_with_family: boolean;
+  /** Nothing known to carry these goes in. "Wheat-free box". */
+  excludes_tags: DietTag[];
+  /** Everything in it must carry all of these. "No-cook box". */
+  requires_tags: DietTag[];
   /** The pantry's default: what Needs, the dashboard and Build start from. */
   is_default: boolean;
   /** A box-type folder, or null for unfiled. */
@@ -514,6 +529,10 @@ interface AppState {
     rules: BoxRules;
     scalesWithFamily: boolean;
     folderId?: string | null;
+    /** Nothing known to carry these goes in. */
+    excludesTags?: DietTag[];
+    /** Everything in the box must carry all of these. */
+    requiresTags?: DietTag[];
   }) => Promise<BoxTemplate>;
   deleteBoxTemplate: (id: string) => Promise<void>;
   setDefaultBoxTemplate: (id: string) => Promise<void>;
@@ -743,7 +762,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
             .order('name', { ascending: true }),
           supabase
             .from('box_templates')
-            .select('id, pantry_id, name, rules, scales_with_family, is_default, folder_id')
+            .select('id, pantry_id, name, rules, scales_with_family, is_default, folder_id, excludes_tags, requires_tags')
             .eq('pantry_id', pantryId)
             .order('is_default', { ascending: false })
             .order('name', { ascending: true }),
@@ -770,6 +789,8 @@ export const usePantryStore = create<AppState>((set, get) => ({
         const boxTemplates = ((tplData as any[]) || []).map(t => ({
           ...t,
           rules: normaliseRules(t.rules),
+          excludes_tags: normaliseDietTags(t.excludes_tags),
+          requires_tags: normaliseDietTags(t.requires_tags),
         })) as BoxTemplate[];
         const defaultBox = boxTemplates.find(t => t.is_default);
         const readyBoxes = ((runData as any[]) || []).map(r => ({
@@ -1158,6 +1179,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
       source_name: item.source_name ?? null,
       image_url: item.image_url ?? null,
       location_id: item.location_id ?? null,
+      diet_tags: normaliseDietTags(item.diet_tags),
       // Where this row came from. Null for anything typed in by hand, and for
       // every row saved before scan history existed.
       scan_id: scanId,
@@ -1536,7 +1558,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
    * next refresh. Templates have member policies, and every write here checks
    * its error.
    */
-  saveBoxTemplate: async ({ id, name, rules, scalesWithFamily, folderId }) => {
+  saveBoxTemplate: async ({ id, name, rules, scalesWithFamily, folderId, excludesTags, requiresTags }) => {
     const { settings, boxTemplates } = get();
     if (!settings.pantryId) throw new Error('No pantry is loaded yet. Reopen the app and try again.');
 
@@ -1545,13 +1567,25 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const clean = normaliseRules(rules);
     if (itemsPerBox(clean) === 0) throw new Error('A box needs at least one item in it.');
 
+    const excludes = normaliseDietTags(excludesTags);
+    const requires = normaliseDietTags(requiresTags);
+    // The database refuses this too, but a volunteer deserves the reason rather
+    // than a constraint name: a box that both demands and forbids a tag can
+    // never be filled, and the failure would read as "you have no stock".
+    const contradiction = excludes.find(tag => requires.includes(tag));
+    if (contradiction) {
+      throw new Error('A box cannot both require and exclude the same thing.');
+    }
+
     const fields = {
       name: trimmed,
       rules: clean,
       scales_with_family: scalesWithFamily,
       folder_id: folderId ?? null,
+      excludes_tags: excludes,
+      requires_tags: requires,
     };
-    const columns = 'id, pantry_id, name, rules, scales_with_family, is_default, folder_id';
+    const columns = 'id, pantry_id, name, rules, scales_with_family, is_default, folder_id, excludes_tags, requires_tags';
 
     let result;
     if (id) {
@@ -1577,7 +1611,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
       throw result.error;
     }
 
-    const saved = { ...(result.data as any), rules: normaliseRules((result.data as any).rules) } as BoxTemplate;
+    const saved = {
+      ...(result.data as any),
+      rules: normaliseRules((result.data as any).rules),
+      excludes_tags: normaliseDietTags((result.data as any).excludes_tags),
+      requires_tags: normaliseDietTags((result.data as any).requires_tags),
+    } as BoxTemplate;
     set({
       boxTemplates: id
         ? boxTemplates.map(t => (t.id === id ? saved : t))
