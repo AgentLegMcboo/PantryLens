@@ -2,7 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import type { AuditWrite, CountedRow } from './audit';
 import { normaliseDietTags, type DietTag } from './diet';
-import type { StartedScan } from './scan-history';
+import { SCAN_PHOTO_BUCKET, type StartedScan } from './scan-history';
 import { itemsPerBox, normaliseRules } from './box-presets';
 import { log } from './log';
 import { ADMIN_ONLY_MESSAGE, asRole, canEditPantry, type PantryRole } from './permissions';
@@ -401,6 +401,43 @@ function subscribeToPantry(pantryId: string, onChange: () => void) {
     .subscribe();
 }
 
+/**
+ * Removes a pantry's photographs from both buckets.
+ *
+ * SQL cannot reach storage, so the server functions hand back the path prefix
+ * and this does the rest. Deliberately best-effort and never thrown from:
+ * orphaned thumbnails are untidy, and failing a reset over them would be worse.
+ */
+async function clearPantryPhotos(pantryId: string): Promise<void> {
+  for (const bucket of [ITEM_PHOTO_BUCKET, SCAN_PHOTO_BUCKET]) {
+    try {
+      const { data, error } = await supabase.storage.from(bucket).list(pantryId, { limit: 1000 });
+      if (error || !data?.length) continue;
+
+      // Scan photos sit one folder deeper, under {pantry}/{scan}/n.jpg, so a
+      // listing returns folders rather than files and each needs opening.
+      const paths: string[] = [];
+      for (const entry of data) {
+        if (entry.id) {
+          paths.push(`${pantryId}/${entry.name}`);
+          continue;
+        }
+        const { data: inner } = await supabase.storage
+          .from(bucket)
+          .list(`${pantryId}/${entry.name}`, { limit: 1000 });
+        for (const file of inner ?? []) paths.push(`${pantryId}/${entry.name}/${file.name}`);
+      }
+
+      if (paths.length > 0) {
+        await supabase.storage.from(bucket).remove(paths);
+        log.debug('store', `removed ${paths.length} file(s) from ${bucket}`);
+      }
+    } catch (err) {
+      log.warn('store', `could not clear ${bucket} for ${pantryId}`, err);
+    }
+  }
+}
+
 function unsubscribeFromPantry() {
   if (pantryChannel) supabase.removeChannel(pantryChannel);
   pantryChannel = null;
@@ -496,6 +533,13 @@ interface AppState {
   defaultLocationFor: (category: Category) => string | null;
   recordExit: (ids: string[], reason: ExitReason) => Promise<void>;
   applyShelfAudit: (locationId: string, photos: number, writes: AuditWrite[]) => Promise<AuditResult>;
+
+  /** Empties the shelf and the history, keeping shelves, box types, team and settings. */
+  resetPantryData: () => Promise<Record<string, number>>;
+  /** Deletes the pantry outright. Everyone is unenrolled and this device lands on selection. */
+  deletePantry: () => Promise<string>;
+  /** Makes the intro play again on next launch. Local to this device. */
+  replayOnboarding: () => Promise<void>;
   deleteLocation: (id: string) => Promise<void>;
 
   addItems: (
@@ -1106,6 +1150,76 @@ export const usePantryStore = create<AppState>((set, get) => ({
     );
     await get().fetchData();
     return result;
+  },
+
+  /**
+   * Clears a pantry's data without clearing how it is set up.
+   *
+   * The deletes are a server function because three of those tables take no
+   * writes from a client at all — scans, scan_items and shelf_audits are
+   * evidence, and evidence a client can rewrite is not evidence. Owner-only
+   * there too, so this is not merely a hidden button.
+   *
+   * Photographs are cleared here rather than in SQL, which cannot reach a
+   * storage bucket. Best-effort: leftover thumbnails are untidy, not broken.
+   */
+  resetPantryData: async () => {
+    const { settings } = get();
+    if (!settings.pantryId) throw new Error('No pantry is loaded.');
+
+    const { data, error } = await supabase.rpc('reset_pantry_data', {
+      target_pantry: settings.pantryId,
+    });
+    if (error) {
+      log.error('store', 'could not clear the pantry', error);
+      throw error;
+    }
+
+    await clearPantryPhotos(settings.pantryId);
+    await get().fetchData();
+
+    const counts = data as Record<string, unknown>;
+    return Object.fromEntries(
+      Object.entries(counts).filter(([, v]) => typeof v === 'number'),
+    ) as Record<string, number>;
+  },
+
+  deletePantry: async () => {
+    const { settings } = get();
+    if (!settings.pantryId) throw new Error('No pantry is loaded.');
+
+    const { data, error } = await supabase.rpc('delete_pantry', {
+      target_pantry: settings.pantryId,
+    });
+    if (error) {
+      log.error('store', 'could not delete the pantry', error);
+      throw error;
+    }
+
+    await clearPantryPhotos(settings.pantryId);
+
+    // The membership went with the pantry, so this device now belongs to no
+    // pantry. Dropping the local copy is what sends the router to selection
+    // instead of leaving every screen reading from a pantry that is gone.
+    unsubscribeFromPantry();
+    set({
+      inventory: [],
+      bulkLots: [],
+      activities: [],
+      locations: [],
+      boxTemplates: [],
+      readyBoxes: [],
+      boxFolders: [],
+      members: [],
+      settings: { ...get().settings, pantryId: null, pantryName: '', inviteCode: '', userRole: 'volunteer' },
+    });
+
+    return String((data as any)?.deleted ?? 'that pantry');
+  },
+
+  replayOnboarding: async () => {
+    await AsyncStorage.removeItem(ONBOARDING_KEY).catch(() => {});
+    set({ onboarded: false });
   },
 
   renameLocation: async (id: string, name: string) => {

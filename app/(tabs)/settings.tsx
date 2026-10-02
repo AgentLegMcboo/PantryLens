@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { KeyboardScreen } from '../../components/keyboard-screen';
 import { FadeInUp } from '../../components/motion';
@@ -17,8 +17,8 @@ import {
   Text,
   Toggle,
 } from '../../components/ui';
-import { getFeedbackPrefs, setHapticsEnabled, setSoundEnabled } from '../../lib/feedback';
-import { canEditPantry, ROLE_BLURBS, ROLE_LABELS } from '../../lib/permissions';
+import { cueSuccess, cueWarn, getFeedbackPrefs, setHapticsEnabled, setSoundEnabled } from '../../lib/feedback';
+import { canEditPantry, canManageTeam, ROLE_BLURBS, ROLE_LABELS } from '../../lib/permissions';
 import { BoxRules, usePantryStore } from '../../lib/store';
 
 /**
@@ -52,8 +52,12 @@ export default function SettingsScreen() {
     members,
     updateSettings,
     updateThresholds,
+    resetPantryData,
+    deletePantry,
+    replayOnboarding,
     signOut,
   } = usePantryStore();
+  const [resetting, setResetting] = useState<string | null>(null);
 
   // The database decides this; the screen only stops offering what will be
   // refused. See lib/permissions.ts.
@@ -116,6 +120,69 @@ export default function SettingsScreen() {
     } catch (err: any) {
       Alert.alert('Could not save', err?.message ?? 'Please try again.');
     }
+  };
+
+  /**
+   * The development reset.
+   *
+   * Everything here is destructive and none of it ships: the whole card is
+   * behind __DEV__. The real guard is in the database though — both functions
+   * are owner-only — because a function that exists is reachable from the API
+   * whether or not a button points at it.
+   */
+  const devAction = async (key: string, run: () => Promise<string>) => {
+    setResetting(key);
+    try {
+      const message = await run();
+      cueSuccess();
+      Alert.alert('Done', message);
+    } catch (err: any) {
+      cueWarn();
+      Alert.alert('Could not do that', err?.message ?? 'Please try again.');
+    } finally {
+      setResetting(null);
+    }
+  };
+
+  const confirmClear = () => {
+    Alert.alert(
+      'Clear all pantry data?',
+      'Every item, scan, count, pack, donation record and learned name goes, along with their photos.\n\nKept: your shelves, box types, folders, team and settings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear it',
+          style: 'destructive',
+          onPress: () =>
+            devAction('clear', async () => {
+              const counts = await resetPantryData();
+              const parts = Object.entries(counts)
+                .filter(([, n]) => n > 0)
+                .map(([k, n]) => `${n} ${k.replace(/_/g, ' ')}`);
+              return parts.length > 0 ? `Removed ${parts.join(', ')}.` : 'There was nothing to remove.';
+            }),
+        },
+      ],
+    );
+  };
+
+  const confirmDeletePantry = () => {
+    Alert.alert(
+      `Delete "${settings.pantryName}" entirely?`,
+      'The pantry and everything in it goes, and every member is removed — not just you. You will land back on pantry selection.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete the pantry',
+          style: 'destructive',
+          onPress: () =>
+            devAction('delete', async () => {
+              const name = await deletePantry();
+              return `${name} is gone. Create or join one to carry on.`;
+            }),
+        },
+      ],
+    );
   };
 
   const handleSignOut = () => {
@@ -396,6 +463,61 @@ export default function SettingsScreen() {
           />
         </View>
       </FadeInUp>
+
+      {/* Development only, and not merely hidden: __DEV__ is compiled out of a
+          release bundle, so none of this exists in a build a pantry installs. */}
+      {__DEV__ && (
+        <FadeInUp index={9}>
+          <Card>
+            <CardHeader
+              title="Developer"
+              subtitle="Only in a development build. A release bundle does not contain this card."
+            />
+            <Row
+              icon="broom"
+              label="Clear all pantry data"
+              hint="Items, scans, counts, packs, donation records and photos. Keeps shelves, box types, team and settings."
+              right={
+                resetting === 'clear' ? (
+                  <ActivityIndicator size="small" color={COLORS.statusCritical} />
+                ) : undefined
+              }
+              onPress={canManageTeam(settings.userRole) ? confirmClear : undefined}
+            />
+            <Row
+              icon="restart"
+              label="Replay the intro"
+              hint="Forgets that onboarding was finished, on this device only."
+              onPress={() =>
+                devAction('onboarding', async () => {
+                  await replayOnboarding();
+                  return 'The intro will play next time the app starts.';
+                })
+              }
+            />
+            <Row
+              icon="delete-forever-outline"
+              label="Delete this pantry"
+              hint="The pantry, its data and everyone's membership. Lands you back on pantry selection."
+              tone="critical"
+              divider={false}
+              right={
+                resetting === 'delete' ? (
+                  <ActivityIndicator size="small" color={COLORS.statusCritical} />
+                ) : undefined
+              }
+              onPress={canManageTeam(settings.userRole) ? confirmDeletePantry : undefined}
+            />
+
+            {!canManageTeam(settings.userRole) && (
+              <Text variant="micro" tone="soft" className="mt-3">
+                Clearing and deleting are owner-only, enforced by the database rather than by this
+                screen. You are {ROLE_LABELS[settings.userRole].toLowerCase()} here.
+              </Text>
+            )}
+          </Card>
+        </FadeInUp>
+      )}
     </KeyboardScreen>
   );
 }
