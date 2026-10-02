@@ -1,7 +1,9 @@
 import * as React from 'react';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pressable, View } from 'react-native';
+import Animated from 'react-native-reanimated';
 import { COLORS } from '../../constants/theme';
+import { usePressScale } from '../motion';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
 import { cueTap } from '../../lib/feedback';
@@ -10,7 +12,13 @@ import { cueTap } from '../../lib/feedback';
  * Numeric stepper. Was redefined in five screens at four different button sizes.
  *
  * The buttons are 44px, not the 32px they were: this is the control a volunteer
- * uses most, often while holding something in the other hand.
+ * uses most, often while holding something in the other hand. Each one carries
+ * 6px of invisible slack as well, so a thumb that lands just off the glyph still
+ * counts — the target should always be bigger than the thing you can see.
+ *
+ * Each press dips. On a control that is pressed over and over to reach a number,
+ * the dip is the only thing confirming that this tap landed and not just the
+ * last one.
  */
 export function Stepper({
   value,
@@ -34,27 +42,54 @@ export function Stepper({
 
   return (
     <View className={cn('flex-row items-center rounded-md bg-subtle', className)}>
-      <Pressable
-        onPress={() => step(-1)}
+      <StepButton
+        icon="minus"
+        label="Decrease"
         disabled={value <= min}
-        accessibilityLabel="Decrease"
-        className={cn('h-11 w-11 items-center justify-center', value <= min && 'opacity-35')}
-      >
-        <MaterialCommunityIcons name="minus" size={18} color={COLORS.textPrimary} />
-      </Pressable>
+        onPress={() => step(-1)}
+      />
 
       <Text variant="heading" className="min-w-[36px] text-center font-bold">
         {value}
       </Text>
 
-      <Pressable
-        onPress={() => step(1)}
-        disabled={value >= max}
-        accessibilityLabel="Increase"
-        className={cn('h-11 w-11 items-center justify-center', value >= max && 'opacity-35')}
-      >
-        <MaterialCommunityIcons name="plus" size={18} color={COLORS.textPrimary} />
-      </Pressable>
+      <StepButton icon="plus" label="Increase" disabled={value >= max} onPress={() => step(1)} />
     </View>
+  );
+}
+
+/** Its own component so it can hold the press hook — two per stepper. */
+function StepButton({
+  icon,
+  label,
+  disabled,
+  onPress,
+}: {
+  icon: 'plus' | 'minus';
+  label: string;
+  disabled: boolean;
+  onPress: () => void;
+}) {
+  const press = usePressScale(0.9);
+
+  return (
+    <Pressable
+      onPressIn={() => {
+        if (!disabled) press.onPressIn();
+      }}
+      onPressOut={press.onPressOut}
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={6}
+      accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+    >
+      <Animated.View
+        style={press.style}
+        className={cn('h-11 w-11 items-center justify-center', disabled && 'opacity-35')}
+      >
+        <MaterialCommunityIcons name={icon} size={18} color={COLORS.textPrimary} />
+      </Animated.View>
+    </Pressable>
   );
 }
