@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_ABOVE } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
 import { Badge, Button, Card, Chip, Input, Stepper, Text } from '../components/ui';
@@ -821,8 +821,8 @@ export default function ReviewVerifyScreen() {
           that moves can't be tapped quickly. Anchored at the bottom, the button
           stays exactly where the thumb is. */}
       <View
-        className="absolute bottom-0 left-0 right-0 border-t border-hairline bg-canvas px-gutter pt-3"
-        style={{ paddingBottom: insets.bottom + 12 }}
+        className="absolute bottom-0 left-0 right-0 bg-canvas px-gutter pt-3"
+        style={[RULE_ABOVE, { paddingBottom: insets.bottom + 12 }]}
       >
         {bar.hint ? (
           <Text variant="micro" tone="soft" numberOfLines={1} className="mb-2">

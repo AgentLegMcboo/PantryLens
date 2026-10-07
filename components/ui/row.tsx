@@ -52,9 +52,12 @@ export function Row({
     <View
       className={cn(
         'min-h-[56px] flex-row items-center gap-3 py-2',
-        divider && 'border-b border-hairline',
         className,
       )}
+      // Set directly: the className form (border-b + a colour) drew all four
+      // sides on Android, so every row in a group was boxed in rather than
+      // underlined.
+      style={divider ? { borderBottomWidth: 1.5, borderBottomColor: COLORS.borderSoft } : undefined}
     >
       {icon ? (
         <View className="h-9 w-9 items-center justify-center rounded-full bg-subtle">

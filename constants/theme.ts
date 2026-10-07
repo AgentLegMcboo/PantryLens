@@ -99,3 +99,13 @@ export const CARD_ELEVATION = {
   shadowOffset: { width: 0, height: 3 },
   elevation: 2,
 } as const;
+
+/**
+ * One-sided rules, as style objects.
+ *
+ * The className forms (`border-b border-hairline`) drew all four sides on
+ * Android, boxing in what should have been an underline. Plain style props do
+ * exactly what they say.
+ */
+export const RULE_BELOW = { borderBottomWidth: 1.5, borderBottomColor: COLORS.borderSoft } as const;
+export const RULE_ABOVE = { borderTopWidth: 1.5, borderTopColor: COLORS.borderSoft } as const;

@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_ABOVE } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { FadeInUp } from '../components/motion';
 import {
@@ -164,7 +164,7 @@ export default function BulkIntakeScreen() {
             </View>
           </View>
 
-          <View className="flex-row items-center gap-3 border-t border-hairline pt-5">
+          <View className="flex-row items-center gap-3 pt-5" style={RULE_ABOVE}>
             <View className="flex-1">
               <Text variant="body" className="font-semibold">
                 Estimated units

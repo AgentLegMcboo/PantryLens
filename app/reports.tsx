@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_BELOW } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
 import {
   Badge,
@@ -224,9 +224,8 @@ export default function ReportsScreen() {
             {byCategory.map(([category, v], i) => (
               <View
                 key={category}
-                className={`flex-row items-center gap-3 py-3 ${
-                  i < byCategory.length - 1 ? 'border-b border-hairline' : ''
-                }`}
+                className="flex-row items-center gap-3 py-3"
+                style={i < byCategory.length - 1 ? RULE_BELOW : undefined}
               >
                 <CategoryIcon category={category} />
                 <Text variant="body" className="flex-1 capitalize">
@@ -276,9 +275,8 @@ export default function ReportsScreen() {
             {slow.map((row, i) => (
               <View
                 key={row.name}
-                className={`flex-row items-center gap-3 py-3 ${
-                  i < slow.length - 1 ? 'border-b border-hairline' : ''
-                }`}
+                className="flex-row items-center gap-3 py-3"
+                style={i < slow.length - 1 ? RULE_BELOW : undefined}
               >
                 <CategoryIcon category={row.category ?? 'unknown'} />
                 <View className="flex-1">

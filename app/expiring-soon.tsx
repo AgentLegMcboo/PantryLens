@@ -4,7 +4,7 @@ import React from 'react';
 import { FlatList, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
-import { Badge, Button, Card, EmptyState, Text } from '../components/ui';
+import { Button, Card, CategoryIcon, EmptyState, Text } from '../components/ui';
 import { daysUntil, windowEndISO } from '../lib/expiry';
 import { InventoryItem, usePantryStore } from '../lib/store';
 
@@ -29,6 +29,13 @@ function urgency(days: number) {
   return { colour: COLORS.statusWarning, tone: 'warn' as const, label: `${days}d left` };
 }
 
+/** "Oct 15" — the year is noise inside a window of weeks. */
+function shortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
 export default function ExpiringSoonScreen() {
   const router = useRouter();
   const { inventory, settings } = usePantryStore();
@@ -47,22 +54,47 @@ export default function ExpiringSoonScreen() {
 
     return (
       <FadeInUp index={index + 1}>
-        <Card className="mb-3 flex-row items-center gap-4">
-          {/* Urgency is carried by the bar, not by a second badge. The rows are
-              already in order, so the colour only has to confirm it. */}
-          <View className="h-11 w-1.5 rounded-full" style={{ backgroundColor: state.colour }} />
+        <Card className="mb-3 flex-row items-center gap-3.5 p-4">
+          <CategoryIcon
+            category={item.category}
+            size="md"
+            tone={state.tone === 'critical' ? 'critical' : 'brand'}
+          />
 
           <View className="flex-1">
             <Text variant="body" className="font-semibold">
               {item.name}
             </Text>
-            <Text variant="micro" tone="soft" className="mt-1 capitalize">
-              {item.category} · {item.count} {item.count === 1 ? 'unit' : 'units'} ·{' '}
-              {item.expiration}
+            <Text variant="micro" tone="soft" className="mt-1">
+              {item.count} {item.count === 1 ? 'unit' : 'units'} · {shortDate(item.expiration!)}
             </Text>
           </View>
 
-          <Badge label={state.label} tone={state.tone} />
+          {/* The number you act on, set large at the end of the row. A coloured
+              pill said "9d left" in the same size as everything around it; a
+              figure you can read from the next shelf over is the point of
+              sorting by date. */}
+          <View
+            className="min-w-[56px] items-center rounded-md px-2.5 py-1.5"
+            style={{ backgroundColor: state.tone === 'critical' ? 'rgba(192,57,43,0.1)' : 'rgba(227,154,59,0.16)' }}
+          >
+            {days < 0 ? (
+              <Text variant="label" className="font-bold" style={{ color: state.colour }}>
+                Past
+              </Text>
+            ) : (
+              <>
+                <Text variant="heading" className="font-bold" style={{ color: state.colour }}>
+                  {days === 0 ? 'Today' : days}
+                </Text>
+                {days > 0 && (
+                  <Text variant="micro" className="font-semibold" style={{ color: state.colour }}>
+                    {days === 1 ? 'day' : 'days'}
+                  </Text>
+                )}
+              </>
+            )}
+          </View>
         </Card>
       </FadeInUp>
     );

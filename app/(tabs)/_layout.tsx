@@ -1,11 +1,60 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, View } from 'react-native';
+import { type ColorValue, View } from 'react-native';
+import Animated, {
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSequence,
+  withSpring,
+} from 'react-native-reanimated';
+import React, { useEffect } from 'react';
 import { COLORS } from '../../constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { usePantryStore } from '../../lib/store';
 import { AppHeader } from '../../components/app-header';
+
+/**
+ * A tab's icon, which hops when its tab becomes the current one.
+ *
+ * The bar used to change colour and nothing else, so a switch registered only
+ * once the page behind it had changed. A small lift-and-settle at the icon, the
+ * thing the thumb is on, says "that one" the instant the tap lands. Skipped
+ * under reduce motion, where the colour change alone carries it.
+ */
+function TabIcon({
+  name,
+  color,
+  size,
+  focused,
+}: {
+  name: React.ComponentProps<typeof MaterialCommunityIcons>['name'];
+  color: ColorValue;
+  size: number;
+  focused: boolean;
+}) {
+  const reduceMotion = useReducedMotion();
+  const lift = useSharedValue(0);
+
+  useEffect(() => {
+    if (!focused || reduceMotion) return;
+    lift.value = withSequence(
+      withSpring(-4, { damping: 12, stiffness: 420 }),
+      withSpring(0, { damping: 11, stiffness: 260 }),
+    );
+  }, [focused, reduceMotion, lift]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ translateY: lift.value }, { scale: 1 - lift.value * 0.025 }],
+  }));
+
+  return (
+    <Animated.View style={style}>
+      <MaterialCommunityIcons name={name} size={size} color={color} />
+    </Animated.View>
+  );
+}
 
 /** Bar height before the home-indicator inset is added. */
 const TAB_BAR_BODY = 50;
@@ -50,6 +99,10 @@ export default function TabLayout() {
           marginTop: -2,
         },
         tabBarIconStyle: { marginTop: 2 },
+        // Pages cross-fade rather than cut. Short, so the tab never feels like it
+        // is waiting on the page.
+        animation: 'fade',
+        transitionSpec: { animation: 'timing', config: { duration: 160 } },
         // Every tab gets the same custom bar: pantry name, an expiry bell, and
         // an overflow holding settings and sign-out.
         header: ({ options }) => <AppHeader title={String(options.title ?? '')} />,
@@ -59,8 +112,8 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="home-variant-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="home-variant-outline" size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -68,8 +121,8 @@ export default function TabLayout() {
         name="inventory"
         options={{
           title: 'Inventory',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="format-list-bulleted" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="format-list-bulleted" size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -77,8 +130,8 @@ export default function TabLayout() {
         name="build"
         options={{
           title: 'Build',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="package-variant-closed" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="package-variant-closed" size={size} color={color} focused={focused} />
           ),
         }}
       />
@@ -86,8 +139,8 @@ export default function TabLayout() {
         name="needs"
         options={{
           title: 'Needs',
-          tabBarIcon: ({ color, size }) => (
-            <MaterialCommunityIcons name="bullhorn-outline" size={size} color={color} />
+          tabBarIcon: ({ color, size, focused }) => (
+            <TabIcon name="bullhorn-outline" size={size} color={color} focused={focused} />
           ),
         }}
       />

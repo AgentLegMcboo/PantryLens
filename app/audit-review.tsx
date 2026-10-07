@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_BELOW } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
 import {
   Badge,
@@ -384,7 +384,8 @@ export default function AuditReviewScreen() {
                 return (
                   <View
                     key={line.key}
-                    className={`gap-3 py-3 ${i < group.length - 1 ? 'border-b border-hairline' : ''}`}
+                    className="gap-3 py-3"
+                    style={i < group.length - 1 ? RULE_BELOW : undefined}
                   >
                     <View className="flex-row items-center gap-3">
                       <ItemThumb

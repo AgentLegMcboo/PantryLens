@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -13,16 +13,23 @@ import {
   View,
 } from 'react-native';
 import { COLORS } from '../../constants/theme';
-import { isPastDate, windowEndISO } from '../../lib/expiry';
+import { daysUntil, isPastDate, windowEndISO } from '../../lib/expiry';
+import { cn } from '../../lib/cn';
 import { cueTap, cueWarn } from '../../lib/feedback';
 import { PlacesManager } from '../../components/places-manager';
 import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
+import Animated, {
+  Easing,
+  FadeInDown,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+  type SharedValue,
+} from 'react-native-reanimated';
 import type { SwipeableMethods } from 'react-native-gesture-handler/lib/typescript/components/ReanimatedSwipeable/ReanimatedSwipeableProps';
 import {
-  Badge,
   Button,
-  Card,
   Chip,
   EmptyState,
   Input,
@@ -112,7 +119,7 @@ function SwipeAction({ translation }: { translation: SharedValue<number> }) {
   return (
     <Animated.View
       style={style}
-      className="mb-3 items-end justify-center overflow-hidden rounded-lg bg-critical pr-5"
+      className="items-end justify-center overflow-hidden bg-critical pr-5"
     >
       <View className="items-center">
         <MaterialCommunityIcons name="tray-arrow-up" size={22} color={COLORS.textOnPrimary} />
@@ -120,6 +127,105 @@ function SwipeAction({ translation }: { translation: SharedValue<number> }) {
           Take off
         </Text>
       </View>
+    </Animated.View>
+  );
+}
+
+/** One duration for the chevron and the rows, so they read as a single motion. */
+const SECTION_MS = 260;
+
+/**
+ * A row that can fold itself away.
+ *
+ * LayoutAnimation was tried first and does nothing here: the rows were removed
+ * from the list's data, so React unmounted them before anything could animate.
+ * Instead the rows stay mounted while a section closes — shrinking to nothing
+ * and fading — and the screen drops them once the motion is over (see
+ * `toggleSection`).
+ *
+ * Rows are different heights (a long name wraps), so each measures itself. The
+ * measured copy sits absolutely positioned inside a clipping wrapper whose height
+ * is the animated number. Until it has been measured it lays out in the normal
+ * flow — a row born closed is only transparent for that first frame, not zero
+ * height, because a child inside a zero-height parent never reports its size.
+ */
+function CollapsibleRow({
+  open,
+  appear,
+  children,
+}: {
+  open: boolean;
+  /** True when the row is mounting because its section was just opened. */
+  appear: boolean;
+  children: React.ReactNode;
+}) {
+  const reduceMotion = useReducedMotion();
+  const startClosed = useRef(!open || appear).current;
+  const progress = useSharedValue(startClosed ? 0 : 1);
+  const natural = useSharedValue(0);
+  const [measured, setMeasured] = useState(false);
+
+  useEffect(() => {
+    progress.value = withTiming(open ? 1 : 0, {
+      duration: reduceMotion ? 0 : SECTION_MS,
+      easing: Easing.out(Easing.cubic),
+    });
+  }, [open, reduceMotion, progress]);
+
+  const clip = useAnimatedStyle(() => ({
+    height: natural.value * progress.value,
+    opacity: progress.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        { overflow: 'hidden' },
+        measured ? clip : startClosed ? { opacity: 0 } : null,
+      ]}
+    >
+      <View
+        style={measured ? { position: 'absolute', top: 0, left: 0, right: 0 } : undefined}
+        onLayout={e => {
+          const h = e.nativeEvent.layout.height;
+          if (h > 0) {
+            natural.value = h;
+            if (!measured) setMeasured(true);
+          }
+        }}
+      >
+        {children}
+      </View>
+    </Animated.View>
+  );
+}
+
+/**
+ * The turn of a section's chevron.
+ *
+ * It used to swap between two different glyphs, so the arrow snapped from
+ * pointing right to pointing down while the rows below it did the same. One
+ * glyph that rotates reads as the SAME arrow opening, and its motion is what
+ * tells the eye the rows beneath are about to follow it.
+ *
+ * Its own component because it holds a shared value, and renderSectionHeader is
+ * a plain callback where a hook is a Rules-of-Hooks violation.
+ */
+function SectionChevron({ collapsed }: { collapsed: boolean }) {
+  const reduceMotion = useReducedMotion();
+  const turn = useSharedValue(collapsed ? 1 : 0);
+
+  useEffect(() => {
+    turn.value = withTiming(collapsed ? 1 : 0, { duration: reduceMotion ? 0 : SECTION_MS });
+  }, [collapsed, reduceMotion, turn]);
+
+  const style = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${-90 * turn.value}deg` }],
+  }));
+
+  return (
+    <Animated.View style={style}>
+      <MaterialCommunityIcons name="chevron-down" size={18} color={COLORS.textSecondary} />
     </Animated.View>
   );
 }
@@ -166,6 +272,27 @@ export default function InventoryScreen() {
   const [groupBy, setGroupBy] = useState<GroupBy>('place');
   /** Sections the volunteer has folded away, by section id. */
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
+  /**
+   * Sections whose rows have finished folding and been dropped from the list.
+   * Trails `collapsed` by one animation, so the rows can be seen shrinking.
+   */
+  const [dropped, setDropped] = useState<Record<string, boolean>>({});
+  /** Sections that were opened a moment ago, whose rows should grow in. */
+  const appearing = useRef(new Set<string>());
+  /** True for the first moments after the screen opens, while rows may stagger in. */
+  const arriving = useRef(true);
+  const reduceMotion = useReducedMotion();
+  useEffect(() => {
+    const t = setTimeout(() => {
+      arriving.current = false;
+    }, 900);
+    return () => clearTimeout(t);
+  }, []);
+  const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    const live = timers.current;
+    return () => live.forEach(clearTimeout);
+  }, []);
   /**
    * Show only stock a human flagged as dented, rusted, seal-broken or past date.
    *
@@ -256,9 +383,40 @@ export default function InventoryScreen() {
       .map(b => ({
         ...b,
         units: b.data.reduce((sum, i) => sum + i.count, 0),
-        data: collapsed[b.id] ? [] : b.data,
+        data: dropped[b.id] ? [] : b.data,
       }));
   })();
+
+  /**
+   * Folds or opens a section.
+   *
+   * Collapsing used to drop the rows in one frame and everything under them
+   * jumped up the screen. Now the rows shrink and fade (CollapsibleRow) while the
+   * sections beneath ride up with them, and only then are they removed from the
+   * list, so a long inventory is not kept mounted while folded. Opening mounts
+   * them back at zero height and grows them in.
+   */
+  const toggleSection = (id: string) => {
+    cueTap();
+    const pending = timers.current.get(id);
+    if (pending) clearTimeout(pending);
+
+    if (!collapsed[id]) {
+      setCollapsed(prev => ({ ...prev, [id]: true }));
+      timers.current.set(
+        id,
+        setTimeout(() => setDropped(prev => ({ ...prev, [id]: true })), SECTION_MS + 60),
+      );
+    } else {
+      appearing.current.add(id);
+      setDropped(prev => ({ ...prev, [id]: false }));
+      setCollapsed(prev => ({ ...prev, [id]: false }));
+      timers.current.set(
+        id,
+        setTimeout(() => appearing.current.delete(id), SECTION_MS + 120),
+      );
+    }
+  };
 
   const selectedIds = Object.keys(selected).filter(id => selected[id]);
   const picking = selectedIds.length > 0;
@@ -349,7 +507,15 @@ export default function InventoryScreen() {
     setModalVisible(false);
   };
 
-  const renderItemRow = ({ item }: { item: InventoryItem }) => {
+  const renderRowContent = ({
+    item,
+    index,
+    section,
+  }: {
+    item: InventoryItem;
+    index: number;
+    section: { data: readonly InventoryItem[] };
+  }) => {
     const pastDate = isPastDate(item.expiration);
     const expiringSoon = !pastDate && !!item.expiration && item.expiration <= warningStr;
     const damaged = !isUsableCondition(item.condition);
@@ -358,6 +524,49 @@ export default function InventoryScreen() {
     const placeName = locations.find(l => l.id === item.location_id)?.name;
 
     const isSelected = !!selected[item.id];
+    const first = index === 0;
+    const last = index === section.data.length - 1;
+
+    const days = daysUntil(item.expiration);
+    const shortDate = item.expiration
+      ? new Date(`${item.expiration}T00:00:00`).toLocaleDateString('en-US', {
+          month: 'short',
+          day: 'numeric',
+          year: 'numeric',
+        })
+      : null;
+
+    /**
+     * One line of status, worst first, in words that carry their own urgency.
+     *
+     * This was a grey "Expires 2026-10-17 · on shelf 20d" line plus a separate
+     * badge underneath it, so every flagged row grew a third line and a colour
+     * chip to say what the line above already half said. Now the line itself
+     * changes: "Use first · 14 days left" is the warning, there is nothing
+     * further to attach to it, and a row stays two lines whatever state it is in.
+     * "Damaged" outranks "out of date" outranks "use first" — it is the order in
+     * which they stop food leaving the building.
+     */
+    const status: { text: string; tone: 'critical' | 'warn'; suffix?: string } | null = damaged
+      ? { text: CONDITION_LABELS[item.condition || 'ok'], tone: 'critical' }
+      : pastDate
+        ? { text: 'Out of date', tone: 'critical', suffix: shortDate ?? undefined }
+        : expiringSoon
+          ? {
+              text:
+                days === 0
+                  ? 'Use first · expires today'
+                  : `Use first · ${days} ${days === 1 ? 'day' : 'days'} left`,
+              tone: 'warn',
+            }
+          : null;
+
+    // Context that only earns its space when it is not already the heading above
+    // the row (place) or the thing the list is sorted by (shelf age).
+    const context = [
+      groupBy !== 'place' && placeName ? placeName : null,
+      sortBy === 'oldest' && item.date_added ? `on shelf ${daysOnShelf(item.date_added)}d` : null,
+    ].filter(Boolean) as string[];
 
     const row = (
       <Pressable
@@ -371,86 +580,102 @@ export default function InventoryScreen() {
         }
         onLongPress={() => toggleSelect(item.id)}
         delayLongPress={250}
+        // One card per SECTION, not per product. Each product used to be its own
+        // bordered, shadowed, bottom-lipped box, which is why three items filled
+        // a screen and the list read as a stack of heavy slabs. Rows now share a
+        // container and are told apart by a hairline, the way every list people
+        // find calm is built; the lip is kept on the group's last row so the
+        // group still sits on the page like the other cards do.
+        className={cn(
+          'border-x-[1.5px] border-hairline',
+          isSelected ? 'bg-subtle' : 'bg-card',
+          first && 'rounded-t-lg border-t-[1.5px]',
+          last && 'rounded-b-lg border-b-[3px]',
+        )}
       >
-        <Card className={isSelected ? 'mb-3 border-brand bg-subtle' : 'mb-3'}>
-          <View className="flex-row items-start gap-3">
-            {picking && (
-              <MaterialCommunityIcons
-                name={isSelected ? 'check-circle' : 'circle-outline'}
-                size={26}
-                color={isSelected ? COLORS.primaryLight : COLORS.borderStrong}
-                style={{ marginTop: 2 }}
-              />
-            )}
-            {/* The actual product where we have a picture of it, the category
-                glyph where we do not. A volunteer at a shelf is matching what
-                the app says against what is in their hand, and a thumbnail does
-                that instantly in a way a line of text never can. */}
-            <ItemThumb
-              imageUrl={item.image_url}
-              category={item.category}
-              tone={blocked ? 'critical' : 'brand'}
+        <View className="flex-row items-center gap-3 px-4 py-3">
+          {picking && (
+            <MaterialCommunityIcons
+              name={isSelected ? 'check-circle' : 'circle-outline'}
+              size={26}
+              color={isSelected ? COLORS.primaryLight : COLORS.borderStrong}
             />
+          )}
+          {/* The actual product where we have a picture of it, the category
+              glyph where we do not. A volunteer at a shelf is matching what
+              the app says against what is in their hand, and a thumbnail does
+              that instantly in a way a line of text never can. */}
+          <ItemThumb
+            imageUrl={item.image_url}
+            category={item.category}
+            tone={blocked ? 'critical' : 'brand'}
+          />
 
-            <View className="flex-1">
-              <Text variant="body" className="font-semibold">
-                {item.name}
-              </Text>
-              <Text variant="micro" tone="soft" className="mt-1">
-                {item.expiration ? `Expires ${item.expiration}` : 'No expiry recorded'}
-                {item.date_added ? ` · on shelf ${daysOnShelf(item.date_added)}d` : ''}
-              </Text>
-              {placeName ? (
-                <View className="mt-1 flex-row items-center gap-1">
-                  <MaterialCommunityIcons
-                    name="map-marker-outline"
-                    size={12}
-                    color={COLORS.textSecondary}
-                  />
-                  <Text variant="micro" tone="soft">
-                    {placeName}
-                  </Text>
-                </View>
-              ) : null}
+          <View className="flex-1">
+            <Text variant="body" numberOfLines={2} className="font-semibold">
+              {item.name}
+            </Text>
 
-              {/* At most one badge, worst first. "Use first" and "Out of date"
-                  had been the same badge, which is the difference between food
-                  to pack this week and food that will never go in a box. */}
-              {damaged ? (
-                <Badge
-                  label={CONDITION_LABELS[item.condition || 'ok']}
-                  tone="critical"
-                  className="mt-2"
+            {status ? (
+              <View className="mt-1 flex-row items-center gap-1.5">
+                <View
+                  className={cn(
+                    'h-1.5 w-1.5 rounded-full',
+                    status.tone === 'critical' ? 'bg-critical' : 'bg-warn',
+                  )}
                 />
-              ) : pastDate ? (
-                <Badge label="Out of date" tone="critical" className="mt-2" />
-              ) : expiringSoon ? (
-                <Badge label="Use first" tone="warn" className="mt-2" />
-              ) : null}
-            </View>
+                <Text variant="micro" tone={status.tone} className="flex-shrink font-bold">
+                  {status.text}
+                  {status.suffix ? (
+                    <Text variant="micro" tone="soft" className="font-normal">
+                      {` · ${status.suffix}`}
+                    </Text>
+                  ) : null}
+                </Text>
+              </View>
+            ) : (
+              <Text variant="micro" tone="soft" className="mt-1">
+                {shortDate ? `Expires ${shortDate}` : 'No expiry date'}
+              </Text>
+            )}
 
-            {/* The stepper is meaningless while picking — the row is a checkbox
-                then, and a control that also changes stock would fight the tap. */}
-            {!picking && (
-              <Stepper
-                value={item.count}
-                min={0}
-                onChange={next => {
-                  const write =
-                    next === 0
-                      ? deleteItem(item.id)
-                      : updateItem(item.id, { count: next });
-                  // These used to be fired and forgotten, so a rejected write was
-                  // an unhandled promise and a silently unchanged shelf.
-                  write.catch((err: any) => {
-                    cueWarn();
-                    Alert.alert('Could not save that change', err?.message ?? 'Please try again.');
-                  });
-                }}
-              />
+            {context.length > 0 && (
+              <Text variant="micro" tone="soft" numberOfLines={1} className="mt-0.5">
+                {context.join(' · ')}
+              </Text>
             )}
           </View>
-        </Card>
+
+          {/* The stepper is meaningless while picking — the row is a checkbox
+              then, and a control that also changes stock would fight the tap. */}
+          {!picking && (
+            <Stepper
+              size="compact"
+              value={item.count}
+              min={0}
+              onChange={next => {
+                const write =
+                  next === 0 ? deleteItem(item.id) : updateItem(item.id, { count: next });
+                // These used to be fired and forgotten, so a rejected write was
+                // an unhandled promise and a silently unchanged shelf.
+                write.catch((err: any) => {
+                  cueWarn();
+                  Alert.alert('Could not save that change', err?.message ?? 'Please try again.');
+                });
+              }}
+            />
+          )}
+        </View>
+
+        {/* Inset to the text column, so the line separates names rather than
+            cutting the thumbnails off from their own row. */}
+        {!last && (
+          <View
+            pointerEvents="none"
+            className="absolute bottom-0 right-0 h-px bg-hairline"
+            style={{ left: picking ? 114 : 76 }}
+          />
+        )}
       </Pressable>
     );
 
@@ -486,6 +711,30 @@ export default function InventoryScreen() {
       </ReanimatedSwipeable>
     );
   };
+
+  const renderItemRow = (info: {
+    item: InventoryItem;
+    index: number;
+    section: { id: string; data: readonly InventoryItem[] };
+  }) => (
+    // Outside the collapsing wrapper so the two never fight over opacity. Only
+    // while the screen is first arriving, and only the first few rows of a
+    // section: rows scrolled in later should simply be there.
+    <Animated.View
+      entering={
+        arriving.current && info.index < 5 && !reduceMotion
+          ? FadeInDown.duration(320).delay(info.index * 55)
+          : undefined
+      }
+    >
+      <CollapsibleRow
+        open={!collapsed[info.section.id]}
+        appear={appearing.current.has(info.section.id)}
+      >
+        {renderRowContent(info)}
+      </CollapsibleRow>
+    </Animated.View>
+  );
 
   return (
     <View className="flex-1 bg-canvas">
@@ -601,35 +850,6 @@ export default function InventoryScreen() {
         </View>
         )}
 
-        {!picking && flaggedCount > 0 && (
-          <Pressable
-            onPress={() => {
-              cueTap();
-              setOnlyFlagged(v => !v);
-            }}
-            className={`flex-row items-center gap-3 rounded-md border-[1.5px] px-4 py-3 ${
-              onlyFlagged ? 'border-critical bg-critical' : 'border-hairline bg-subtle'
-            }`}
-          >
-            <MaterialCommunityIcons
-              name="alert-circle-outline"
-              size={20}
-              color={onlyFlagged ? COLORS.textOnPrimary : COLORS.statusCritical}
-            />
-            <Text
-              variant="label"
-              tone={onlyFlagged ? 'on' : 'default'}
-              className="flex-1 font-semibold"
-            >
-              {flaggedCount} {flaggedCount === 1 ? 'item is' : 'items are'} out of date or
-              damaged
-            </Text>
-            <Text variant="micro" tone={onlyFlagged ? 'on' : 'soft'} className="font-bold">
-              {onlyFlagged ? 'Show all' : 'Show them'}
-            </Text>
-          </Pressable>
-        )}
-
         {!picking && (
         <FlatList
           horizontal
@@ -637,6 +857,43 @@ export default function InventoryScreen() {
           keyExtractor={c => c.id}
           showsHorizontalScrollIndicator={false}
           contentContainerClassName="gap-2 pr-gutter"
+          // Out-of-date or damaged stock used to get its own full-width banner
+          // above the filters — the loudest thing on the screen for what is, most
+          // days, a single item. It is a filter like the others, so it is a chip
+          // like the others, just red so it still cannot be missed. It only
+          // exists while there is something to show.
+          ListHeaderComponent={
+            flaggedCount > 0 ? (
+              <Pressable
+                onPress={() => {
+                  cueTap();
+                  setOnlyFlagged(v => !v);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: onlyFlagged }}
+                accessibilityLabel={`${flaggedCount} out of date or damaged. ${
+                  onlyFlagged ? 'Showing only these. Tap to show all.' : 'Tap to show only these.'
+                }`}
+                className={cn(
+                  'min-h-[40px] flex-row items-center gap-1.5 rounded-full border-[1.5px] px-3.5',
+                  onlyFlagged ? 'border-critical bg-critical' : 'border-critical bg-card',
+                )}
+              >
+                <MaterialCommunityIcons
+                  name="alert-circle"
+                  size={16}
+                  color={onlyFlagged ? COLORS.textOnPrimary : COLORS.statusCritical}
+                />
+                <Text
+                  variant="label"
+                  tone={onlyFlagged ? 'on' : 'critical'}
+                  className="font-semibold"
+                >
+                  {flaggedCount} to check
+                </Text>
+              </Pressable>
+            ) : null
+          }
           renderItem={({ item }) => (
             <Chip
               label={item.label}
@@ -656,25 +913,24 @@ export default function InventoryScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         contentContainerClassName="px-gutter pt-4 pb-28"
+        renderSectionFooter={() => <View className="h-5" />}
         renderSectionHeader={({ section }) => {
           if (groupBy === 'none' || picking) return null;
           const isCollapsed = !!collapsed[section.id];
           return (
             <Pressable
-              onPress={() => {
-                cueTap();
-                setCollapsed(prev => ({ ...prev, [section.id]: !prev[section.id] }));
-              }}
+              onPress={() => toggleSection(section.id)}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: !isCollapsed }}
               // Opaque, because it sticks: a translucent header would let rows
               // scroll through the text behind it.
-              className="mb-3 flex-row items-center gap-2 bg-canvas pb-2 pt-1"
+              className="flex-row items-center gap-1.5 bg-canvas pb-2.5 pt-1"
             >
-              <MaterialCommunityIcons
-                name={isCollapsed ? 'chevron-right' : 'chevron-down'}
-                size={20}
-                color={COLORS.textSecondary}
-              />
-              <Text variant="heading" className="flex-1">
+              <SectionChevron collapsed={isCollapsed} />
+              {/* A label, not a heading: a section name at 17px bold competed with
+                  the product names beneath it at 15, so the eye had no idea which
+                  line was the thing and which was the shelf it was on. */}
+              <Text variant="label" tone="soft" className="flex-1 font-bold">
                 {section.title}
               </Text>
               {/* Units, not rows. "12 tins" is the number a volunteer standing in
@@ -689,7 +945,7 @@ export default function InventoryScreen() {
         }}
         ListHeaderComponent={
           picking ? null : (
-            <View className="mb-4 flex-row items-center justify-between gap-3">
+            <View className="mb-3 flex-row items-center justify-between gap-3">
               <Pressable
                 onPress={() => {
                   cueTap();

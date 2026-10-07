@@ -2,9 +2,11 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { Alert, Image, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { Button, Chip, Screen, Text } from '../components/ui';
+import { FadeInUp } from '../components/motion';
+import { CaptureCard, PhotoGrid } from '../components/photo-capture';
 import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
@@ -213,100 +215,68 @@ export default function LogDonationScreen() {
 
   return (
     <Screen>
-      {shots.length === 0 ? (
-        <Pressable onPress={handleTakePhoto}>
-          <View className="h-56 items-center justify-center rounded-lg border-2 border-dashed border-brand-light bg-subtle px-8">
-            <MaterialCommunityIcons name="camera-outline" size={40} color={COLORS.primaryLight} />
-            <Text variant="heading" className="mt-3">
-              Photograph the donation
+      <FadeInUp index={0}>
+        {shots.length === 0 ? (
+          <CaptureCard
+            title="Photograph the donation"
+            body="Lay items out so the labels face the camera. Several close shots beat one wide one."
+            disabled={isAnalyzing}
+            onCamera={handleTakePhoto}
+            onLibrary={handlePickFromLibrary}
+          />
+        ) : (
+          <PhotoGrid
+            uris={shots.map(x => x.uri)}
+            max={MAX_PHOTOS}
+            disabled={isAnalyzing}
+            onRemove={removeShot}
+            onAddCamera={handleTakePhoto}
+            onAddLibrary={handlePickFromLibrary}
+          />
+        )}
+      </FadeInUp>
+
+      <FadeInUp index={1}>
+        <View className="gap-2.5">
+          <View className="flex-row items-baseline gap-2 px-1">
+            <Text variant="label" className="font-bold">
+              Where did this come from?
             </Text>
-            <Text variant="label" tone="soft" className="mt-2 text-center">
-              Lay items out so the labels face the camera.
+            <Text variant="micro" tone="soft">
+              optional
             </Text>
           </View>
-        </Pressable>
-      ) : (
-        <View className="flex-row flex-wrap gap-3">
-          {shots.map((shot, i) => (
-            <View key={`${shot.uri}-${i}`} className="aspect-square w-[30%]">
-              <Image source={{ uri: shot.uri }} className="h-full w-full rounded-md bg-muted" />
-              <Pressable
-                onPress={() => removeShot(i)}
-                hitSlop={8}
-                accessibilityLabel={`Remove photo ${i + 1}`}
-                className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full bg-ink"
-              >
-                <MaterialCommunityIcons name="close" size={14} color={COLORS.textOnPrimary} />
-              </Pressable>
-            </View>
-          ))}
-
-          {!atLimit && (
-            <Pressable
-              onPress={handleTakePhoto}
-              className="aspect-square w-[30%] items-center justify-center rounded-md border-2 border-dashed border-brand-light bg-subtle"
-            >
-              <MaterialCommunityIcons name="camera-plus-outline" size={24} color={COLORS.primaryLight} />
-            </Pressable>
-          )}
+          <View className="flex-row flex-wrap gap-2">
+            {SOURCES.map(src => (
+              <Chip
+                key={src}
+                label={SOURCE_ORG_LABELS[src]}
+                selected={sourceOrg === src}
+                onPress={() => setSourceOrg(sourceOrg === src ? null : src)}
+              />
+            ))}
+          </View>
         </View>
+      </FadeInUp>
+
+      {shots.length > 0 && (
+        <FadeInUp index={2}>
+          <Button
+            label={isAnalyzing ? 'Reading labels…' : `Detect items in ${shots.length} ${shots.length === 1 ? 'photo' : 'photos'}`}
+            block
+            loading={isAnalyzing}
+            icon={<MaterialCommunityIcons name="auto-fix" size={20} color={COLORS.textOnPrimary} />}
+            onPress={handleDetectItems}
+          />
+        </FadeInUp>
       )}
 
-      <View className="gap-2">
-        <Text variant="label" tone="soft" className="font-semibold">
-          Where did this come from?
+      <View className="flex-row items-center justify-center gap-2 px-4">
+        <MaterialCommunityIcons name="shield-check-outline" size={16} color={COLORS.textSecondary} />
+        <Text variant="micro" tone="soft" className="flex-shrink text-center">
+          Nothing is saved until you check every line.
         </Text>
-        <View className="flex-row flex-wrap gap-2">
-          {SOURCES.map(src => (
-            <Chip
-              key={src}
-              label={SOURCE_ORG_LABELS[src]}
-              selected={sourceOrg === src}
-              onPress={() => setSourceOrg(sourceOrg === src ? null : src)}
-            />
-          ))}
-        </View>
       </View>
-
-      <View className="flex-row gap-3">
-        <Button
-          label="Camera"
-          variant="secondary"
-          size="compact"
-          className="flex-1 justify-center"
-          disabled={atLimit || isAnalyzing}
-          onPress={handleTakePhoto}
-        />
-        <Button
-          label="Photo library"
-          variant="secondary"
-          size="compact"
-          className="flex-1 justify-center"
-          disabled={atLimit || isAnalyzing}
-          onPress={handlePickFromLibrary}
-        />
-      </View>
-
-      <Button
-        label={isAnalyzing ? 'Reading labels…' : 'Detect items'}
-        block
-        loading={isAnalyzing}
-        disabled={shots.length === 0}
-        icon={<MaterialCommunityIcons name="auto-fix" size={20} color={COLORS.textOnPrimary} />}
-        onPress={handleDetectItems}
-      />
-
-      <Text variant="micro" tone="soft" className="text-center">
-        {shots.length === 0
-          ? `Up to ${MAX_PHOTOS} photos. Several close shots beat one wide one.`
-          : atLimit
-            ? `${MAX_PHOTOS} photos — that's the limit for one scan.`
-            : `${shots.length} of ${MAX_PHOTOS} attached. A big pile reads better in sections.`}
-      </Text>
-
-      <Text variant="micro" tone="soft" className="text-center">
-        Nothing is saved yet — you check every line before it reaches inventory.
-      </Text>
     </Screen>
   );
 }

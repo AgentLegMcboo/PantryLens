@@ -2,9 +2,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { Alert, Image, Pressable, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
+import { CaptureCard, PhotoGrid } from '../components/photo-capture';
 import { Button, Card, CardHeader, EmptyState, Panel, Row, Screen, Text } from '../components/ui';
 import { processImageScan, ScanError } from '../lib/ai_vision';
 import type { CountedRow } from '../lib/audit';
@@ -192,95 +193,70 @@ export default function ShelfAuditScreen() {
             subtitle="The count replaces what this shelf says. Everywhere else is left alone."
           />
 
-          {locations.map((place, i) => {
-            const active = place.id === locationId;
-            const items = inventory.filter(x => x.location_id === place.id);
-            const units = items.reduce((sum, x) => sum + x.count, 0);
-            return (
-              <Pressable
-                key={place.id}
-                accessibilityRole="radio"
-                accessibilityState={{ selected: active }}
-                onPress={() => {
-                  cueTap();
-                  setLocationId(place.id);
-                }}
-                className={`min-h-[56px] flex-row items-center gap-3 py-2 ${
-                  i === locations.length - 1 ? '' : 'border-b border-hairline'
-                }`}
-              >
-                <MaterialCommunityIcons
-                  name={active ? 'radiobox-marked' : 'radiobox-blank'}
-                  size={24}
-                  color={active ? COLORS.primaryLight : COLORS.borderStrong}
-                />
-                <View className="flex-1">
-                  <Text
-                    variant="body"
-                    tone={active ? 'default' : 'soft'}
-                    className={active ? 'font-semibold' : undefined}
-                  >
-                    {place.name}
-                  </Text>
-                  {/* What the books claim, so the scope is a number before a
-                      single photo is taken. */}
-                  <Text variant="micro" tone="soft" className="mt-0.5">
-                    {items.length === 0
-                      ? 'Nothing recorded here'
-                      : `${units} unit${units === 1 ? '' : 's'} across ${items.length} item${
-                          items.length === 1 ? '' : 's'
-                        }`}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
+          <View className="gap-2.5">
+            {locations.map(place => {
+              const active = place.id === locationId;
+              const items = inventory.filter(x => x.location_id === place.id);
+              const units = items.reduce((sum, x) => sum + x.count, 0);
+              return (
+                <Pressable
+                  key={place.id}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: active }}
+                  onPress={() => {
+                    cueTap();
+                    setLocationId(place.id);
+                  }}
+                  // The chosen shelf is outlined and tinted rather than ticked, so
+                  // the one in play reads from across the room.
+                  style={{
+                    borderColor: active ? COLORS.primaryLight : COLORS.borderSoft,
+                    backgroundColor: active ? 'rgba(188,90,60,0.07)' : COLORS.cardSurface,
+                  }}
+                  className="min-h-[60px] flex-row items-center gap-3 rounded-md border-2 px-3.5 py-2.5"
+                >
+                  <MaterialCommunityIcons
+                    name={active ? 'check-circle' : 'circle-outline'}
+                    size={24}
+                    color={active ? COLORS.primaryLight : COLORS.borderStrong}
+                  />
+                  <View className="flex-1">
+                    <Text variant="body" className="font-semibold">
+                      {place.name}
+                    </Text>
+                    {/* What the books claim, so the scope is a number before a
+                        single photo is taken. */}
+                    <Text variant="micro" tone="soft" className="mt-0.5">
+                      {items.length === 0
+                        ? 'Nothing recorded here'
+                        : `${units} unit${units === 1 ? '' : 's'} across ${items.length} item${
+                            items.length === 1 ? '' : 's'
+                          }`}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            })}
+          </View>
         </Card>
       </FadeInUp>
 
       <FadeInUp index={1}>
         {shots.length === 0 ? (
-          <Pressable onPress={handleTakePhoto}>
-            <View className="h-56 items-center justify-center rounded-lg border-2 border-dashed border-brand-light bg-subtle px-8">
-              <MaterialCommunityIcons name="camera-outline" size={40} color={COLORS.primaryLight} />
-              <Text variant="heading" className="mt-3">
-                Photograph the shelf
-              </Text>
-              <Text variant="label" tone="soft" className="mt-2 text-center">
-                Overlapping shots — left, middle, right — so nothing between them is missed.
-              </Text>
-            </View>
-          </Pressable>
+          <CaptureCard
+            title="Photograph the shelf"
+            body="Overlapping shots — left, middle, right — so nothing between them is missed."
+            disabled={isAuditing}
+            onCamera={handleTakePhoto}
+          />
         ) : (
-          <View className="flex-row flex-wrap gap-3">
-            {shots.map((shot, i) => (
-              <View key={`${shot.uri}-${i}`} className="aspect-square w-[30%]">
-                <Image source={{ uri: shot.uri }} className="h-full w-full rounded-md bg-muted" />
-                <Pressable
-                  onPress={() => removeShot(i)}
-                  hitSlop={8}
-                  accessibilityLabel={`Remove photo ${i + 1}`}
-                  className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full bg-ink"
-                >
-                  <MaterialCommunityIcons name="close" size={14} color={COLORS.textOnPrimary} />
-                </Pressable>
-              </View>
-            ))}
-
-            {!atLimit && (
-              <Pressable
-                onPress={handleTakePhoto}
-                accessibilityLabel="Take another photo"
-                className="aspect-square w-[30%] items-center justify-center rounded-md border-2 border-dashed border-brand-light bg-subtle"
-              >
-                <MaterialCommunityIcons
-                  name="camera-plus-outline"
-                  size={24}
-                  color={COLORS.primaryLight}
-                />
-              </Pressable>
-            )}
-          </View>
+          <PhotoGrid
+            uris={shots.map(x => x.uri)}
+            max={MAX_SHOTS}
+            disabled={isAuditing}
+            onRemove={removeShot}
+            onAddCamera={handleTakePhoto}
+          />
         )}
       </FadeInUp>
 
