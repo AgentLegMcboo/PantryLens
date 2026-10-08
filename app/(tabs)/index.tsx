@@ -190,7 +190,7 @@ export default function DashboardScreen() {
       <FadeInUp index={1}>
         <View className="flex-row gap-3">
           <View className="flex-1">
-          <Card className="flex-1 gap-3 p-4">
+          <Card className="grow gap-3 p-4">
             <View className="h-9 w-9 items-center justify-center rounded-full bg-subtle">
               <MaterialCommunityIcons name="warehouse" size={19} color={COLORS.primaryLight} />
             </View>
@@ -219,7 +219,7 @@ export default function DashboardScreen() {
             accessibilityLabel={`${expiringCount} units to use within ${settings.expirationWarningDays} days`}
           >
             <Card
-              className="flex-1 gap-3 p-4"
+              className="grow gap-3 p-4"
               style={
                 expiringCount > 0
                   ? {
