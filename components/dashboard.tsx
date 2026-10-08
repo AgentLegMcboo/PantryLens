@@ -30,6 +30,8 @@ export default function DashboardScreen() {
     activities,
     thresholds,
     boxRules,
+    boxTemplates,
+    setAuditDraft,
     pendingIntakes,
     syncError,
     syncing,
@@ -43,12 +45,14 @@ export default function DashboardScreen() {
   const [resuming, setResuming] = useState(false);
   const totals = stockTotals(inventory, bulkLots);
   const total = Object.values(totals).reduce((a, b) => a + b, 0);
+  const defaultBox = boxTemplates.find(t => t.is_default);
   const plan = computeAllocation(
     inventory,
     boxRules,
-    12,
-    settings.defaultFamilySize,
+    settings.boxTarget,
+    defaultBox?.scales_with_family === false ? 4 : settings.defaultFamilySize,
     bulkLots,
+    { warningDays: settings.expirationWarningDays, excludes: defaultBox?.excludes_tags, requires: defaultBox?.requires_tags },
   );
   const warning = new Date();
   warning.setDate(warning.getDate() + settings.expirationWarningDays);
@@ -73,6 +77,11 @@ export default function DashboardScreen() {
         throw new Error(
           "Some photos could not be read. Your scan is still saved; retry before reviewing.",
         );
+      if (saved.mode === "shelf_audit" && saved.locationId) {
+        setAuditDraft({ locationId: saved.locationId, photos: saved.shots.length, counted: result.candidates });
+        router.push("/audit-review");
+        return;
+      }
       setDraft(result.candidates as any, saved.shots, saved.createdAt);
       setDraftSource(saved.sourceOrg);
       setDraftLocation(saved.locationId);
@@ -119,9 +128,9 @@ export default function DashboardScreen() {
         </View>
         <Card style={{ flex: wide ? 1 : undefined, gap: 12, justifyContent: 'space-between' }}>
           <View className="flex-row items-center justify-between"><Text style={TYPOGRAPHY.sectionTitle}>Ready to make a difference</Text><MaterialCommunityIcons name="package-variant-closed" size={21} color={COLORS.primary} /></View>
-          <View className="flex-row items-baseline gap-2"><Text style={{ ...TYPOGRAPHY.metric, fontSize: 56, lineHeight: 62, color: COLORS.primary }}>{plan.achievableBoxes}</Text><Text variant="label" tone="soft">/ 12 family boxes</Text></View>
-          <View accessibilityRole="progressbar" accessibilityLabel="Boxes ready" accessibilityValue={{ min: 0, max: 12, now: plan.achievableBoxes }} style={{ height: 6, borderRadius: 3, backgroundColor: COLORS.surfaceContainer }}><View style={{ height: 6, borderRadius: 3, width: `${Math.min(100, plan.achievableBoxes / 12 * 100)}%`, backgroundColor: COLORS.secondary }} /></View>
-          <Text variant="label" tone="soft">{plan.achievableBoxes < 12 ? `${plan.shortfallPerCategory[plan.limitingCategory]} more ${categoryNames[plan.limitingCategory].toLowerCase()} units would help reach your goal.` : 'Enough of every required category to reach your goal.'}</Text>
+          <View className="flex-row items-baseline gap-2"><Text style={{ ...TYPOGRAPHY.metric, fontSize: 56, lineHeight: 62, color: COLORS.primary }}>{plan.achievableBoxes}</Text><Text variant="label" tone="soft">/ {settings.boxTarget} family boxes</Text></View>
+          <View accessibilityRole="progressbar" accessibilityLabel="Boxes ready" accessibilityValue={{ min: 0, max: settings.boxTarget, now: plan.achievableBoxes }} style={{ height: 6, borderRadius: 3, backgroundColor: COLORS.surfaceContainer }}><View style={{ height: 6, borderRadius: 3, width: `${Math.min(100, plan.achievableBoxes / settings.boxTarget * 100)}%`, backgroundColor: COLORS.secondary }} /></View>
+          <Text variant="label" tone="soft">{plan.achievableBoxes < settings.boxTarget ? `${plan.shortfallPerCategory[plan.limitingCategory]} more ${categoryNames[plan.limitingCategory].toLowerCase()} units would help reach your goal.` : 'Enough of every required category to reach your goal.'}</Text>
           <Button label="Plan your boxes" variant="secondary" block icon={<MaterialCommunityIcons name="arrow-right" size={18} color={COLORS.primary} />} onPress={() => router.push('/(tabs)/build')} />
         </Card>
       </View>

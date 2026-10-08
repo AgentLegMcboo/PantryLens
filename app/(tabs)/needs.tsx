@@ -1,18 +1,17 @@
+import { useAppRouter } from '../../components/app-navigation';
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import React, { useState } from "react";
 import { Alert, Pressable, View } from "react-native";
-import { COLORS, TYPOGRAPHY } from "../../constants/theme";
-import { stockTotals, donationMessage } from '../../lib/stock';
+import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
-import { useWorkspaceLayout } from "../../components/workspace-layout";
+import { FadeInUp } from "../../components/motion";
 import {
+  PageHeading,
   Button,
   Card,
   CategoryIcon,
-  Badge,
   Panel,
-  PageHeading,
   Screen,
   Sheet,
   Text,
@@ -43,19 +42,30 @@ const EXAMPLES: Record<string, string> = {
 };
 
 export default function NeedsScreen() {
-  const { wide } = useWorkspaceLayout();
-  const { inventory, bulkLots, boxRules, thresholds, settings } = usePantryStore();
+  const router = useAppRouter();
+  const { inventory, bulkLots, boxRules, boxTemplates, thresholds, settings } = usePantryStore();
+
+  // The pantry's own drop-off details. This line used to be hardcoded, so every
+  // pantry's message sent donors to the same invented rear entrance. With
+  // nothing set it is left out: no address beats a wrong one.
+  const dropoff = [settings.dropoffLocation.trim(), settings.dropoffHours.trim()]
+    .filter(Boolean)
+    .join(", ");
+  // The pantry's own target, not the number 12 that used to sit here. Every
+  // "stopping boxes going out" figure below is measured against it, so a pantry
+  // serving sixty families no longer asks donors for enough food for twelve.
+  const defaultBox = boxTemplates.find(t => t.is_default);
   const plan = computeAllocation(
     inventory,
     boxRules,
-    12,
-    settings.defaultFamilySize,
+    settings.boxTarget,
+    defaultBox?.scales_with_family === false ? 4 : settings.defaultFamilySize,
     bulkLots,
+    { warningDays: settings.expirationWarningDays, excludes: defaultBox?.excludes_tags, requires: defaultBox?.requires_tags },
   );
 
   const [flyerOpen, setFlyerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
-  const totals = stockTotals(inventory, bulkLots);
 
   const deficits: { category: string; deficit: number; reason: string }[] = [];
 
@@ -69,71 +79,196 @@ export default function NeedsScreen() {
   }
 
   Object.keys(thresholds).forEach((cat) => {
-    const current = totals[cat as keyof typeof totals];
+    if (cat === plan.limitingCategory) return;
+    // The allocator's own totals, not a fresh count of the shelf. Counting the
+    // shelf raw asked donors for food the pantry already had in a weighed bulk
+    // lot, and stayed quiet about categories whose only stock was out of date
+    // or waiting on an inspection.
+    const current = plan.categoryTotals[cat as keyof typeof plan.categoryTotals] ?? 0;
     const min = (thresholds as any)[cat];
-    const boxDeficit = plan.shortfallPerCategory[cat as keyof typeof plan.shortfallPerCategory] ?? 0;
-    const deficit = Math.max(0, min - current, boxDeficit);
-    if (deficit > 0 && !deficits.some(d => d.category === cat)) {
+    if (current < min) {
       deficits.push({
         category: cat,
-        deficit,
-        reason: boxDeficit > 0 ? "Needed for 12 boxes" : "Below the level you set",
+        deficit: min - current,
+        reason: "Below the level you set",
       });
     }
   });
 
-  const flyerText = donationMessage(settings.pantryName, deficits, EXAMPLES, settings.dropOffDetails);
+  const flyerText = `🛒 MOST NEEDED ITEMS — ${settings.pantryName.toUpperCase()}
+${new Date().toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+
+Our pantry is short on the food for ${settings.boxTarget} family box${
+    settings.boxTarget === 1 ? "" : "es"
+  }:
+
+${deficits
+  .map(
+    (d) =>
+      `• ${d.category.toUpperCase()} — about ${d.deficit} more needed\n  ${EXAMPLES[d.category] ?? ""}`,
+  )
+  .join("\n\n")}
+
+${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbours ❤️`;
 
   const handleCopy = async () => {
-    try {
-      await Clipboard.setStringAsync(flyerText);
-      cueSuccess();
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
-    } catch {
-      Alert.alert('Could not copy', 'Open the message preview to select and copy the request.');
-    }
+    await Clipboard.setStringAsync(flyerText);
+    cueSuccess();
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2500);
+    Alert.alert("Copied", "Paste it into an email, a post, or a printed flyer.");
   };
-  const categoryNames: Record<string,string> = {grain:'Grains',vegetable:'Vegetables',protein:'Protein',breakfast:'Breakfast',snack:'Snacks',hygiene:'Hygiene',baby:'Baby essentials'};
-  const requestCard = (
-    <Card style={{gap:20}}>
-      <View className="flex-row items-center gap-3"><View className="h-10 w-10 rounded-md bg-brand-tint items-center justify-center"><MaterialCommunityIcons name="text-box-outline" size={22} color={COLORS.primary} /></View><View className="flex-1 gap-1"><Text style={TYPOGRAPHY.sectionTitle}>Ready to share</Text><Text variant="micro" tone="soft">One request, based on real stock.</Text></View></View>
-      {wide && <Panel><Text variant="label" selectable style={{lineHeight:23}}>{flyerText}</Text></Panel>}
-      <Button label={copied ? 'Request copied' : 'Copy donation request'} block
-        icon={<MaterialCommunityIcons name={copied ? 'check' : 'content-copy'} size={18} color={COLORS.textOnPrimary} />} onPress={handleCopy} />
-      <Text variant="micro" tone={copied ? 'good' : 'soft'} accessibilityLiveRegion="polite">{copied ? 'Copied. Ready to paste into a message or post.' : 'Paste into a community post, email, or printed flyer.'}</Text>
-      {!wide && <Button label="Preview message" variant="ghost" size="compact" block onPress={() => setFlyerOpen(true)} />}
-      {settings.dropOffDetails ? <View className="flex-row items-start gap-2 border-t border-hairline pt-4"><MaterialCommunityIcons name="map-marker-outline" size={18} color={COLORS.primary} /><Text variant="micro" tone="soft" className="flex-1">{settings.dropOffDetails}</Text></View> : <Text variant="micro" tone="soft">Add drop-off details in Settings to include them in your request.</Text>}
-    </Card>
-  );
+
+  if (deficits.length === 0) {
+    return (
+      <Screen>
+      <PageHeading title="Donation needs" description="Help your community give what your pantry needs most." />
+        <FadeInUp index={0}>
+          <View className="items-center px-6 py-16">
+            <MaterialCommunityIcons
+              name="check-decagram"
+              size={52}
+              color={COLORS.statusGood}
+            />
+            <Text variant="title" className="mt-5 text-center">
+              Nothing to ask for
+            </Text>
+            <Text variant="body" tone="soft" className="mt-2 text-center">
+              Every category is above the level you set. This page will fill in
+              on its own when something runs low.
+            </Text>
+          </View>
+        </FadeInUp>
+      </Screen>
+    );
+  }
+
   return (
     <>
       <Screen>
-        <PageHeading title="Donation needs" description="Help your community give what your pantry needs most." />
-        {deficits.length === 0 ? (
-          <Card className="items-center py-12 gap-4"><View className="h-16 w-16 items-center justify-center rounded-full bg-good-tint"><MaterialCommunityIcons name="check" size={34} color={COLORS.statusGood} /></View><Text variant="title">Your shelves are well stocked</Text><Text variant="label" tone="soft" className="text-center">Every category meets your pantry minimum and current box goal.</Text></Card>
-        ) : (
-          <>
-            <View className="flex-row items-center gap-3 rounded-lg bg-brand-tint p-5"><MaterialCommunityIcons name="hand-heart-outline" size={26} color={COLORS.primary} /><View className="flex-1 gap-1"><Text variant="label" className="font-semibold">{deficits.length} {deficits.length === 1 ? 'category needs' : 'categories need'} a little support</Text><Text variant="micro" tone="soft">Your biggest packing need comes first. Updated from your inventory.</Text></View></View>
-            <View style={{flexDirection:wide?'row':'column',gap:20,alignItems:'flex-start'}}>
-              <Card style={{flex:wide?1.15:undefined,width:wide?undefined:'100%',padding:0,overflow:'hidden'}}>
-                <View className="px-5 py-4"><Text style={TYPOGRAPHY.sectionTitle}>What to ask for</Text></View>
-                {deficits.map((item,i) => (
-                  <View key={item.category} style={{padding:20,gap:14,borderTopWidth:1,borderTopColor:COLORS.borderSoft}}>
-                    <View className="flex-row items-center gap-3"><CategoryIcon category={item.category} size="md" /><View className="flex-1 gap-1"><Text variant="body" className="font-semibold">{categoryNames[item.category]??item.category}</Text><Text variant="micro" tone="soft">{totals[item.category as keyof typeof totals]} units on hand</Text></View><View className="items-end gap-1"><Text variant="title" tone="brand">+{item.deficit}</Text><Text variant="micro" tone="soft">units needed</Text></View></View>
-                    <Text variant="label" tone="soft">{EXAMPLES[item.category] ?? 'Any shelf-stable items'}</Text>
-                    {item.reason === 'Stopping boxes going out' ? <Badge label="Priority · needed for 12 balanced boxes" tone="warn" /> : <Badge label={item.reason === 'Needed for 12 boxes' ? 'Needed for your box goal' : 'Below pantry minimum'} tone="neutral" />}
-                  </View>
-                ))}
-              </Card>
-              <View style={{flex:wide?1:undefined,width:wide?undefined:'100%'}}>{requestCard}</View>
-            </View>
-          </>
-        )}
+        <FadeInUp index={0}>
+          <View className="px-1">
+            <Text variant="headline">
+              Ask for {deficits.length}{" "}
+              {deficits.length === 1 ? "thing" : "things"}
+            </Text>
+            <Text variant="body" tone="soft" className="mt-1">
+              Built from what is actually on your shelves, so donors bring what
+              you need instead of what they guess.
+            </Text>
+            {/* The assumption behind every "stopping boxes going out" figure,
+                said out loud. It was the number 12, hardcoded, and a pantry
+                reading these amounts had no way to know what they were for. */}
+            <Pressable
+              onPress={() => router.push("/(tabs)/settings")}
+              accessibilityRole="button"
+              className="mt-3 flex-row items-center gap-2"
+            >
+              <MaterialCommunityIcons
+                name="package-variant-closed"
+                size={14}
+                color={COLORS.textSecondary}
+              />
+              <Text variant="micro" tone="soft" className="flex-1">
+                Amounts are for {settings.boxTarget} box
+                {settings.boxTarget === 1 ? "" : "es"} of {settings.defaultFamilySize}
+                . Change that in Settings.
+              </Text>
+            </Pressable>
+          </View>
+        </FadeInUp>
+
+        {deficits.map((item, i) => (
+          <FadeInUp key={item.category} index={i + 1}>
+            <Card className="flex-row items-center gap-4">
+              <CategoryIcon
+                category={item.category}
+                size="md"
+                tone={
+                  item.reason === "Stopping boxes going out" ? "critical" : "brand"
+                }
+              />
+              <View className="flex-1">
+                <View className="flex-row items-baseline gap-2">
+                  <Text variant="heading" className="capitalize">
+                    {item.category}
+                  </Text>
+                  <Text variant="label" tone="soft">
+                    about {item.deficit} more
+                  </Text>
+                </View>
+                <Text variant="label" tone="soft" className="mt-1">
+                  {EXAMPLES[item.category] ?? "Any shelf-stable items"}
+                </Text>
+                {item.reason === "Stopping boxes going out" && (
+                  <Text variant="micro" tone="critical" className="mt-2 font-bold">
+                    This is what's stopping boxes going out
+                  </Text>
+                )}
+              </View>
+            </Card>
+          </FadeInUp>
+        ))}
+
+        <FadeInUp index={deficits.length + 1}>
+          <View className="gap-3">
+            <Button
+              label={copied ? "Copied" : "Copy the ask"}
+              block
+              icon={
+                <MaterialCommunityIcons
+                  name={copied ? "check" : "content-copy"}
+                  size={18}
+                  color={COLORS.textOnPrimary}
+                />
+              }
+              onPress={handleCopy}
+            />
+            <Pressable onPress={() => setFlyerOpen(true)} className="self-start px-1 py-2">
+              <Text variant="label" tone="brand" className="font-semibold">
+                See exactly what gets copied
+              </Text>
+            </Pressable>
+          </View>
+        </FadeInUp>
       </Screen>
-      <Sheet visible={flyerOpen} onClose={() => setFlyerOpen(false)} title="Donation request" subtitle="Review the message before sharing.">
-        <Panel><Text variant="label" selectable style={{lineHeight:23}}>{flyerText}</Text></Panel>
-        <Button label={copied?'Request copied':'Copy request'} block onPress={handleCopy} />
+
+      <Sheet
+        visible={flyerOpen}
+        onClose={() => setFlyerOpen(false)}
+        title="The message"
+        subtitle="Paste into an email, a post, or a printed flyer"
+      >
+        <Panel>
+          <Text variant="label" selectable style={{ lineHeight: 21 }}>
+            {flyerText}
+          </Text>
+        </Panel>
+        {!dropoff && (
+          <Pressable
+            onPress={() => {
+              setFlyerOpen(false);
+              router.push("/(tabs)/settings");
+            }}
+            accessibilityRole="button"
+            className="flex-row items-center gap-2 px-1 py-1"
+          >
+            <MaterialCommunityIcons
+              name="map-marker-plus-outline"
+              size={16}
+              color={COLORS.primaryDark}
+            />
+            <Text variant="micro" tone="brand" className="flex-1 font-semibold">
+              Add your drop-off location and hours in Settings so donors know where to go.
+            </Text>
+          </Pressable>
+        )}
+        <Button
+          label={copied ? "Copied" : "Copy it"}
+          block
+          className="mt-1"
+          onPress={handleCopy}
+        />
       </Sheet>
     </>
   );

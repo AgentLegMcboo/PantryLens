@@ -1,3 +1,5 @@
+import type { ScanOutcome } from './scan-history';
+
 /** Serial, durable queue. A job is removed only after the server acknowledges it. */
 export interface QueueStorage {
   getItem(key: string): Promise<string | null>;
@@ -13,6 +15,7 @@ export interface IntakeJob {
   createdAt: string;
   items: Record<string, unknown>[];
   photos: { uri: string; width: number; height: number }[];
+  scan?: { id: string; outcomes: ScanOutcome[] };
 }
 
 export function isNetworkError(error: unknown): boolean {

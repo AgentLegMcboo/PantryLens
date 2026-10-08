@@ -22,6 +22,8 @@ export function EmptyState({
   tone = 'neutral',
   actionLabel,
   onAction,
+  actionVariant = 'secondary',
+  children,
   className,
 }: {
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
@@ -31,6 +33,10 @@ export function EmptyState({
   tone?: 'neutral' | 'good';
   actionLabel?: string;
   onAction?: () => void;
+  /** 'primary' when the action is the one obvious next step, not merely an escape. */
+  actionVariant?: 'primary' | 'secondary';
+  /** Anything that explains the empty space better than a sentence, like a short how-it-works. */
+  children?: React.ReactNode;
   className?: string;
 }) {
   const colour = tone === 'good' ? COLORS.statusGood : COLORS.textSecondary;
@@ -51,13 +57,25 @@ export function EmptyState({
       </Text>
 
       {body ? (
-        <Text variant="body" tone="soft" className="mt-2 text-center">
+        // Capped width, so a sentence wraps into a readable block instead of
+        // one long line on a wide screen.
+        <Text variant="body" tone="soft" className="mt-2 max-w-[320px] text-center">
           {body}
         </Text>
       ) : null}
 
+      {children}
+
       {actionLabel && onAction ? (
-        <Button label={actionLabel} variant="secondary" className="mt-5" onPress={onAction} />
+        // self-center matters: Button is `self-start` by default, which beats
+        // this container's items-center. Without it, every empty state's button
+        // sat against the left edge, on six screens.
+        <Button
+          label={actionLabel}
+          variant={actionVariant}
+          className="mt-6 self-center"
+          onPress={onAction}
+        />
       ) : null}
     </View>
   );

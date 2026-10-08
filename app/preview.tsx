@@ -14,6 +14,9 @@ import Reports from './reports';
 import ExpiringSoon from './expiring-soon';
 import ItemDetail from './item-detail';
 import PackingChecklist from './packing-checklist';
+import AuditReview from './audit-review';
+import ReadyBoxes from './ready-boxes';
+import Team from './team';
 import { COLORS } from '../constants/theme';
 import { Text } from '../components/ui';
 import { AppShell } from '../components/app-shell';
@@ -25,9 +28,10 @@ const screens: Record<string, React.ComponentType> = {
   index: Dashboard, inventory: Inventory, build: Build, needs: Needs, settings: Settings,
   'log-donation': LogDonation, 'bulk-intake': BulkIntake, 'shelf-audit': ShelfAudit,
   reports: Reports, 'expiring-soon': ExpiringSoon, 'item-detail': ItemDetail,
-  'packing-checklist': PackingChecklist,
+  'packing-checklist': PackingChecklist, 'audit-review': AuditReview, 'ready-boxes': ReadyBoxes, team: Team,
 };
 const titles: Record<string,string> = {
+  'audit-review':'Review shelf count', 'ready-boxes':'Ready to go', team:'Your team',
   'log-donation':'Add donation','bulk-intake':'Bulk intake','shelf-audit':'Shelf audit',
   reports:'Reports','expiring-soon':'Expiring stock','item-detail':'Item details','packing-checklist':'Packing checklist',
 };
@@ -44,7 +48,7 @@ export default function Preview() {
     usePantryStore.setState({
       settings: previewSettings, inventory: previewInventory, bulkLots: previewBulk,
       locations: [{ id:'preview-shelf-a',name:'Shelf A',pantry_id:'preview',sort_order:0,categories:[] },{ id:'preview-shelf-b',name:'Shelf B',pantry_id:'preview',sort_order:1,categories:[] }],
-      pendingIntakes:0, syncError:null,
+      pendingIntakes:0, syncError:null, boxTemplates:[], readyBoxes:[], boxFolders:[], members:[], currentScan:null, auditDraft:null,
       activities:[
         {id:'1',text:'Grocery rescue brought 60 lb of grains',icon:'scale-balance',time:new Date().toISOString()},
         {id:'2',text:'A neighbour donated 8 jars of peanut butter',icon:'hand-heart-outline',time:new Date().toISOString()},
@@ -52,6 +56,7 @@ export default function Preview() {
     });
     setReady(true);
     return () => usePantryStore.setState({
+      boxTemplates:previous.boxTemplates,readyBoxes:previous.readyBoxes,boxFolders:previous.boxFolders,members:previous.members,currentScan:previous.currentScan,auditDraft:previous.auditDraft,
       settings:previous.settings,inventory:previous.inventory,bulkLots:previous.bulkLots,
       locations:previous.locations,activities:previous.activities,pendingIntakes:previous.pendingIntakes,syncError:previous.syncError,
     });

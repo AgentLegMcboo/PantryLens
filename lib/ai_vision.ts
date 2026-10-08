@@ -1,7 +1,13 @@
 import { supabase } from './supabase';
 import { usePantryStore } from './store';
 import { applyCatalogue } from './catalogue';
-import { mergeDuplicates, normaliseItem, type ScanCandidate } from './scan-normalize';
+import { cropRegion } from './photo';
+import {
+  mergeDuplicates,
+  normaliseItem,
+  type DetectionBox,
+  type ScanCandidate,
+} from './scan-normalize';
 import { describeImage, log } from './log';
 
 /**
@@ -33,6 +39,20 @@ export class ScanError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'ScanError';
+  }
+}
+
+/**
+ * A scan that reached the model and came back with nothing it could name.
+ *
+ * Its own type so a caller can tell "nothing there" apart from a network or
+ * quota failure, and say something specific. Identifying a hand-drawn box
+ * does exactly that.
+ */
+export class NothingFoundError extends ScanError {
+  constructor(message: string) {
+    super(message);
+    this.name = 'NothingFoundError';
   }
 }
 
@@ -123,7 +143,7 @@ export async function processImageScan(images: string[] | string): Promise<ScanR
   log.debug('scan', `${candidates.length} candidate(s) after normalising and merging`, candidates);
 
   if (candidates.length === 0) {
-    throw new ScanError(
+    throw new NothingFoundError(
       'Nothing recognisable in those photos. Try getting closer to the labels, or add the items by hand.',
     );
   }
@@ -152,6 +172,14 @@ export interface BarcodeLookup {
   name?: string;
   brand?: string | null;
   category?: string | null;
+  /** The manufacturer's pack shot, when the provider had one. */
+  imageUrl?: string | null;
+  /**
+   * Allergens and diet from the product database. Positive claims only — an
+   * empty array means nothing is recorded, not that the food is free of
+   * anything. See lib/diet.ts.
+   */
+  dietTags?: string[];
   /** 'usda' | 'openfoodfacts' | 'cache' when found. */
   source?: string;
   /** 'INVALID' when the digits failed their check digit, 'UNKNOWN' when no
@@ -195,4 +223,68 @@ export async function lookupBarcode(barcode: string): Promise<BarcodeLookup> {
     log.error('scan', 'barcode lookup threw', err);
     return { found: false, reason: 'ERROR', error: 'Could not reach the product database.' };
   }
+}
+
+/** A little wider than a thumbnail, so a label running past the box edge is still readable. */
+const IDENTIFY_PADDING = 0.12;
+/** Long edge of the crop the model sees. Never enlarged: upscaling adds bytes, not detail. */
+const IDENTIFY_EDGE = 1024;
+
+export interface RegionIdentity {
+  /** The clearest product in the box. */
+  item: ScanCandidate;
+  /** Anything else the model saw in there, so the volunteer can box it separately. */
+  alsoSaw: string[];
+}
+
+/**
+ * Names whatever a volunteer drew a box around.
+ *
+ * For the items the scan missed. Only the box goes to the model, cropped out of
+ * the photo, not the whole shelf again, so it looks exactly where the human is
+ * pointing. It goes through the normal scan path, so barcode lookup and this
+ * pantry's catalogue both apply.
+ *
+ * The caller keeps the box the volunteer drew. The model's own box for the
+ * crop is only used to break ties when it sees more than one thing.
+ */
+export async function identifyRegion(
+  photo: { uri: string; width: number; height: number },
+  box: DetectionBox,
+): Promise<RegionIdentity> {
+  const crop = await cropRegion(photo, box, {
+    padding: IDENTIFY_PADDING,
+    edge: IDENTIFY_EDGE,
+    allowUpscale: false,
+    quality: 0.8,
+  });
+  if (!crop) {
+    throw new ScanError('That box is too small to read. Draw it a little bigger around the item.');
+  }
+
+  let candidates: ScanCandidate[];
+  try {
+    ({ candidates } = await processImageScan([crop]));
+  } catch (err) {
+    if (err instanceof NothingFoundError) {
+      throw new ScanError(
+        "Couldn't tell what's in that box. Draw it tighter around one item, or type the name in.",
+      );
+    }
+    throw err;
+  }
+
+  // Most confident first. On a tie, the one filling more of the crop is more
+  // likely the thing the volunteer meant.
+  const area = (c: ScanCandidate) => (c.box ? c.box.width * c.box.height : 0);
+  const [item, ...rest] = [...candidates].sort(
+    (a, b) => b.confidence - a.confidence || area(b) - area(a),
+  );
+
+  log.debug(
+    'scan',
+    `identified a hand-drawn box as "${item.name}"` +
+      (rest.length ? ` (also saw ${rest.length} other)` : ''),
+  );
+  return { item, alsoSaw: rest.map(c => c.name) };
 }

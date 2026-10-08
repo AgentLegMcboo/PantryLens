@@ -1,66 +1,508 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useState } from 'react';
-import { View } from 'react-native';
-import { COLORS, TYPOGRAPHY } from '../../constants/theme';
-import { computeAllocation } from '../../lib/allocation';
-import { Button, Card, CategoryIcon, Badge, PageHeading, Screen, Stepper, Segmented, Text } from '../../components/ui';
 import { useAppRouter } from '../../components/app-navigation';
-import { useWorkspaceLayout } from '../../components/workspace-layout';
-import { BoxRules, usePantryStore } from '../../lib/store';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useEffect, useRef, useState } from "react";
+import { Pressable, StyleSheet, View } from "react-native";
+import { LinearGradient } from "expo-linear-gradient";
+import { COLORS } from "../../constants/theme";
+import { computeAllocation } from "../../lib/allocation";
+import { DIET_TAG_LABELS, EXCLUSION_CAVEAT, type DietTag } from "../../lib/diet";
+import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
+import { BoxPicker, type BoxSelection } from "../../components/box-picker";
+import { AnimatedCounter, FadeInUp } from "../../components/motion";
+import {
+  PageHeading,
+  Button,
+  Card,
+  CategoryIcon,
+  Chip,
+  Panel,
+  Screen,
+  Sheet,
+  Stepper,
+  Text,
+} from "../../components/ui";
+import { cuePress, cueTap } from "../../lib/feedback";
+import { BoxRules, usePantryStore } from "../../lib/store";
 
+/**
+ * Building family boxes.
+ *
+ * The old version opened on a configuration card, then a result badge reading
+ * "7 / 12", then a seven-row table of per-category stock versus requirement —
+ * three things competing before you knew what any of them meant.
+ *
+ * It answers one question now: HOW MANY BOXES CAN WE PACK RIGHT NOW. That is
+ * the number at the top and the thing the button acts on. The arithmetic behind
+ * it — what each category needs, what is short — is one tap away in a sheet,
+ * because it explains the answer rather than being the answer.
+ */
 export default function BuildBoxesScreen() {
   const router = useAppRouter();
-  const { wide } = useWorkspaceLayout();
-  const { inventory, bulkLots, boxRules, settings } = usePantryStore();
-  const [requestedBoxes, setRequestedBoxes] = useState(12);
+  const { inventory, bulkLots, boxRules, boxTemplates, readyBoxes, settings } = usePantryStore();
+  const readyCount = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
+
+  const [requestedBoxes, setRequestedBoxes] = useState(settings.boxTarget);
+  // Build is a tab, so it mounts before the pantry has loaded and seeds itself
+  // from the default. `touched` is what keeps the arriving setting from
+  // yanking the number out from under somebody already adjusting it.
+  const touchedBoxes = useRef(false);
+  useEffect(() => {
+    if (!touchedBoxes.current) setRequestedBoxes(settings.boxTarget);
+  }, [settings.boxTarget]);
   const [familySize, setFamilySize] = useState(settings.defaultFamilySize || 4);
-  const plan = computeAllocation(inventory, boxRules, requestedBoxes, familySize, bulkLots);
-  const categories = (Object.keys(boxRules) as (keyof BoxRules)[]).filter(cat => plan.perBoxNeeds[cat] > 0);
+  const [breakdownOpen, setBreakdownOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
+
+  /**
+   * The box being built. `null` means "the pantry default". That's resolved
+   * on every render rather than copied into state, so a default changed on
+   * another phone shows up here, and a deleted box falls back to the default
+   * instead of leaving Build pointing at nothing.
+   */
+  const [selection, setSelection] = useState<BoxSelection | null>(null);
+
+  const box = (() => {
+    if (selection?.kind === "template") {
+      const t = boxTemplates.find((x) => x.id === selection.id);
+      if (t) {
+        return {
+          key: `template:${t.id}`,
+          name: t.name,
+          rules: t.rules,
+          scales: t.scales_with_family,
+          excludes: t.excludes_tags,
+          requires: t.requires_tags,
+        };
+      }
+    }
+    if (selection?.kind === "preset") {
+      const p = BOX_PRESETS.find((x) => x.key === selection.key);
+      if (p) {
+        return {
+          key: `preset:${p.key}`,
+          name: p.name,
+          rules: p.rules,
+          scales: p.scalesWithFamily,
+          excludes: p.excludesTags ?? [],
+          requires: p.requiresTags ?? [],
+        };
+      }
+    }
+    const fallback = boxTemplates.find((t) => t.is_default);
+    return fallback
+      ? {
+          key: `template:${fallback.id}`,
+          name: fallback.name,
+          rules: fallback.rules,
+          scales: fallback.scales_with_family,
+          excludes: fallback.excludes_tags,
+          requires: fallback.requires_tags,
+        }
+      : {
+          key: "pantry-default",
+          name: "Standard family box",
+          rules: boxRules,
+          scales: true,
+          excludes: [] as DietTag[],
+          requires: [] as DietTag[],
+        };
+  })();
+
+  // A box that doesn't scale is sized for the base family of 4, which the
+  // allocator treats as "use the amounts exactly as written".
+  const packingFamilySize = box.scales ? familySize : 4;
+
+  const plan = computeAllocation(
+    inventory,
+    box.rules,
+    requestedBoxes,
+    packingFamilySize,
+    bulkLots,
+    {
+      warningDays: settings.expirationWarningDays,
+      // This box's dietary rules, so the headline figure counts only what can
+      // actually go in it. A wheat-free box that claimed twelve were possible
+      // using bread would be worse than no figure at all.
+      excludes: box.excludes,
+      requires: box.requires,
+    },
+  );
+
+  const categories = Object.keys(box.rules) as (keyof BoxRules)[];
   const isShort = plan.achievableBoxes < requestedBoxes;
   const canPack = plan.achievableBoxes > 0;
+
   return (
-    <Screen>
+    <>
+      <Screen>
       <PageHeading title="Build boxes" description="A balanced box for every family. Start with what’s on your shelves." />
-      <View style={{ flexDirection: wide ? 'row' : 'column', gap: 20 }}>
-        <Card style={{ flex: wide ? 1 : undefined, gap: 24 }}>
-          <View className="flex-row items-center gap-3"><View className="h-8 w-8 items-center justify-center rounded-full bg-brand-tint"><Text variant="label" tone="brand" className="font-semibold">1</Text></View><Text style={TYPOGRAPHY.sectionTitle}>Set your packing goal</Text></View>
+        {/* The answer. */}
+        <FadeInUp index={0}>
+          <View
+            className="overflow-hidden rounded-lg"
+            style={{
+              borderBottomWidth: 6,
+              borderBottomColor: COLORS.primaryDeep,
+              shadowColor: COLORS.shadow,
+              shadowOpacity: 0.18,
+              shadowRadius: 14,
+              shadowOffset: { width: 0, height: 5 },
+              elevation: 4,
+            }}
+          >
+            <LinearGradient
+              colors={["#B0512F", "#9C4226"]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={StyleSheet.absoluteFill}
+            />
+
+            <View className="p-card">
+              <Text variant="label" className="text-ink-on/70">
+                You can pack right now
+              </Text>
+
+              <View className="mt-1 flex-row items-baseline gap-2">
+                <AnimatedCounter
+                  value={plan.achievableBoxes}
+                  style={{
+                    fontSize: 60,
+                    fontWeight: "800",
+                    color: COLORS.textOnPrimary,
+                    letterSpacing: -2,
+                  }}
+                />
+                <Text variant="title" className="text-ink-on">
+                  {plan.achievableBoxes === 1 ? "box" : "boxes"}
+                </Text>
+              </View>
+
+              <View className="my-4 h-px bg-white/20" />
+
+              <Pressable
+                onPress={() => setBreakdownOpen(true)}
+                className="flex-row items-center justify-between gap-3"
+              >
+                <Text variant="label" className="flex-1 text-ink-on/85">
+                  {isShort ? (
+                    <>
+                      <Text
+                        variant="label"
+                        className="font-bold capitalize text-ink-on"
+                      >
+                        {plan.limitingCategory}
+                      </Text>{" "}
+                      runs out first — short {
+                        plan.shortfallPerCategory[plan.limitingCategory]
+                      } for {requestedBoxes}
+                    </>
+                  ) : (
+                    `Enough of everything for ${requestedBoxes}`
+                  )}
+                </Text>
+                <View className="flex-row items-center gap-1 rounded-full bg-white/15 px-3 py-2">
+                  <Text variant="micro" className="font-bold text-ink-on">
+                    Why
+                  </Text>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={14}
+                    color={COLORS.textOnPrimary}
+                  />
+                </View>
+              </Pressable>
+            </View>
+          </View>
+        </FadeInUp>
+
+        {/* Stock a volunteer can see on the shelf but the plan will not use.
+            Left unsaid, this reads as the engine being broken — the shelf has
+            twelve tins of beans and Build insists it has none. */}
+        {/* Food this BOX cannot take, as opposed to food nothing can. Separate
+            panel and separate sentence: nothing is wrong with it, it just is not
+            for this household, and conflating the two would read as waste. */}
+        {plan.excluded.dietary.units > 0 && (
+          <FadeInUp index={1}>
+            <Panel className="flex-row gap-3">
+              <MaterialCommunityIcons
+                name="shield-alert-outline"
+                size={18}
+                color={COLORS.statusWarning}
+              />
+              <View className="flex-1 gap-1">
+                <Text variant="micro" tone="soft">
+                  <Text variant="micro" className="font-bold">
+                    {plan.excluded.dietary.units} good unit
+                    {plan.excluded.dietary.units === 1 ? "" : "s"} held back by this box&apos;s rules.
+                  </Text>{" "}
+                  {box.requires.length > 0
+                    ? `Only food recorded as ${box.requires
+                        .map(t => DIET_TAG_LABELS[t].toLowerCase())
+                        .join(" and ")} can go in, and anything untagged does not qualify.`
+                    : `Anything known to contain ${box.excludes
+                        .map(t => DIET_TAG_LABELS[t].toLowerCase())
+                        .join(" or ")} is left out.`}
+                </Text>
+                {box.excludes.length > 0 && (
+                  <Text variant="micro" tone="soft">
+                    {EXCLUSION_CAVEAT}
+                  </Text>
+                )}
+              </View>
+            </Panel>
+          </FadeInUp>
+        )}
+
+        {(plan.excluded.pastDate.units > 0 || plan.excluded.flagged.units > 0) && (
+          <FadeInUp index={1}>
+            <Panel className="flex-row gap-3">
+              <MaterialCommunityIcons
+                name="alert-outline"
+                size={18}
+                color={COLORS.statusWarning}
+              />
+              <View className="flex-1 gap-1">
+                <Text variant="micro" tone="soft">
+                  {[
+                    plan.excluded.pastDate.units > 0
+                      ? `${plan.excluded.pastDate.units} unit${
+                          plan.excluded.pastDate.units === 1 ? "" : "s"
+                        } past their date`
+                      : "",
+                    plan.excluded.flagged.units > 0
+                      ? `${plan.excluded.flagged.units} unit${
+                          plan.excluded.flagged.units === 1 ? "" : "s"
+                        } flagged for inspection`
+                      : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" and ")}{" "}
+                  {plan.excluded.pastDate.units + plan.excluded.flagged.units === 1
+                    ? "is"
+                    : "are"}{" "}
+                  on the shelf but left out of this plan.
+                </Text>
+                {plan.excluded.pastDate.units > 0 && (
+                  <Pressable onPress={() => router.push("/expiring-soon")}>
+                    <Text variant="micro" tone="brand" className="font-semibold">
+                      Check what is out of date →
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
+            </Panel>
+          </FadeInUp>
+        )}
+
+        {/* What's being packed, then how many and for whom. */}
+        <FadeInUp index={1}>
+          <Card className="gap-4">
+            <Pressable
+              onPress={() => {
+                cueTap();
+                setPickerOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={`Box: ${box.name}. Tap to change.`}
+              className="flex-row items-center gap-3"
+            >
+              <View className="h-11 w-11 items-center justify-center rounded-md bg-subtle">
+                <MaterialCommunityIcons
+                  name="package-variant-closed"
+                  size={22}
+                  color={COLORS.primaryLight}
+                />
+              </View>
+              <View className="flex-1">
+                <Text variant="body" className="font-semibold">
+                  {box.name}
+                </Text>
+                <Text variant="micro" tone="soft" numberOfLines={2} className="mt-0.5">
+                  {describeRules(box.rules)}
+                </Text>
+              </View>
+              <Text variant="label" tone="brand" className="font-bold">
+                Change
+              </Text>
+            </Pressable>
+
+            <View className="h-px bg-hairline" />
+
+            <View className="flex-row items-center justify-between gap-3">
+              <Text variant="body" className="flex-1">
+                How many boxes do you need?
+              </Text>
+              <Stepper
+                value={requestedBoxes}
+                min={1}
+                max={200}
+                onChange={next => {
+                  touchedBoxes.current = true;
+                  setRequestedBoxes(next);
+                }}
+              />
+            </View>
+
+            {box.scales ? (
+              <View className="gap-2">
+                <Text variant="body">How big are the families?</Text>
+                <View className="flex-row gap-2">
+                  {[2, 4, 6].map((size) => (
+                    <Chip
+                      key={size}
+                      label={`${size} people`}
+                      selected={familySize === size}
+                      onPress={() => setFamilySize(size)}
+                    />
+                  ))}
+                </View>
+              </View>
+            ) : (
+              <Text variant="micro" tone="soft">
+                This box doesn&apos;t scale: every household gets the same amounts.
+              </Text>
+            )}
+          </Card>
+        </FadeInUp>
+
+        {/* One action. */}
+        <FadeInUp index={2}>
           <View className="gap-3">
-            <View className="flex-row flex-wrap items-center justify-between gap-3"><View className="gap-1"><Text className="font-medium">Number of boxes</Text><Text variant="micro" tone="soft">How many would you like to prepare?</Text></View><Stepper value={requestedBoxes} min={1} max={200} onChange={setRequestedBoxes} /></View>
+            <Button
+              label={
+                canPack
+                  ? `Pack ${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? "box" : "boxes"}`
+                  : "Nothing to pack yet"
+              }
+              block
+              disabled={!canPack}
+              icon={
+                <MaterialCommunityIcons
+                  name="clipboard-check-outline"
+                  size={19}
+                  color={COLORS.textOnPrimary}
+                />
+              }
+              onPress={() => {
+                cuePress();
+                router.push({
+                  pathname: "/packing-checklist",
+                  // The rules travel with the route: a preset used once was
+                  // never saved anywhere for the checklist to look up.
+                  params: {
+                    targetBoxes: requestedBoxes,
+                    familySize: packingFamilySize,
+                    rules: JSON.stringify(box.rules),
+                    boxName: box.name,
+                    scales: box.scales ? "1" : "0",
+                    // Carried through, or the pick list would recompute without
+                    // them and hand a volunteer bread to put in a wheat-free box.
+                    excludes: box.excludes.join(","),
+                    requires: box.requires.join(","),
+                  },
+                });
+              }}
+            />
+
+            {isShort && (
+              <Button
+                label="Ask donors for what's short"
+                variant="secondary"
+                size="compact"
+                onPress={() => router.push("/(tabs)/needs")}
+              />
+            )}
+
+            {readyCount > 0 && (
+              <Button
+                label={`${readyCount} packed and waiting for pickup`}
+                variant="ghost"
+                size="compact"
+                icon={
+                  <MaterialCommunityIcons
+                    name="package-variant-closed"
+                    size={17}
+                    color={COLORS.primaryDark}
+                  />
+                }
+                onPress={() => router.push("/ready-boxes")}
+              />
+            )}
           </View>
-          <View style={{ height: 1, backgroundColor: COLORS.borderSoft }} />
-          <View className="gap-3"><View className="gap-1"><Text className="font-medium">Family size</Text><Text variant="micro" tone="soft">Portions adjust for each household.</Text></View>
-            <Segmented options={[{value:2,label:'2 people'},{value:4,label:'4 people'},{value:6,label:'6 people'}]} value={familySize} onChange={setFamilySize} />
-            {![2,4,6].includes(familySize) && <Text variant="micro" tone="soft">Using your pantry default: {familySize} people.</Text>}
-          </View>
-          <View className="flex-row items-start gap-2 rounded-md bg-subtle p-3"><MaterialCommunityIcons name="information-outline" size={18} color={COLORS.textSecondary} /><Text variant="micro" tone="soft" className="flex-1">Your pantry’s box recipe determines how much of each category goes into a box.</Text></View>
-        </Card>
-        <Card style={{ flex: wide ? 1 : undefined, gap: 20, justifyContent: 'space-between' }}>
-          <View className="flex-row items-center justify-between"><Text style={TYPOGRAPHY.sectionTitle}>Available with current stock</Text><MaterialCommunityIcons name="package-variant-closed" size={24} color={COLORS.primary} /></View>
-          <View className="flex-row items-baseline gap-2"><Text selectable style={{ ...TYPOGRAPHY.metric, fontSize: 64, lineHeight: 72, color: COLORS.primary }}>{plan.achievableBoxes}</Text><Text tone="soft">of {requestedBoxes} boxes</Text></View>
-          <View accessibilityRole="progressbar" accessibilityLabel="Boxes available" accessibilityValue={{min:0,max:requestedBoxes,now:plan.achievableBoxes}} style={{ height: 6, backgroundColor: COLORS.surfaceContainer, borderRadius: 6 }}><View style={{height:6,borderRadius:6,backgroundColor:COLORS.secondary,width:`${Math.min(100,plan.achievableBoxes/requestedBoxes*100)}%`}} /></View>
-          <View className="rounded-md bg-subtle p-4"><Text variant="label">{isShort ? `${plan.limitingCategory.charAt(0).toUpperCase()+plan.limitingCategory.slice(1)} runs out first. Add ${plan.shortfallPerCategory[plan.limitingCategory]} more units to reach ${requestedBoxes} boxes.` : 'You have enough of every required category. Ready when you are.'}</Text></View>
-          <Button label={canPack ? `Start packing ${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? 'box' : 'boxes'}` : 'Add stock to start packing'} block disabled={!canPack}
-            icon={<MaterialCommunityIcons name="arrow-right" size={18} color={COLORS.textOnPrimary} />}
-            onPress={() => router.push({pathname:'/packing-checklist',params:{targetBoxes:requestedBoxes,familySize}})} />
-        </Card>
-      </View>
-      <Card style={{ padding: 0, overflow: 'hidden' }}>
-        <View className="p-5 gap-1"><Text accessibilityRole="header" style={TYPOGRAPHY.sectionTitle}>What goes into each box</Text><Text variant="label" tone="soft">For a family of {familySize} · planning {requestedBoxes} boxes</Text></View>
-        <View className="flex-row bg-subtle px-5 py-3"><Text variant="micro" tone="soft" className="flex-1">CATEGORY / PER BOX</Text><Text variant="micro" tone="soft">STOCK / NEEDED</Text></View>
-        {categories.map(cat => {
-          const short = plan.shortfallPerCategory[cat];
+        </FadeInUp>
+
+        {!canPack && (
+          <FadeInUp index={3}>
+            <Text variant="label" tone="soft" className="px-1">
+              A box needs every category it calls for. Add stock, or choose a
+              smaller box.
+            </Text>
+          </FadeInUp>
+        )}
+      </Screen>
+
+      {/* The arithmetic, out of the way until asked for. */}
+      <Sheet
+        visible={breakdownOpen}
+        onClose={() => setBreakdownOpen(false)}
+        title="What's in a box"
+        subtitle={`${box.name}: per box${box.scales ? ` for a family of ${familySize}` : ""}, against ${requestedBoxes} boxes`}
+      >
+        {categories.map((cat) => {
           const perBox = plan.perBoxNeeds[cat];
+          if (perBox === 0) return null;
+
+          const stock = plan.categoryTotals[cat];
+          const short = plan.shortfallPerCategory[cat];
+          const limiting = cat === plan.limitingCategory && short > 0;
+
           return (
-            <View key={cat} className="flex-row items-center gap-3 border-t border-hairline px-5 py-4">
-              <CategoryIcon category={cat} size="sm" />
-              <View className="flex-1 gap-1"><Text variant="label" className="capitalize font-semibold">{cat === 'vegetable' ? 'Vegetables' : cat === 'grain' ? 'Grains' : cat}</Text><Text variant="micro" tone="soft">{perBox} {perBox === 1 ? 'unit' : 'units'} per box</Text></View>
-              <View className="items-end gap-1"><Text variant="label" className="font-medium" style={{fontVariant:['tabular-nums']}}>{plan.categoryTotals[cat]} <Text variant="micro" tone="soft">/ {perBox * requestedBoxes}</Text></Text><Badge label={short > 0 ? `${short} short` : 'Enough stock'} tone={short > 0 ? 'warn' : 'good'} /></View>
+            <View
+              key={String(cat)}
+              className="flex-row items-center gap-3 rounded-md bg-card px-4 py-3"
+              style={{
+                borderWidth: 1.5,
+                borderColor: limiting ? COLORS.statusCritical : COLORS.borderSoft,
+              }}
+            >
+              <CategoryIcon
+                category={String(cat)}
+                tone={limiting ? "critical" : "brand"}
+              />
+              <View className="flex-1">
+                <Text variant="body" className="font-semibold capitalize">
+                  {String(cat)}
+                </Text>
+                <Text variant="micro" tone="soft" className="mt-0.5">
+                  {perBox} per box · {stock} in stock
+                </Text>
+              </View>
+              {short > 0 ? (
+                <Text variant="label" tone="critical" className="font-bold">
+                  {short} short
+                </Text>
+              ) : (
+                <MaterialCommunityIcons
+                  name="check-circle"
+                  size={20}
+                  color={COLORS.statusGood}
+                />
+              )}
             </View>
           );
         })}
-        <View className="flex-row items-start gap-2 border-t border-hairline p-4"><MaterialCommunityIcons name="shield-check-outline" size={18} color={COLORS.textSecondary} /><Text variant="micro" tone="soft" className="flex-1">Past-date and damaged items are excluded. Soonest-expiring stock is packed first.</Text></View>
-      </Card>
-      {isShort && <View className="flex-row flex-wrap items-center justify-between gap-3 rounded-lg bg-warn-tint p-5"><View style={{flex:1,minWidth:180,gap:4}}><Text variant="label" className="font-semibold">Help fill the gaps</Text><Text variant="micro" tone="soft">Create a donation request using your current shortages.</Text></View><Button label="View donation needs" variant="secondary" size="compact" onPress={() => router.push('/(tabs)/needs')} /></View>}
-    </Screen>
+
+        <Text variant="micro" tone="soft" className="px-1 pt-1">
+          Damaged stock and anything past its date is left out of these totals.
+        </Text>
+      </Sheet>
+
+      <BoxPicker
+        visible={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        selectedKey={box.key}
+        onSelect={setSelection}
+      />
+    </>
   );
 }

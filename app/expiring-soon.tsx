@@ -5,6 +5,7 @@ import { FlatList, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
 import { Badge, Button, Card, EmptyState, Text } from '../components/ui';
+import { daysUntil, windowEndISO } from '../lib/expiry';
 import { InventoryItem, usePantryStore } from '../lib/store';
 
 /**
@@ -20,15 +21,6 @@ import { InventoryItem, usePantryStore } from '../lib/store';
  * at the bottom where an action belongs.
  */
 
-/** Whole days from today until the date, negative once it is past. */
-function daysUntil(date: string): number {
-  const then = new Date(`${date}T00:00:00`).getTime();
-  if (Number.isNaN(then)) return 0;
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Math.round((then - today.getTime()) / 86400000);
-}
-
 /** How a window of days should read: past, this week, or merely soon. */
 function urgency(days: number) {
   if (days < 0) return { colour: COLORS.statusCritical, tone: 'critical' as const, label: 'Past date' };
@@ -41,9 +33,7 @@ export default function ExpiringSoonScreen() {
   const router = useAppRouter();
   const { inventory, settings } = usePantryStore();
 
-  const warningLimit = new Date();
-  warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
-  const warningStr = warningLimit.toISOString().split('T')[0];
+  const warningStr = windowEndISO(settings.expirationWarningDays);
 
   const expiring = inventory
     .filter(item => !!item.expiration && item.expiration <= warningStr)
@@ -52,7 +42,7 @@ export default function ExpiringSoonScreen() {
   const unitsAtRisk = expiring.reduce((sum, item) => sum + item.count, 0);
 
   const renderRow = ({ item, index }: { item: InventoryItem; index: number }) => {
-    const days = daysUntil(item.expiration!);
+    const days = daysUntil(item.expiration!) ?? 0;
     const state = urgency(days);
 
     return (

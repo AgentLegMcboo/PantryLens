@@ -16,6 +16,7 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
     await db.exec(`
       create schema auth;
       create role authenticated;
+      create role anon;
       create table auth.users(id uuid primary key);
       create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub', true), '')::uuid $$;
       create table pantries(id uuid primary key, name text);
@@ -25,12 +26,16 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
         id uuid primary key, pantry_id uuid references pantries(id), name text not null,
         category text not null check(category in ('grain','vegetable','protein','breakfast','snack','hygiene','baby','unknown')),
         count integer not null, expiration date, date_added date, source text,
-        confidence float, condition text not null default 'ok', source_org text, source_name text,
+        confidence float, condition text not null default 'ok', source_org text, source_name text, diet_tags text[] not null default '{}',
         image_url text, location_id uuid references locations(id), created_at timestamptz not null default now()
       );
       create table bulk_lots(id uuid primary key, pantry_id uuid references pantries(id), category text, est_units integer, weight_lbs numeric(8,2), expiration date);
       create table activities(id uuid primary key default gen_random_uuid(), pantry_id uuid, text text, time text, icon text);
       create table stock_exits(id uuid primary key default gen_random_uuid(), pantry_id uuid, item_name text, category text, count integer, reason text, recorded_by uuid);
+      create table shelf_audits(id uuid primary key, pantry_id uuid);
+      create table pack_runs(id uuid primary key, pantry_id uuid);
+      create table product_aliases(id uuid primary key, pantry_id uuid);
+      create function public.pantry_role(target_pantry uuid) returns text language sql stable as $$ select role from pantry_members where pantry_id = target_pantry and user_id = auth.uid() $$;
       grant usage on schema auth to authenticated;
       grant select on pantry_members to authenticated;
       insert into auth.users values('${id(1)}'),('${id(2)}');
@@ -39,13 +44,22 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
       insert into locations values('${id(20)}','${id(10)}','Shelf A'),('${id(21)}','${id(10)}','Shelf B'),('${id(22)}','${id(11)}','Other pantry');
       select set_config('request.jwt.claim.sub','${id(1)}',false);
     `);
+    // The incoming scan-history migration and the offline migration must coexist.
+    await db.exec(`
+      create schema storage;
+      create table storage.buckets(id text primary key, name text, public boolean, file_size_limit bigint, allowed_mime_types text[]);
+      create table storage.objects(id uuid primary key, bucket_id text, name text);
+      create function storage.foldername(text) returns text[] language sql immutable as $$ select string_to_array($1, '/') $$;
+      create function public.is_pantry_member(target_pantry uuid) returns boolean language sql stable security definer as $$ select exists(select 1 from pantry_members where pantry_id = target_pantry and user_id = auth.uid()) $$;
+    `);
+    await db.exec(fs.readFileSync("supabase/migrations/20260921090000_scan_history.sql", "utf8"));
     await db.exec(
       fs.readFileSync(
         "supabase/migrations/20261005090000_reliable_intake_and_packing.sql",
         "utf8",
       ),
     );
-    await db.exec("grant select on scans, packing_events to authenticated;");
+    await db.exec("grant select on intake_batches, scans, packing_events to authenticated;");
     const row = (n, count = 10, location = 20) => ({
       id: id(n),
       name: "Beans",
@@ -81,11 +95,11 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
         id(batch),
       ]);
 
-    await test("intake writes stock and a durable scan record", async () => {
+    await test("intake writes stock and a durable intake receipt", async () => {
       await intake(100, [row(30)]);
       assert.equal(await count(30), 10);
       assert.equal(
-        (await db.query("select count(*)::int as n from scans")).rows[0].n,
+        (await db.query("select count(*)::int as n from intake_batches")).rows[0].n,
         1,
       );
     });
@@ -185,14 +199,37 @@ const id = (n) => `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
       assert.equal(await count(39), 10);
       assert.equal((await db.query("select est_units from bulk_lots where id=$1", [id(51)])).rows[0].est_units, 10);
     });
+    await test("verified intake keeps dietary tags and links to incoming scan history", async () => {
+      await db.query("insert into scans(id,pantry_id,scanned_by,mode) values($1,$2,$3,'donation')", [id(300), id(10), id(1)]);
+      await intake(109, [{ ...row(40), diet_tags: ["no-cook", "contains-soy"], scan_id: id(300) }]);
+      const saved = (await db.query("select diet_tags,scan_id from inventory where id=$1", [id(40)])).rows[0];
+      assert.deepEqual(saved.diet_tags, ["no-cook", "contains-soy"]);
+      assert.equal(saved.scan_id, id(300));
+      assert.equal((await db.query("select count(*)::int n from scans where id=$1", [id(300)])).rows[0].n, 1);
+    });
+    await test("an intake cannot attach another pantry's scan", async () => {
+      await db.query("insert into scans(id,pantry_id,scanned_by,mode) values($1,$2,$3,'donation')", [id(301), id(11), id(2)]);
+      await assert.rejects(intake(110, [{ ...row(41), scan_id: id(301) }]), /Scan belongs to another pantry/);
+      assert.equal(await count(41), undefined);
+    });
     await test("a non-member cannot save stock or read another pantry’s scan history", async () => {
       await db.query("select set_config('request.jwt.claim.sub',$1,false)", [
         id(2),
       ]);
       await assert.rejects(intake(107, [row(38)]), /not a member/);
       await db.exec("set role authenticated;");
-      assert.equal((await db.query("select * from scans")).rows.length, 0);
+      assert.equal((await db.query("select * from intake_batches")).rows.length, 0);
       await db.exec("reset role;");
+    });
+    await test("owner reset clears both kinds of history and receipts while retaining shelves", async () => {
+      await db.query("select set_config('request.jwt.claim.sub',$1,false)", [id(1)]);
+      await assert.rejects(db.query("select reset_pantry_data($1)", [id(10)]), /Only the pantry owner/);
+      await db.query("update pantry_members set role='owner' where user_id=$1", [id(1)]);
+      await db.query("select reset_pantry_data($1)", [id(10)]);
+      for (const table of ["inventory", "scans", "intake_batches", "packing_events"])
+        assert.equal((await db.query(`select count(*)::int n from ${table} where pantry_id=$1`, [id(10)])).rows[0].n, 0);
+      assert.equal((await db.query("select count(*)::int n from locations where pantry_id=$1", [id(10)])).rows[0].n, 2);
+      assert.equal((await db.query("select count(*)::int n from scans where pantry_id=$1", [id(11)])).rows[0].n, 1);
     });
     console.log(`\n${passed}/${passed} database transaction tests passed`);
   } finally {

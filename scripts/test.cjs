@@ -94,7 +94,7 @@ test("past-date stock is excluded consistently from capacity and shortage totals
   assert.equal(plan.achievableBoxes, 2);
   assert.equal(plan.allocatedItems.length, 1);
 });
-test("soonest expiration is packed first", () => {
+test("urgent stock is packed in expiration order before other products", () => {
   const plan = computeAllocation(
     [
       item("late", "protein", 4, { expiration: "2030-01-01" }),
@@ -110,6 +110,9 @@ test("soonest expiration is packed first", () => {
       baby: 0,
     },
     1,
+    4,
+    [],
+    { today: "2026-12-15" },
   );
   assert.equal(plan.allocatedItems[0].item.id, "early");
   assert.equal(plan.allocatedItems[0].countToGrab, 2);
@@ -124,6 +127,29 @@ test("donation requests contain configured drop-off details", () => {
     ),
     /Drop-off: Front desk, Saturday 10am/,
   );
+});
+test("nonurgent products share a box allocation instead of draining one product", () => {
+  const plan = computeAllocation(
+    [item("beans", "protein", 20), item("tuna", "protein", 20)],
+    { ...rules, grain: 0, vegetable: 0, breakfast: 0, snack: 0 },
+    4,
+  );
+  assert.deepEqual(plan.allocatedItems.map(a => a.countToGrab), [4, 4]);
+});
+test("dietary requirements and exclusions narrow capacity and the pick list together", () => {
+  const plan = computeAllocation(
+    [
+      item("unknown", "protein", 20),
+      item("nuts", "protein", 20, { diet_tags: ["no-cook", "contains-peanuts"] }),
+      item("beans", "protein", 4, { diet_tags: ["no-cook"] }),
+    ],
+    { ...rules, grain: 0, vegetable: 0, breakfast: 0, snack: 0 },
+    12, 4, [],
+    { excludes: ["contains-peanuts"], requires: ["no-cook"] },
+  );
+  assert.equal(plan.achievableBoxes, 2);
+  assert.deepEqual(plan.allocatedItems.map(a => a.item.id), ["beans"]);
+  assert.equal(plan.excluded.dietary.units, 40);
 });
 test("missing drop-off configuration never invents an address", () => {
   assert.doesNotMatch(

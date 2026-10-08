@@ -1,5 +1,6 @@
 // Type-only, so this module pulls in no supabase client and stays runnable
 // anywhere — including a plain node process.
+import { normaliseDietTags, type DietTag } from './diet';
 import type { Category, Condition, InventoryItem } from './store';
 
 /**
@@ -131,6 +132,15 @@ export type ScanCandidate = Partial<InventoryItem> & {
   resolvedBy?: 'barcode' | 'catalogue' | null;
   /** The manufacturer's pack shot, when a barcode lookup found one. */
   imageUrl?: string | null;
+  /**
+   * Allergens and diet, when a barcode identified the product.
+   *
+   * Everything the model returns is untrusted, and this is no exception — it is
+   * normalised against the shipped vocabulary rather than stored as given,
+   * because an unrecognised string here would be a tag that silently fails to
+   * match a box exclusion.
+   */
+  diet_tags?: DietTag[];
   /** Null when the model gave no usable box — the item is still verifiable. */
   box: DetectionBox | null;
 };
@@ -183,6 +193,7 @@ export function normaliseItem(raw: any): ScanCandidate | null {
     barcode: barcode || null,
     resolvedBy: raw?.resolved_by === 'barcode' ? 'barcode' : null,
     imageUrl: typeof raw?.image_url === 'string' && raw.image_url ? raw.image_url : null,
+    diet_tags: normaliseDietTags(raw?.diet_tags),
     box: normaliseBox(raw?.box_2d),
   };
 }

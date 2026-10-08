@@ -22,6 +22,13 @@ import {
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { renderItemPhoto, storeItemPhoto } from '../lib/item-photos';
 import {
+  DIET_TAG_GROUPS,
+  DIET_TAG_LABELS,
+  isAllergenTag,
+  normaliseDietTags,
+  type DietTag,
+} from '../lib/diet';
+import {
   Category,
   Condition,
   CONDITION_LABELS,
@@ -68,6 +75,7 @@ export default function ItemDetailScreen() {
   const [expiration, setExpiration] = useState(item?.expiration || '');
   const [condition, setCondition] = useState<Condition>(item?.condition ?? 'ok');
   const [locationId, setLocationId] = useState<string | null>(item?.location_id ?? null);
+  const [dietTags, setDietTags] = useState<DietTag[]>(normaliseDietTags(item?.diet_tags));
   const [photoBusy, setPhotoBusy] = useState(false);
   const [saving, setSaving] = useState(false);
 
@@ -112,6 +120,7 @@ export default function ItemDetailScreen() {
       expiration: expiration.trim() || null,
       condition,
       location_id: locationId,
+      diet_tags: dietTags,
     });
     cueSuccess();
     router.back();
@@ -382,7 +391,66 @@ export default function ItemDetailScreen() {
         </Card>
       </FadeInUp>
 
+      {/* Allergens, diet, and whether somebody without a kitchen can use it.
+          Barcoded products arrive with the allergens already filled in from Open
+          Food Facts. The last two nobody publishes, so they are a question for
+          whoever is holding the tin — and they are the two that decide whether a
+          parcel is food or a problem for someone living in a car. */}
       <FadeInUp index={3}>
+        <Card>
+          <CardHeader
+            title="Who can eat it"
+            subtitle="Used to build boxes for households with an allergy, a diet, or nowhere to cook."
+          />
+
+          {DIET_TAG_GROUPS.map((group, groupIndex) => (
+            <View
+              key={group.title}
+              className={groupIndex < DIET_TAG_GROUPS.length - 1 ? 'gap-2 pb-4' : 'gap-2'}
+            >
+              <Text variant="label" className="font-semibold">
+                {group.title}
+              </Text>
+              <Text variant="micro" tone="soft">
+                {group.hint}
+              </Text>
+              <View className="flex-row flex-wrap gap-2">
+                {group.tags.map(tag => {
+                  const on = dietTags.includes(tag);
+                  return (
+                    <Chip
+                      key={tag}
+                      label={DIET_TAG_LABELS[tag]}
+                      selected={on}
+                      className={on && isAllergenTag(tag) ? 'border-warn bg-warn' : undefined}
+                      onPress={() => {
+                        cueTap();
+                        setDietTags(prev =>
+                          normaliseDietTags(on ? prev.filter(t => t !== tag) : [...prev, tag]),
+                        );
+                      }}
+                    />
+                  );
+                })}
+              </View>
+            </View>
+          ))}
+
+          <Panel className="mt-2 flex-row gap-3">
+            <MaterialCommunityIcons
+              name="information-outline"
+              size={18}
+              color={COLORS.textSecondary}
+            />
+            <Text variant="micro" tone="soft" className="flex-1">
+              Ticking something means you know it is true. Leaving it unticked means nobody has
+              checked — never that the food is free of it.
+            </Text>
+          </Panel>
+        </Card>
+      </FadeInUp>
+
+      <FadeInUp index={4}>
         <View className="flex-row items-center justify-between px-1">
           <Text variant="micro" tone="soft">
             Received {item.date_added}

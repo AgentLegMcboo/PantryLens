@@ -4,6 +4,7 @@ import { Alert, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
 import {
+  Badge,
   Button,
   Card,
   CardHeader,
@@ -18,8 +19,11 @@ import {
   bulkLotsCsv,
   exitsCsv,
   fetchExits,
+  fetchSlowMovers,
   inventoryCsv,
   shareCsv,
+  slowMoversCsv,
+  type SlowMover,
   type StockExit,
 } from '../lib/reports';
 import { usePantryStore } from '../lib/store';
@@ -50,10 +54,19 @@ const sinceFor = (days: number): string | null => {
 };
 
 export default function ReportsScreen() {
-  const { inventory, bulkLots, locations, settings } = usePantryStore();
+  const { inventory, bulkLots, locations, settings, readyBoxes } = usePantryStore();
+
+  // Packed but not collected. Not "given out" yet, and worth saying so, or a
+  // pantry that packed ahead of distribution day reads its numbers as a drop.
+  const waitingBoxes = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
+  const waitingUnits = readyBoxes.reduce(
+    (sum, r) => sum + Math.round((r.units_taken * (r.boxes - r.boxes_collected)) / Math.max(1, r.boxes)),
+    0,
+  );
 
   const [days, setDays] = useState<number>(30);
   const [exits, setExits] = useState<StockExit[]>([]);
+  const [slow, setSlow] = useState<SlowMover[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
 
@@ -66,6 +79,12 @@ export default function ReportsScreen() {
       .then(rows => !cancelled && setExits(rows))
       .catch(() => !cancelled && setExits([]))
       .finally(() => !cancelled && setLoading(false));
+
+    // Not windowed by `days`: "this has been sitting for four months" is a fact
+    // about the shelf now, not about a reporting period.
+    fetchSlowMovers(settings.pantryId)
+      .then(rows => !cancelled && setSlow(rows))
+      .catch(() => !cancelled && setSlow([]));
 
     return () => {
       cancelled = true;
@@ -168,6 +187,15 @@ export default function ReportsScreen() {
         </FadeInUp>
       )}
 
+      {waitingBoxes > 0 && (
+        <FadeInUp index={2}>
+          <Text variant="micro" tone="soft" className="px-1">
+            Not counted yet: {waitingBoxes} packed {waitingBoxes === 1 ? 'box' : 'boxes'} (about{' '}
+            {waitingUnits} units) waiting for pickup. They count as given out once collected.
+          </Text>
+        </FadeInUp>
+      )}
+
       <FadeInUp index={3}>
         <Card className="flex-row items-center">
           <View className="flex-1">
@@ -232,7 +260,56 @@ export default function ReportsScreen() {
       {/* The spreadsheet bridge. Whoever MESA reports to still wants a sheet, and
           an app that cannot produce one is an app you run ALONGSIDE a
           spreadsheet rather than instead of it. */}
-      <FadeInUp index={6}>
+      {/* What nobody is taking.
+          The complaint people who use food banks make most is getting the same
+          few things every week, and its mirror image is a pantry sitting on
+          pallets of something nobody wants. A pantry cannot ask a donor to send
+          something else without a number, and the numbers were already here —
+          nothing read them. */}
+      {slow.length > 0 && (
+        <FadeInUp index={6}>
+          <Card>
+            <CardHeader
+              title="Sitting the longest"
+              subtitle="Oldest unit still on the shelf. The evidence for asking a donor to send something else."
+            />
+            {slow.map((row, i) => (
+              <View
+                key={row.name}
+                className={`flex-row items-center gap-3 py-3 ${
+                  i < slow.length - 1 ? 'border-b border-hairline' : ''
+                }`}
+              >
+                <CategoryIcon category={row.category ?? 'unknown'} />
+                <View className="flex-1">
+                  <Text variant="body" className="font-semibold" numberOfLines={1}>
+                    {row.name}
+                  </Text>
+                  <Text variant="micro" tone="soft" className="mt-0.5">
+                    {row.units_on_shelf} on the shelf
+                    {row.days_on_shelf !== null ? ` · oldest ${row.days_on_shelf}d` : ''}
+                    {row.units_given_out > 0
+                      ? ` · ${row.units_given_out} given out`
+                      : ' · never given out'}
+                  </Text>
+                </View>
+                {row.units_discarded > 0 && (
+                  <Badge
+                    label={`${row.units_discarded} binned`}
+                    tone={row.waste_pct !== null && row.waste_pct >= 50 ? 'critical' : 'warn'}
+                  />
+                )}
+              </View>
+            ))}
+            <Text variant="micro" tone="soft" className="mt-3">
+              Something here that never gets given out is shelf space, a donor relationship and
+              somebody&apos;s week, all spent on food nobody wants.
+            </Text>
+          </Card>
+        </FadeInUp>
+      )}
+
+      <FadeInUp index={7}>
         <Card className="gap-3">
           <CardHeader
             title="Export"
@@ -282,6 +359,20 @@ export default function ReportsScreen() {
               />
             }
             onPress={() => exportCsv(`${slug}-bulk-lots-${stamp}.csv`, bulkLotsCsv(bulkLots))}
+          />
+          <Button
+            label="What nobody is taking"
+            variant="secondary"
+            block
+            disabled={busy || slow.length === 0}
+            icon={
+              <MaterialCommunityIcons
+                name="file-delimited-outline"
+                size={18}
+                color={COLORS.textPrimary}
+              />
+            }
+            onPress={() => exportCsv(`${slug}-slow-movers-${stamp}.csv`, slowMoversCsv(slow))}
           />
         </Card>
       </FadeInUp>

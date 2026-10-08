@@ -24,6 +24,7 @@ const storage = {
 let response = { data: { id: "saved" }, error: null },
   rpcError = null,
   calls = 0,
+  requests = [],
   uuid = 0;
 const chain = () => {
   const query = {};
@@ -46,8 +47,9 @@ const chain = () => {
 const supabase = {
   from: chain,
   channel: () => ({}),
-  rpc: async () => {
+  rpc: async (name, args) => {
     calls++;
+    requests.push({ name, args });
     return { error: rpcError };
   },
 };
@@ -69,6 +71,7 @@ const test = async (name, run) => {
   memory.clear();
   rpcError = null;
   calls = 0;
+  requests = [];
   response = { data: { id: "saved" }, error: null };
   store.setState({
     ...initial,
@@ -112,6 +115,25 @@ const test = async (name, run) => {
       store.getState().settings.pantryName,
       initial.settings.pantryName,
     );
+  });
+  await test("owners retain pantry management access after the role merge", async () => {
+    store.setState({ settings: { ...store.getState().settings, userRole: "owner" } });
+    await store.getState().updateSettings({ pantryName: "Owner's pantry" });
+    assert.equal(store.getState().settings.pantryName, "Owner's pantry");
+  });
+  await test("offline intakes retain diet tags and finish scan history only after replay succeeds", async () => {
+    rpcError = { message: "Failed to fetch" };
+    const outcome = { id: "candidate", verdict: "accepted", item_id: "beans", name: "Beans", category: "protein", count: 4, expiration: null };
+    await store.getState().addItems([{ id: "beans", name: "Beans", category: "protein", count: 4, diet_tags: ["no-cook"] }], "donation", "scan-a", [outcome]);
+    const job = JSON.parse(memory.get("pantrylens.intake-outbox.v1"))[0];
+    assert.deepEqual(job.items[0].diet_tags, ["no-cook"]);
+    assert.equal(job.items[0].scan_id, "scan-a");
+    assert.deepEqual(job.scan.outcomes, [outcome]);
+    assert.deepEqual(requests.map(r => r.name), ["commit_intake"]);
+    rpcError = null;
+    await store.getState().flushIntakes();
+    assert.deepEqual(requests.map(r => r.name), ["commit_intake", "commit_intake", "finish_scan"]);
+    assert.equal(store.getState().pendingIntakes, 0);
   });
   await test("network failures persist verified intake before returning queued", async () => {
     rpcError = { message: "TypeError: Failed to fetch", code: "" };

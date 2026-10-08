@@ -1,23 +1,25 @@
+import { useAppRouter } from '../../components/app-navigation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Alert, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { KeyboardScreen } from '../../components/keyboard-screen';
 import { FadeInUp } from '../../components/motion';
 import {
+  PageHeading,
   Button,
   Card,
   CardHeader,
   categoryIcon,
   Input,
-  PageHeading,
   Row,
   Segmented,
   Stepper,
   Text,
   Toggle,
 } from '../../components/ui';
-import { getFeedbackPrefs, setHapticsEnabled, setSoundEnabled } from '../../lib/feedback';
+import { cueSuccess, cueWarn, getFeedbackPrefs, setHapticsEnabled, setSoundEnabled } from '../../lib/feedback';
+import { canEditPantry, canManageTeam, ROLE_BLURBS, ROLE_LABELS } from '../../lib/permissions';
 import { BoxRules, usePantryStore } from '../../lib/store';
 
 /**
@@ -30,10 +32,16 @@ import { BoxRules, usePantryStore } from '../../lib/store';
  *
  * It is the same seven groups, but every line is now the same `Row` at the same
  * height with the same divider, and every control is the one the rest of the app
- * uses. The two numeric groups are the ones a volunteer will actually change, so
- * they get the full 44px stepper rather than the cramped one they had.
+ * uses.
+ *
+ * Almost everything on this screen writes to the pantry row, which only a
+ * manager may change — so for a volunteer the same groups are shown as plain
+ * lines of text. They were controls until now, and tapping them appeared to
+ * work: the database refuses an update by matching no rows rather than by
+ * erroring, so the number moved on screen and was gone at the next refresh.
  */
 export default function SettingsScreen() {
+  const router = useAppRouter();
   const initialPrefs = getFeedbackPrefs();
   const [haptics, setHaptics] = useState(initialPrefs.hapticsEnabled);
   const [sound, setSound] = useState(initialPrefs.soundEnabled);
@@ -42,27 +50,38 @@ export default function SettingsScreen() {
     settings,
     boxRules,
     thresholds,
+    members,
     updateSettings,
-    updateBoxRules,
     updateThresholds,
+    resetPantryData,
+    deletePantry,
+    replayOnboarding,
     signOut,
   } = usePantryStore();
+  const [resetting, setResetting] = useState<string | null>(null);
+
+  // The database decides this; the screen only stops offering what will be
+  // refused. See lib/permissions.ts.
+  const canEdit = canEditPantry(settings.userRole);
 
 
   const [pantryName, setPantryName] = useState(settings.pantryName);
-  const [dropOffDetails, setDropOffDetails] = useState(settings.dropOffDetails);
-  const isAdmin = settings.userRole === 'admin';
-  const adminProps = { pointerEvents: isAdmin ? 'auto' as const : 'none' as const, style: { opacity: isAdmin ? 1 : 0.65 } };
+  const [dropoffLocation, setDropoffLocation] = useState(settings.dropoffLocation);
+  const [dropoffHours, setDropoffHours] = useState(settings.dropoffHours);
   const [savingName, setSavingName] = useState(false);
 
-  // The field is seeded from the store, which is empty until the pantry loads.
+  // The fields are seeded from the store, which is empty until the pantry loads.
   useEffect(() => {
     setPantryName(settings.pantryName);
-    setDropOffDetails(settings.dropOffDetails);
-  }, [settings.pantryName, settings.dropOffDetails]);
+    setDropoffLocation(settings.dropoffLocation);
+    setDropoffHours(settings.dropoffHours);
+  }, [settings.pantryName, settings.dropoffLocation, settings.dropoffHours]);
 
   const categories = Object.keys(boxRules) as (keyof BoxRules)[];
-  const nameChanged = pantryName.trim() !== settings.pantryName || dropOffDetails.trim() !== settings.dropOffDetails;
+  const nameChanged =
+    pantryName.trim() !== settings.pantryName ||
+    dropoffLocation.trim() !== settings.dropoffLocation ||
+    dropoffHours.trim() !== settings.dropoffHours;
 
   const handleSavePantryName = async () => {
     const trimmed = pantryName.trim();
@@ -73,15 +92,14 @@ export default function SettingsScreen() {
 
     setSavingName(true);
     try {
-      await updateSettings({ pantryName: trimmed, dropOffDetails: dropOffDetails.trim() });
+      await updateSettings({
+        pantryName: trimmed,
+        dropoffLocation: dropoffLocation.trim(),
+        dropoffHours: dropoffHours.trim(),
+      });
     } catch (err: any) {
-      // Admin-only under RLS, so a volunteer tapping Save gets told why.
-      Alert.alert(
-        'Could not save',
-        err?.message?.includes('policy')
-          ? 'Only a pantry admin can rename the pantry.'
-          : (err?.message ?? 'Please try again.'),
-      );
+      // Admin-only under RLS; the store turns a silent refusal into this error.
+      Alert.alert('Could not save', err?.message ?? 'Please try again.');
     } finally {
       setSavingName(false);
     }
@@ -95,6 +113,79 @@ export default function SettingsScreen() {
     }
   };
 
+  // Thresholds used to be written and forgotten. They go to the same
+  // manager-only row as everything else here, so a refusal needs saying.
+  const handleThresholdChange = async (updates: Partial<typeof thresholds>) => {
+    try {
+      await updateThresholds(updates);
+    } catch (err: any) {
+      Alert.alert('Could not save', err?.message ?? 'Please try again.');
+    }
+  };
+
+  /**
+   * The development reset.
+   *
+   * Everything here is destructive and none of it ships: the whole card is
+   * behind __DEV__. The real guard is in the database though — both functions
+   * are owner-only — because a function that exists is reachable from the API
+   * whether or not a button points at it.
+   */
+  const devAction = async (key: string, run: () => Promise<string>) => {
+    setResetting(key);
+    try {
+      const message = await run();
+      cueSuccess();
+      Alert.alert('Done', message);
+    } catch (err: any) {
+      cueWarn();
+      Alert.alert('Could not do that', err?.message ?? 'Please try again.');
+    } finally {
+      setResetting(null);
+    }
+  };
+
+  const confirmClear = () => {
+    Alert.alert(
+      'Clear all pantry data?',
+      'Every item, scan, count, pack, donation record and learned name goes, along with their photos.\n\nKept: your shelves, box types, folders, team and settings.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear it',
+          style: 'destructive',
+          onPress: () =>
+            devAction('clear', async () => {
+              const counts = await resetPantryData();
+              const parts = Object.entries(counts)
+                .filter(([, n]) => n > 0)
+                .map(([k, n]) => `${n} ${k.replace(/_/g, ' ')}`);
+              return parts.length > 0 ? `Removed ${parts.join(', ')}.` : 'There was nothing to remove.';
+            }),
+        },
+      ],
+    );
+  };
+
+  const confirmDeletePantry = () => {
+    Alert.alert(
+      `Delete "${settings.pantryName}" entirely?`,
+      'The pantry and everything in it goes, and every member is removed — not just you. You will land back on pantry selection.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete the pantry',
+          style: 'destructive',
+          onPress: () =>
+            devAction('delete', async () => {
+              const name = await deletePantry();
+              return `${name} is gone. Create or join one to carry on.`;
+            }),
+        },
+      ],
+    );
+  };
+
   const handleSignOut = () => {
     Alert.alert('Sign out?', 'You will need to sign in again to reach this pantry.', [
       { text: 'Cancel', style: 'cancel' },
@@ -105,29 +196,112 @@ export default function SettingsScreen() {
   return (
     <KeyboardScreen>
       <PageHeading title="Settings" description="Your pantry, packing rules, and personal preferences." />
-      {!isAdmin && <Text variant="label" tone="soft">Pantry settings are managed by your coordinator. You can view them here and change your own feel & sound preferences.</Text>}
-      <FadeInUp index={0}>
-        <Card className="gap-4" {...adminProps}>
-          <Input
-            label="Pantry name"
-            value={pantryName}
-            onChangeText={setPantryName}
-            hint="What every volunteer sees at the top of the app."
-          />
-          <Input label="Donation drop-off details" value={dropOffDetails} onChangeText={setDropOffDetails} placeholder="Address, entrance, and opening hours" hint="Included in the donation request. Leave blank to omit." />
-          {/* Only appears once there is something to save — a Save button that
-              is always there is a Save button nobody reads. */}
-          {nameChanged && (
-            <Button
-              label="Save pantry details"
-              loading={savingName}
-              onPress={handleSavePantryName}
+      {/* Says why the rest of the screen is read-only, once, instead of a
+          padlock on every line. Managers and the owner never see it. */}
+      {!canEdit && (
+        <FadeInUp index={0}>
+          <Card className="flex-row items-start gap-3">
+            <MaterialCommunityIcons
+              name="lock-outline"
+              size={20}
+              color={COLORS.textSecondary}
+              style={{ marginTop: 2 }}
             />
+            <View className="flex-1">
+              <Text variant="label" className="font-bold">
+                You are a {ROLE_LABELS[settings.userRole].toLowerCase()}
+              </Text>
+              <Text variant="micro" tone="soft" className="mt-1">
+                {ROLE_BLURBS[settings.userRole]} Everything below is how your pantry is set up —
+                ask your pantry owner if it needs changing.
+              </Text>
+            </View>
+          </Card>
+        </FadeInUp>
+      )}
+
+      <FadeInUp index={1}>
+        <Card className={canEdit ? 'gap-4' : undefined}>
+          {!canEdit ? (
+            <>
+              <Row
+                icon="storefront-outline"
+                label="Pantry name"
+                hint={settings.pantryName || 'Not set'}
+              />
+              <Row
+                icon="map-marker-outline"
+                label="Drop-off location"
+                hint={settings.dropoffLocation || 'Not set yet'}
+              />
+              <Row
+                icon="clock-outline"
+                label="Drop-off hours"
+                hint={settings.dropoffHours || 'Not set yet'}
+                divider={false}
+              />
+            </>
+          ) : (
+            <>
+              <Input
+                label="Pantry name"
+                value={pantryName}
+                onChangeText={setPantryName}
+                hint="What every volunteer sees at the top of the app."
+              />
+              {/* Where and when donors can drop food off. Needs puts these in the
+                  message it writes for donors; they used to be hardcoded, so every
+                  pantry's message sent people to the same made-up rear entrance. */}
+              <Input
+                label="Drop-off location"
+                value={dropoffLocation}
+                onChangeText={setDropoffLocation}
+                placeholder="Rear entrance, 12 Main St"
+                maxLength={120}
+              />
+              <Input
+                label="Drop-off hours"
+                value={dropoffHours}
+                onChangeText={setDropoffHours}
+                placeholder="Mon–Fri, 9am–4pm"
+                maxLength={80}
+                hint="Both go in the donor message on Needs. Leave them blank and it's left out."
+              />
+              {/* Only appears once there is something to save — a Save button that
+                  is always there is a Save button nobody reads. */}
+              {nameChanged && (
+                <Button
+                  label="Save changes"
+                  loading={savingName}
+                  onPress={handleSavePantryName}
+                />
+              )}
+            </>
           )}
         </Card>
       </FadeInUp>
 
-      <FadeInUp index={1}>
+      {/* Who is in this pantry, and — for the owner — who may do what. Everyone
+          can see the roster; only the owner gets the controls, on that screen. */}
+      <FadeInUp index={2}>
+        <Card>
+          <Row
+            icon="account-multiple-outline"
+            label="Team"
+            hint={
+              members.length
+                ? `${members.length} ${members.length === 1 ? 'person' : 'people'} · you are the ${ROLE_LABELS[
+                    settings.userRole
+                  ].toLowerCase()}`
+                : `You are the ${ROLE_LABELS[settings.userRole].toLowerCase()}`
+            }
+            divider={false}
+            onPress={() => router.push('/team')}
+          />
+        </Card>
+      </FadeInUp>
+
+      <FadeInUp index={3}>
         <Card>
           <CardHeader
             title="Feel & sound"
@@ -167,32 +341,22 @@ export default function SettingsScreen() {
         </Card>
       </FadeInUp>
 
-      <FadeInUp index={2}>
-        <Card {...adminProps}>
-          <CardHeader
-            title="What goes in a box"
-            subtitle="Items per category in one standard box, for a family of four."
+      {/* Boxes moved to Build, where they're chosen. This row stays so anyone
+          who comes looking here finds them. */}
+      <FadeInUp index={4}>
+        <Card>
+          <Row
+            icon="package-variant-closed"
+            label="What goes in a box"
+            hint="Set up on the Build tab: pick a box, edit it, or start from a preset."
+            divider={false}
+            onPress={() => router.push('/(tabs)/build')}
           />
-          {categories.map((cat, i) => (
-            <Row
-              key={cat}
-              icon={categoryIcon(String(cat))}
-              label={String(cat).charAt(0).toUpperCase() + String(cat).slice(1)}
-              divider={i < categories.length - 1}
-              right={
-                <Stepper
-                  value={boxRules[cat]}
-                  min={0}
-                  onChange={next => updateBoxRules({ [cat]: next }).catch(e => Alert.alert('Could not save', e.message))}
-                />
-              }
-            />
-          ))}
         </Card>
       </FadeInUp>
 
-      <FadeInUp index={3}>
-        <Card {...adminProps}>
+      <FadeInUp index={5}>
+        <Card>
           <CardHeader
             title="Tell me when stock is low"
             subtitle="Below this total, a category starts showing up on the dashboard and in Needs."
@@ -204,49 +368,91 @@ export default function SettingsScreen() {
               label={String(cat).charAt(0).toUpperCase() + String(cat).slice(1)}
               divider={i < categories.length - 1}
               right={
-                <Stepper
-                  value={thresholds[cat]}
-                  min={1}
-                  onChange={next => updateThresholds({ [cat]: next }).catch(e => Alert.alert('Could not save', e.message))}
-                />
+                canEdit ? (
+                  <Stepper
+                    value={thresholds[cat]}
+                    min={1}
+                    onChange={next => handleThresholdChange({ [cat]: next })}
+                  />
+                ) : (
+                  <Text variant="heading" tone="soft" className="min-w-[36px] text-center font-bold">
+                    {thresholds[cat]}
+                  </Text>
+                )
               }
             />
           ))}
         </Card>
       </FadeInUp>
 
-      <FadeInUp index={4}>
-        <Card {...adminProps}>
+      <FadeInUp index={6}>
+        <Card>
           <CardHeader
             title="Flag stock as use-first"
             subtitle="How far ahead to look when deciding what is about to expire."
           />
           <Segmented
             value={settings.expirationWarningDays}
+            disabled={!canEdit}
             options={[14, 21, 30].map(days => ({ value: days, label: `${days} days` }))}
             onChange={days => handleSettingChange({ expirationWarningDays: days })}
           />
         </Card>
       </FadeInUp>
 
-      <FadeInUp index={5}>
-        <Card {...adminProps}>
+      <FadeInUp index={7}>
+        <Card>
+          <CardHeader
+            title="Boxes you usually pack"
+            subtitle="How many households a distribution serves. Needs measures shortfalls against this, and Build opens on it."
+          />
+          <Row
+            icon="package-variant-closed"
+            label="Boxes per distribution"
+            hint={
+              canEdit
+                ? 'Change it whenever your numbers change.'
+                : 'Set by your pantry manager.'
+            }
+            divider={false}
+            right={
+              canEdit ? (
+                <Stepper
+                  value={settings.boxTarget}
+                  min={1}
+                  max={200}
+                  onChange={next => handleSettingChange({ boxTarget: next })}
+                />
+              ) : (
+                <Text variant="heading" tone="soft" className="min-w-[36px] text-center font-bold">
+                  {settings.boxTarget}
+                </Text>
+              )
+            }
+          />
+        </Card>
+      </FadeInUp>
+
+      <FadeInUp index={8}>
+        <Card>
           <CardHeader
             title="Usual family size"
             subtitle="What the dashboard and Build Boxes assume before anyone changes it."
           />
           <Segmented
             value={settings.defaultFamilySize}
+            disabled={!canEdit}
             options={[2, 4, 6].map(size => ({ value: size, label: `${size} people` }))}
             onChange={size => handleSettingChange({ defaultFamilySize: size })}
           />
         </Card>
       </FadeInUp>
 
-      <FadeInUp index={6}>
+      <FadeInUp index={9}>
         <View className="gap-4">
           <Text variant="micro" tone="soft" className="px-1 text-center">
-            Signed in to {settings.pantryName || 'this pantry'} as {settings.userRole}.
+            Signed in to {settings.pantryName || 'this pantry'} as a{' '}
+            {ROLE_LABELS[settings.userRole].toLowerCase()}.
           </Text>
           <Button
             label="Sign out"
@@ -259,6 +465,61 @@ export default function SettingsScreen() {
           />
         </View>
       </FadeInUp>
+
+      {/* Development only, and not merely hidden: __DEV__ is compiled out of a
+          release bundle, so none of this exists in a build a pantry installs. */}
+      {__DEV__ && (
+        <FadeInUp index={9}>
+          <Card>
+            <CardHeader
+              title="Developer"
+              subtitle="Only in a development build. A release bundle does not contain this card."
+            />
+            <Row
+              icon="broom"
+              label="Clear all pantry data"
+              hint="Items, scans, counts, packs, donation records and photos. Keeps shelves, box types, team and settings."
+              right={
+                resetting === 'clear' ? (
+                  <ActivityIndicator size="small" color={COLORS.statusCritical} />
+                ) : undefined
+              }
+              onPress={canManageTeam(settings.userRole) ? confirmClear : undefined}
+            />
+            <Row
+              icon="restart"
+              label="Replay the intro"
+              hint="Forgets that onboarding was finished, on this device only."
+              onPress={() =>
+                devAction('onboarding', async () => {
+                  await replayOnboarding();
+                  return 'The intro will play next time the app starts.';
+                })
+              }
+            />
+            <Row
+              icon="delete-forever-outline"
+              label="Delete this pantry"
+              hint="The pantry, its data and everyone's membership. Lands you back on pantry selection."
+              tone="critical"
+              divider={false}
+              right={
+                resetting === 'delete' ? (
+                  <ActivityIndicator size="small" color={COLORS.statusCritical} />
+                ) : undefined
+              }
+              onPress={canManageTeam(settings.userRole) ? confirmDeletePantry : undefined}
+            />
+
+            {!canManageTeam(settings.userRole) && (
+              <Text variant="micro" tone="soft" className="mt-3">
+                Clearing and deleting are owner-only, enforced by the database rather than by this
+                screen. You are {ROLE_LABELS[settings.userRole].toLowerCase()} here.
+              </Text>
+            )}
+          </Card>
+        </FadeInUp>
+      )}
     </KeyboardScreen>
   );
 }

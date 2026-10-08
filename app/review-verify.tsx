@@ -2,14 +2,19 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useState, useRef } from 'react';
 import { Alert, Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
 import { Badge, Button, Card, Chip, Input, Stepper, Text } from '../components/ui';
 import * as Crypto from 'expo-crypto';
+import { identifyRegion, ScanError } from '../lib/ai_vision';
 import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
+import { nextRowToCheck } from '../lib/review-order';
 import { attachItemPhotos, type PhotoJob } from '../lib/item-photos';
 import type { DetectionBox, ScanCandidate } from '../lib/scan-normalize';
+import { describeTags, normaliseDietTags } from '../lib/diet';
+import { verdictFor, type DetectedSnapshot } from '../lib/scan-history';
 import {
   Condition,
   CONDITION_LABELS,
@@ -51,6 +56,21 @@ type DraftRow = Partial<InventoryItem> &
      * the row at save time would only ever record the corrected name twice.
      */
     rawName: string;
+    /** A box a volunteer drew over something the scan missed. */
+    drawnByHand?: boolean;
+    /**
+     * The scan_items row this came from, and what that row said before anyone
+     * touched it.
+     *
+     * `rawName` above already freezes the name for the catalogue. This freezes
+     * the rest — count, category, date — because scan history has to be able to
+     * say whether a human changed anything at all, and reading it back off the
+     * row at save time would only ever compare the corrected values with
+     * themselves. Absent on rows a volunteer added by hand, which belong to no
+     * candidate.
+     */
+    scanItemId?: string;
+    detected?: DetectedSnapshot;
   };
 
 let uidCounter = 0;
@@ -72,6 +92,8 @@ export default function ReviewVerifyScreen() {
     pendingBarcode,
     draftLocationId,
     setPendingBarcode,
+    currentScan,
+    setCurrentScan,
   } = usePantryStore();
 
   /**
@@ -97,10 +119,19 @@ export default function ReviewVerifyScreen() {
     params.source === 'shelf_audit' ? 'shelf_audit' : 'donation';
 
   const [draftItems, setDraftItems] = useState<DraftRow[]>(() =>
-    currentDraft.map(item => ({
+    currentDraft.map((item, index) => ({
       ...item,
       uid: nextUid(),
       rawName: item.name ?? '',
+      // start_scan returns the candidate ids in the order they were sent, and
+      // currentDraft is those same candidates in that same order.
+      scanItemId: currentScan?.itemIds[index],
+      detected: {
+        name: item.name ?? '',
+        category: (item.category ?? 'unknown') as string,
+        count: item.count ?? 0,
+        expiration: item.expiration ?? null,
+      },
       // normaliseItem hands this over as imageUrl; the row stores it the way the
       // database does.
       image_url: (item as any).imageUrl ?? null,
@@ -170,6 +201,7 @@ export default function ReviewVerifyScreen() {
       // A box a human drew has no model reading behind it, so there is nothing
       // for the catalogue to learn from — an empty rawName excludes it.
       rawName: '',
+      drawnByHand: true,
       name: '',
       category: 'unknown',
       count: 1,
@@ -185,10 +217,130 @@ export default function ReviewVerifyScreen() {
     setDrawMode(false);
   };
 
-  const toggleVerified = (id: string) => {
-    const next = !verifiedIds[id];
-    next ? cueSuccess() : cueTap();
-    setVerifiedIds(prev => ({ ...prev, [id]: next }));
+  const insets = useSafeAreaInsets();
+  const [identifyingId, setIdentifyingId] = useState<string | null>(null);
+
+  /**
+   * The confirmed set as of the latest tap, not the latest render.
+   *
+   * Confirming is meant to be tapped quickly. Two taps can land before React
+   * re-renders, and working out "what's next" from the rendered state would
+   * pick the row the previous tap just confirmed.
+   */
+  const verifiedRef = useRef(verifiedIds);
+  verifiedRef.current = verifiedIds;
+
+  /** Puts a row on screen, switching to its photo if it lives on another. */
+  const focusRow = (row: DraftRow | null) => {
+    if (!row) return;
+    setSelectedId(row.uid);
+    setPhotoIndex(row.imageIndex ?? 0);
+  };
+
+  /**
+   * Confirms a row and moves straight to the next one waiting.
+   *
+   * Confirm-only, never a toggle. The old button undid a confirmation when
+   * tapped again, so a double-tap that beat a re-render took back the confirm it
+   * had just made. Undo lives in the editor, away from the button being tapped.
+   *
+   * It confirms the row that was RENDERED when tapped. If taps outrun the
+   * screen, the extra one re-confirms a row that is already confirmed, which
+   * does nothing. That beats confirming a row nobody has seen.
+   */
+  const confirmAndAdvance = (uid: string) => {
+    const row = draftItems.find(r => r.uid === uid);
+    if (!row || !row.name?.trim()) return;
+
+    let map = verifiedRef.current;
+    if (!map[uid]) {
+      map = { ...map, [uid]: true };
+      verifiedRef.current = map;
+      setVerifiedIds(map);
+    }
+
+    const next = nextRowToCheck(draftItems, map, uid, photoIndex, currentScanPhotos.length);
+    if (next) {
+      cueTap();
+      focusRow(next);
+    } else {
+      // Stays on the last row. The bar turns into a non-tappable "All
+      // confirmed", so a stray tap after the end can't land on Save.
+      cueSuccess();
+    }
+  };
+
+  const unconfirm = (uid: string) => {
+    cueTap();
+    const map = { ...verifiedRef.current };
+    delete map[uid];
+    verifiedRef.current = map;
+    setVerifiedIds(map);
+  };
+
+  /**
+   * Asks the model what is inside a box the volunteer drew.
+   *
+   * Only the box is sent, cropped out of the photo. The volunteer's box is kept
+   * as drawn. If the model saw more than one thing in there, the clearest one
+   * fills the row and the rest are named so they can be boxed separately.
+   */
+  const handleIdentify = async (uid: string) => {
+    if (identifyingId) return;
+    const row = draftItems.find(r => r.uid === uid);
+    const source = row ? currentScanPhotos[row.imageIndex ?? 0] : undefined;
+    if (!row?.box || !source?.uri || !source.width || !source.height) {
+      Alert.alert('Nothing to look at', 'This item has no box on a photo. Type the name in instead.');
+      return;
+    }
+
+    cueTap();
+    setIdentifyingId(uid);
+    try {
+      const { item, alsoSaw } = await identifyRegion(
+        { uri: source.uri, width: source.width, height: source.height },
+        row.box,
+      );
+
+      setDraftItems(prev =>
+        prev.map(r =>
+          r.uid !== uid
+            ? r
+            : {
+                ...r,
+                name: item.name,
+                // The model produced this reading, so a correction to it is
+                // worth teaching the catalogue, just like any scanned row.
+                rawName: item.name,
+                category: item.category,
+                count: item.count,
+                expiration: item.expiration,
+                condition: item.condition,
+                confidence: item.confidence,
+                barcode: item.barcode ?? null,
+                resolvedBy: item.resolvedBy ?? null,
+                image_url: item.imageUrl ?? r.image_url ?? null,
+              },
+        ),
+      );
+      cueSuccess();
+
+      if (alsoSaw.length > 0) {
+        Alert.alert(
+          'There was more in that box',
+          `Filled this in as the clearest one. Also in there: ${alsoSaw.join(', ')}. Draw separate boxes to add them.`,
+        );
+      }
+    } catch (err) {
+      cueWarn();
+      log.error('scan', 'identifying a hand-drawn box failed', err);
+      Alert.alert(
+        "Couldn't identify it",
+        err instanceof ScanError ? err.message : 'Something went wrong. Type the name in instead.',
+      );
+    } finally {
+      setIdentifyingId(null);
+    }
   };
 
   /**
@@ -227,6 +379,13 @@ export default function ReviewVerifyScreen() {
         barcode: pendingBarcode.barcode,
         resolvedBy: 'barcode',
         image_url: pendingBarcode.imageUrl ?? next[index].image_url ?? null,
+        // Allergens from the product database, merged with anything a volunteer
+        // had already ticked by hand — a scan should add knowledge, never erase
+        // somebody's own observation that the tin has no pull tab.
+        diet_tags: normaliseDietTags([
+          ...(next[index].diet_tags ?? []),
+          ...pendingBarcode.dietTags,
+        ]),
         // The manufacturer said so. Nothing in this pipeline is more certain.
         confidence: 1,
       };
@@ -260,7 +419,12 @@ export default function ReviewVerifyScreen() {
           batchLocation ?? defaultLocationFor((row.category ?? 'unknown') as any),
         source_org: draftSource,
       }));
-      const result = await addItems(rows, source);
+      const outcomes = rows.flatMap(row => row.scanItemId && row.detected ? [{
+        id: row.scanItemId, verdict: verdictFor(row.detected, row), item_id: row.id,
+        name: row.name ?? '', category: row.category ?? 'unknown', count: row.count ?? 0, expiration: row.expiration ?? null,
+      }] : []);
+      const result = await addItems(rows, source, currentScan?.scanId ?? null, outcomes);
+      setCurrentScan(null);
       committed = true;
       setSaved(true);
       if (settings.pantryId && usePantryStore.getState().session?.user.id) {
@@ -272,6 +436,7 @@ export default function ReviewVerifyScreen() {
         Alert.alert('Saved on this device', 'Your verified intake is waiting to sync. It will appear in inventory after the server confirms it.', [{ text: 'Back to pantry', onPress: () => router.replace('/(tabs)') }]);
         return;
       }
+
 
       /**
        * Teach the catalogue what this pantry just agreed to.
@@ -424,8 +589,78 @@ export default function ReviewVerifyScreen() {
     .map((item, i) => ({ item, i }))
     .filter(({ item }) => !item.box && (item.imageIndex ?? 0) === photoIndex);
 
+  /**
+   * What the pinned bar offers right now: the obvious next move for the row on
+   * screen. Inert states have no action and render as a plain status, not a
+   * disabled button, so a tap on them does nothing at all.
+   */
+  const unverifiedCount = draftItems.length - verifiedCount;
+  const bar: {
+    label: string;
+    hint?: string;
+    icon: keyof typeof MaterialCommunityIcons.glyphMap;
+    action?: () => void;
+    primary?: boolean;
+    loading?: boolean;
+    done?: boolean;
+  } = (() => {
+    if (allVerified) {
+      return {
+        label: 'All confirmed',
+        hint: `All ${draftItems.length} checked. Add them when you're ready.`,
+        icon: 'check-all',
+        done: true,
+      };
+    }
+    if (!selectedItem) {
+      return {
+        label: 'Start checking',
+        hint: `${unverifiedCount} left to confirm`,
+        icon: 'arrow-right',
+        primary: true,
+        action: () => {
+          cueTap();
+          focusRow(
+            nextRowToCheck(draftItems, verifiedRef.current, null, photoIndex, currentScanPhotos.length),
+          );
+        },
+      };
+    }
+    const uid = selectedItem.uid;
+    if (!selectedItem.name?.trim()) {
+      const source = currentScanPhotos[selectedItem.imageIndex ?? 0];
+      return selectedItem.box && source?.uri
+        ? {
+            label: 'Identify with AI',
+            hint: 'Or type the name in above.',
+            icon: 'auto-fix',
+            primary: true,
+            loading: identifyingId === uid,
+            action: () => handleIdentify(uid),
+          }
+        : { label: 'Name it first', hint: 'Type a name above to confirm it.', icon: 'pencil-outline' };
+    }
+    if (verifiedIds[uid]) {
+      return {
+        label: 'Next item',
+        hint: `${unverifiedCount} left to confirm`,
+        icon: 'arrow-right',
+        action: () => confirmAndAdvance(uid),
+      };
+    }
+    return {
+      label: 'Confirm',
+      hint: `${selectedItem.count ?? 1}× ${selectedItem.name}`,
+      icon: 'check',
+      primary: true,
+      action: () => confirmAndAdvance(uid),
+    };
+  })();
+
   return (
-    <KeyboardScreen scrollEnabled={scrollEnabled}>
+    <View className="flex-1 bg-canvas">
+    {/* Extra foot so the Save button can scroll clear of the pinned bar. */}
+    <KeyboardScreen scrollEnabled={scrollEnabled} contentContainerClassName="pb-40">
       {/* Progress, stated once as a sentence rather than as a card full of
           chrome. The bar is the only ornament it needs. */}
       <View className="gap-2">
@@ -552,7 +787,9 @@ export default function ReviewVerifyScreen() {
           onChange={updates => updateItemAtIndex(selectedIndex, updates)}
           onRemove={() => removeItemAtIndex(selectedIndex)}
           onBarcode={() => handleBarcodeScan(selectedItem.uid)}
-          onToggleVerified={() => toggleVerified(selectedId!)}
+          onUndoConfirm={() => unconfirm(selectedItem.uid)}
+          onIdentify={() => handleIdentify(selectedItem.uid)}
+          identifying={identifyingId === selectedItem.uid}
           onClose={() => setSelectedId(null)}
         />
       ) : null}
@@ -591,15 +828,90 @@ export default function ReviewVerifyScreen() {
         </Card>
       )}
 
-      <Button
-        label={saved ? 'Intake saved' : source === 'shelf_audit' ? 'Replace this shelf with verified counts' : `Add ${draftItems.length} item${draftItems.length === 1 ? '' : 's'} to inventory`}
-        block
-        loading={saving}
-        disabled={saved}
-        icon={<MaterialCommunityIcons name="database-check" size={20} color={COLORS.textOnPrimary} />}
-        onPress={handleSaveToInventory}
-      />
     </KeyboardScreen>
+
+      {/* THE CONFIRM BAR.
+          Pinned to the screen rather than living at the end of the editor card,
+          because that card changes height from item to item (no barcode button
+          for a barcode match, a damage warning for a flagged tin), and a button
+          that moves can't be tapped quickly. Anchored at the bottom, the button
+          stays exactly where the thumb is. */}
+      <View
+        className="absolute bottom-0 left-0 right-0 border-t border-hairline bg-canvas px-gutter pt-3"
+        style={{ paddingBottom: insets.bottom + 12 }}
+      >
+        {bar.hint ? (
+          <Text variant="micro" tone="soft" numberOfLines={1} className="mb-2">
+            {bar.hint}
+          </Text>
+        ) : null}
+
+        {/* Confirm and Add, side by side. Adding used to be at the very bottom of
+            the page, a scroll away from the button you'd just been confirming
+            with.
+
+            The two keep FIXED positions and widths. Confirm is the wide one on
+            the left, where rapid taps land, and it ends as a non-tappable "All
+            confirmed". Add is a separate target on the right, so a burst of
+            confirms can never spill into saving. Adding with items still
+            unconfirmed asks first (handleSaveToInventory). */}
+        <View className="flex-row gap-2">
+          <View className="flex-[3]">
+            {bar.action ? (
+              <Button
+                label={bar.label}
+                block
+                variant={bar.primary ? 'primary' : 'secondary'}
+                loading={bar.loading}
+                className="px-3"
+                icon={
+                  <MaterialCommunityIcons
+                    name={bar.icon}
+                    size={19}
+                    color={bar.primary ? COLORS.textOnPrimary : COLORS.textPrimary}
+                  />
+                }
+                onPress={bar.action}
+              />
+            ) : (
+              // Same height as a button with its lip, so nothing shifts when the
+              // last confirm turns the button into this.
+              <View className="min-h-[54px] flex-row items-center justify-center gap-2">
+                <MaterialCommunityIcons
+                  name={bar.icon}
+                  size={19}
+                  color={bar.done ? COLORS.statusGood : COLORS.textSecondary}
+                />
+                <Text variant="body" tone={bar.done ? 'good' : 'soft'} className="font-bold">
+                  {bar.label}
+                </Text>
+              </View>
+            )}
+          </View>
+
+          <View className="flex-[2]">
+            <Button
+              label={saved ? "Intake saved" : `Add ${draftItems.length}`}
+              accessibilityLabel={`Add ${draftItems.length} ${draftItems.length === 1 ? 'item' : 'items'} to inventory`}
+              block
+              // The obvious next step only once everything is checked.
+              variant={allVerified ? 'primary' : 'secondary'}
+              loading={saving}
+              disabled={saved}
+              className="px-3"
+              icon={
+                <MaterialCommunityIcons
+                  name="tray-arrow-down"
+                  size={19}
+                  color={allVerified ? COLORS.textOnPrimary : COLORS.textPrimary}
+                />
+              }
+              onPress={handleSaveToInventory}
+            />
+          </View>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -616,7 +928,9 @@ function ItemEditor({
   onChange,
   onRemove,
   onBarcode,
-  onToggleVerified,
+  onUndoConfirm,
+  onIdentify,
+  identifying,
   onClose,
 }: {
   item: DraftRow;
@@ -624,7 +938,9 @@ function ItemEditor({
   onChange: (updates: Partial<InventoryItem>) => void;
   onRemove: () => void;
   onBarcode: () => void;
-  onToggleVerified: () => void;
+  onUndoConfirm: () => void;
+  onIdentify: () => void;
+  identifying: boolean;
   onClose: () => void;
 }) {
   const isLowConf = (item.confidence ?? 1) < 0.7;
@@ -647,6 +963,21 @@ function ItemEditor({
           />
         )}
         <View className="flex-row items-center gap-5">
+          {/* Up here, well away from the confirm bar, so undoing is always
+              deliberate and never the side effect of tapping quickly. */}
+          {verified && (
+            <Pressable
+              onPress={onUndoConfirm}
+              hitSlop={8}
+              accessibilityLabel="Undo confirm"
+              className="flex-row items-center gap-1"
+            >
+              <MaterialCommunityIcons name="undo-variant" size={16} color={COLORS.primaryDark} />
+              <Text variant="micro" tone="brand" className="font-bold">
+                Undo confirm
+              </Text>
+            </Pressable>
+          )}
           <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove this item">
             <MaterialCommunityIcons name="trash-can-outline" size={20} color={COLORS.textSecondary} />
           </Pressable>
@@ -656,6 +987,25 @@ function ItemEditor({
         </View>
       </View>
 
+      {/* What the product database knows about allergens, when a barcode named
+          this. Read-only here — this screen is for getting the item right, and
+          the full set is editable on the item itself. It is shown at all because
+          a volunteer sorting a donation is the last person who can catch a
+          mislabelled tin before it reaches a household that cannot eat it. */}
+      {describeTags(item.diet_tags ?? []) ? (
+        <View className="mt-4 flex-row gap-2 rounded-md bg-subtle px-3 py-2">
+          <MaterialCommunityIcons
+            name="information-outline"
+            size={15}
+            color={COLORS.textSecondary}
+            style={{ marginTop: 1 }}
+          />
+          <Text variant="micro" tone="soft" className="flex-1 capitalize">
+            {describeTags(item.diet_tags ?? [])}
+          </Text>
+        </View>
+      ) : null}
+
       <View className="mt-5">
         <Input
           label="Name"
@@ -663,6 +1013,21 @@ function ItemEditor({
           placeholder="What is it?"
           onChangeText={txt => onChange({ name: txt })}
         />
+        {/* Only for boxes a volunteer drew. Scanned rows already have the
+            model's reading, and re-asking would just return it again. Offered
+            again after a first try, since nudging the box and retrying is the
+            natural fix for a wrong answer. */}
+        {item.drawnByHand && (
+          <Button
+            label={item.name?.trim() ? 'Identify again with AI' : 'Identify with AI'}
+            variant="secondary"
+            size="compact"
+            className="mt-3"
+            loading={identifying}
+            icon={<MaterialCommunityIcons name="auto-fix" size={17} color={COLORS.textPrimary} />}
+            onPress={onIdentify}
+          />
+        )}
       </View>
 
       <View className="mt-5 gap-2">
@@ -744,20 +1109,6 @@ function ItemEditor({
         />
       )}
 
-      <Button
-        label={verified ? 'Confirmed — tap to undo' : 'Looks right, confirm it'}
-        block
-        variant={verified ? 'secondary' : 'primary'}
-        className={verified ? 'mt-3' : 'mt-5'}
-        icon={
-          <MaterialCommunityIcons
-            name={verified ? 'check-circle' : 'check-circle-outline'}
-            size={18}
-            color={verified ? COLORS.primaryDark : COLORS.textOnPrimary}
-          />
-        }
-        onPress={onToggleVerified}
-      />
     </Card>
   );
 }

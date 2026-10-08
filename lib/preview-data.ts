@@ -5,6 +5,10 @@ export const previewSettings: Settings = {
   expirationWarningDays: 30,
   defaultFamilySize: 4,
   userRole: "volunteer",
+  boxTarget: 12,
+  inviteCode: "",
+  dropoffLocation: "123 Maple Street",
+  dropoffHours: "Tuesdays and Thursdays, 10am–2pm",
   dropOffDetails: "123 Maple Street · Tuesdays and Thursdays, 10am–2pm",
 };
 const date = (days: number) => {
