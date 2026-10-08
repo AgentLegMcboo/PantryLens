@@ -1,6 +1,8 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
+import { useLocalSearchParams } from 'expo-router';
+import { useAppRouter } from '../components/app-navigation';
+import React, { useMemo, useState, useRef } from 'react';
+import * as Crypto from 'expo-crypto';
 import { Alert, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { computeAllocation } from '../lib/allocation';
@@ -23,15 +25,20 @@ import { usePantryStore } from '../lib/store';
  * progress you can see is what makes a long pick list bearable.
  */
 export default function PackingChecklistScreen() {
-  const router = useRouter();
+  const router = useAppRouter();
   const params = useLocalSearchParams();
   const targetBoxes = parseInt(params.targetBoxes as string, 10) || 12;
   const familySize = parseInt(params.familySize as string, 10) || 4;
 
   const { inventory, bulkLots, boxRules, locations, deductItems } = usePantryStore();
-  const plan = computeAllocation(inventory, boxRules, targetBoxes, familySize, bulkLots);
+  // Keep the quantities the volunteer started picking stable as stock refreshes.
+  // The server checks remaining stock again when this batch is committed.
+  const [plan] = useState(() => computeAllocation(inventory, boxRules, targetBoxes, familySize, bulkLots));
 
   const [checked, setChecked] = useState<Record<string, boolean>>({});
+  const [saving, setSaving] = useState(false);
+  const packingId = useRef(Crypto.randomUUID());
+  const savingRef = useRef(false);
 
   const allKeys = useMemo(
     () =>
@@ -50,14 +57,19 @@ export default function PackingChecklistScreen() {
     setChecked(prev => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const handleFinish = () => {
-    deductItems(plan.allocatedItems.map(a => ({ id: a.item.id, count: a.countToGrab })));
+  const handleFinish = async () => {
+    if (!allDone || savingRef.current) return;
+    savingRef.current = true; setSaving(true);
+    try {
+    await deductItems(plan.allocatedItems.map(a => ({ id: a.item.id, count: a.countToGrab })), packingId.current);
     cueSuccess();
     Alert.alert(
       'Boxes packed',
       `${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? 'box is' : 'boxes are'} ready, and the shelf counts have come down to match.`,
       [{ text: 'Done', onPress: () => router.replace('/(tabs)') }],
     );
+    } catch (e: any) { Alert.alert('Could not finish packing', e.message ?? 'Your checklist is still here. Please retry.'); }
+    finally { setSaving(false); savingRef.current = false; }
   };
 
   const recipe = Object.entries(plan.perBoxNeeds)
@@ -189,6 +201,7 @@ export default function PackingChecklistScreen() {
             label={allDone ? 'Finish and update the shelf' : `${total - doneCount} still to pick`}
             block
             disabled={!allDone}
+            loading={saving}
             icon={
               <MaterialCommunityIcons
                 name="check-all"

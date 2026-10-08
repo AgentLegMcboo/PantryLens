@@ -10,3 +10,4 @@ export { EmptyState } from './empty-state';
 export { Row, Toggle } from './row';
 export { Segmented } from './segmented';
 export { CategoryIcon, ItemThumb, CATEGORY_ICONS, categoryIcon } from './category-icon';
+export { PageHeading } from './page-heading';

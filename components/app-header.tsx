@@ -1,9 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useAppRouter } from './app-navigation';
+import { useWorkspaceLayout } from './workspace-layout';
 import React, { useState } from 'react';
-import { Alert, Modal, Pressable, View } from 'react-native';
+import { Alert, Pressable, View } from 'react-native';
+import { Sheet } from './ui/sheet';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
+import { COLORS, FONTS } from '../constants/theme';
 import { cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
 import { Text } from './ui/text';
@@ -24,9 +26,10 @@ import { Text } from './ui/text';
  *    freed a fifth of the tab bar for the four things a volunteer actually
  *    does.
  */
-export function AppHeader({ title }: { title: string }) {
+export function AppHeader({ title, preview = false }: { title: string; preview?: boolean }) {
   const insets = useSafeAreaInsets();
-  const router = useRouter();
+  const router = useAppRouter();
+  const { desktop, gutter } = useWorkspaceLayout();
   const [menuOpen, setMenuOpen] = useState(false);
 
   const { settings, inventory, signOut } = usePantryStore();
@@ -50,8 +53,8 @@ export function AppHeader({ title }: { title: string }) {
   };
 
   return (
-    <View style={{ paddingTop: insets.top }} className="bg-canvas">
-      <View className="flex-row items-center gap-2.5 px-gutter pb-4 pt-3">
+    <View style={{ paddingTop: insets.top, backgroundColor: COLORS.cardSurface, borderBottomWidth: 1, borderBottomColor: COLORS.borderSoft }}>
+      <View style={{ width: '100%', maxWidth: 1200, alignSelf: 'center', minHeight: desktop ? 80 : 68, paddingHorizontal: gutter, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {/* The pantry as a pill rather than a bare title: the initial gives it
             an identity you recognise at a glance, and the whole thing is the
             tap target for switching or signing out — which is what a volunteer
@@ -63,18 +66,19 @@ export function AppHeader({ title }: { title: string }) {
           }}
           accessibilityRole="button"
           accessibilityLabel={`${settings.pantryName || 'PantryLens'}, ${title}. Opens pantry menu.`}
-          className="mr-auto max-w-[62%] flex-row items-center gap-2.5 rounded-full border-[1.5px] border-outline bg-card py-1.5 pl-1.5 pr-4"
+          style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+          className="mr-auto flex-1 flex-row items-center gap-3 py-1.5 pr-2"
         >
-          <View className="h-9 w-9 items-center justify-center rounded-full bg-brand">
-            <Text variant="body" tone="on" className="font-bold">
-              {(settings.pantryName || 'P').trim().charAt(0).toUpperCase()}
-            </Text>
+          <View className="h-10 w-10 items-center justify-center rounded-full bg-brand">
+            <MaterialCommunityIcons name="sprout" size={24} color={COLORS.textOnPrimary} />
           </View>
-          <Text variant="heading" numberOfLines={1} className="shrink font-bold">
-            {settings.pantryName || 'PantryLens'}
-          </Text>
+          <View className="flex-1">
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8} style={{ fontFamily: FONTS.serifSemi, fontSize: desktop ? 25 : 22, lineHeight: 29 }}>PantryLens</Text>
+            <Text variant="micro" tone="soft" numberOfLines={1}>{settings.pantryName || title}</Text>
+          </View>
         </Pressable>
 
+        {desktop && preview && <View className="rounded-md bg-subtle px-3 py-1.5"><Text variant="micro" tone="soft">Preview · sample data</Text></View>}
         <HeaderButton
           icon="bell-outline"
           label="Expiring soon"
@@ -88,14 +92,9 @@ export function AppHeader({ title }: { title: string }) {
         />
       </View>
 
-      {/* A sheet rather than a floating popover: anchoring a menu under an icon
-          means measuring the icon, and a bottom sheet is easier to hit with a
-          thumb anyway. */}
-      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={close}>
-        <Pressable className="flex-1 justify-end bg-black/40" onPress={close}>
-          <Pressable className="rounded-t-lg bg-canvas px-gutter pb-10 pt-4" onPress={() => {}}>
-            <View className="mb-4 h-1 w-10 self-center rounded-full bg-hairline" />
-
+      <Sheet visible={menuOpen} onClose={close} title="Pantry menu" subtitle={settings.pantryName || "PantryLens"}>
+            <MenuRow icon="clipboard-check-outline" label="Shelf audit" hint="Check quantities and item condition" onPress={() => { close(); router.push('/shelf-audit'); }} />
+            <MenuRow icon="scale-balance" label="Bulk intake" hint="Weigh bags and loose food" onPress={() => { close(); router.push('/bulk-intake'); }} />
             <MenuRow
               icon="chart-box-outline"
               label="Reports"
@@ -125,9 +124,7 @@ export function AppHeader({ title }: { title: string }) {
               tone="critical"
               onPress={handleSignOut}
             />
-          </Pressable>
-        </Pressable>
-      </Modal>
+      </Sheet>
     </View>
   );
 }
@@ -151,11 +148,12 @@ function HeaderButton({
         cueTap();
         onPress();
       }}
-      className="h-12 w-12 items-center justify-center rounded-full border-[1.5px] border-outline bg-card"
+      style={({ pressed }) => ({ opacity: pressed ? 0.65 : 1 })}
+      className="h-11 w-11 items-center justify-center rounded-md bg-card"
     >
       <MaterialCommunityIcons name={icon} size={22} color={COLORS.textPrimary} />
       {!!badge && badge > 0 && (
-        <View className="absolute -right-0.5 -top-0.5 min-w-[18px] items-center justify-center rounded-full bg-warn px-1 py-0.5">
+        <View className="absolute right-0 top-0 min-w-[18px] items-center justify-center rounded-full bg-warn px-1 py-0.5">
           <Text variant="micro" tone="on" className="text-[10px] font-bold">
             {badge > 99 ? '99+' : badge}
           </Text>
@@ -236,7 +234,7 @@ export function StackHeader({
             cueTap();
             onBack();
           }}
-          className="h-12 w-12 items-center justify-center rounded-full border-[1.5px] border-outline bg-card"
+          className="h-11 w-11 items-center justify-center rounded-md bg-subtle"
         >
           <MaterialCommunityIcons name="chevron-left" size={24} color={COLORS.textPrimary} />
         </Pressable>

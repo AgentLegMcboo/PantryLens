@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useAppRouter } from '../components/app-navigation';
 import React from 'react';
 import { FlatList, View } from 'react-native';
 import { COLORS } from '../constants/theme';
@@ -38,7 +38,7 @@ function urgency(days: number) {
 }
 
 export default function ExpiringSoonScreen() {
-  const router = useRouter();
+  const router = useAppRouter();
   const { inventory, settings } = usePantryStore();
 
   const warningLimit = new Date();

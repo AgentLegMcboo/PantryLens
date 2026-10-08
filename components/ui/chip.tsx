@@ -16,6 +16,7 @@ export function Chip({
   selected,
   className,
   onPress,
+  style,
   ...props
 }: Omit<PressableProps, 'children'> & { label: string; selected?: boolean }) {
   return (
@@ -27,13 +28,14 @@ export function Chip({
         onPress?.(e);
       }}
       className={cn(
-        'rounded-full border-[1.5px] px-4 py-2 min-h-[40px] justify-center',
-        selected ? 'bg-brand-light border-brand-light' : 'bg-card border-outline',
+        'rounded-md border px-4 py-2 min-h-[44px] justify-center',
+        selected ? 'bg-brand-tint border-brand-tint' : 'bg-transparent border-transparent',
         className,
       )}
+      style={state => [{ opacity: state.pressed ? 0.7 : 1 }, typeof style === 'function' ? style(state) : style]}
       {...props}
     >
-      <Text variant="label" tone={selected ? 'on' : 'soft'} className="font-semibold">
+      <Text variant="label" tone={selected ? 'brand' : 'soft'} className="font-semibold">
         {label}
       </Text>
     </Pressable>
@@ -51,16 +53,16 @@ export function Badge({
   className?: string;
 }) {
   const tones = {
-    neutral: 'bg-muted',
-    good: 'bg-good',
-    warn: 'bg-warn',
-    critical: 'bg-critical',
-    brand: 'bg-brand-light',
+    neutral: 'bg-subtle',
+    good: 'bg-good-tint',
+    warn: 'bg-warn-tint',
+    critical: 'bg-critical-tint',
+    brand: 'bg-brand-tint',
   } as const;
 
   return (
     <View className={cn('self-start rounded-sm px-2 py-0.5', tones[tone], className)}>
-      <Text variant="micro" tone={tone === 'neutral' ? 'default' : 'on'} className="font-bold">
+      <Text variant="micro" tone={tone === 'neutral' ? 'soft' : tone} className="font-medium">
         {label}
       </Text>
     </View>

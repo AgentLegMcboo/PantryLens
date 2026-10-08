@@ -1,54 +1,7 @@
-export const COLORS = {
-  // Core Brand Colors
-  primary: '#9C4226',
-  primaryLight: '#BC5A3C',
-  primaryDark: '#8F3E24',
-  /** The lip under a pressed-in button. Must be clearly darker than primary. */
-  primaryDeep: '#5E2411',
-  secondary: '#6B8E4E',
-  
-  // Surfaces
-  //
-  // The canvas is the original warm cream — a deeper sand was tried and read as
-  // muddy. That leaves cards at only 1.08:1 against it, so fill alone can never
-  // separate them: the shadow does the work instead, and cards are pure white to
-  // take every bit of the little contrast available.
-  //
-  // `surfaceContainer` deliberately sits BELOW the page rather than above it.
-  // Grouped-but-secondary content should recede; only cards float.
-  background: '#FFFFFF', // EXPERIMENT: was '#FBF6EE'
-  cardSurface: '#FFFFFF',
-  surfaceContainer: '#F5EADF',
-  surfaceVariant: '#EDE0D9',
-  borderSoft: '#E0CDBB',
-  /** Outline for controls. Deliberately stronger than borderSoft — a small
-   *  chip has too little edge for the card tone to register. */
-  borderStrong: '#CDB498',
-  /** Warm brown, never grey — a grey shadow on a cream ground looks like dirt. */
-  shadow: '#6B4A2F',
-  
-  // Typography
-  textPrimary: '#2B2420',
-  textSecondary: '#6B6259',
-  textOnPrimary: '#FFFFFF',
-  
-  // Status Colors (Sacred)
-  statusGood: '#5B8C51',
-  statusWarning: '#E39A3B',
-  statusCritical: '#C0392B',
-  
-  // Food Category Hues
-  categories: {
-    grain: '#C9A227',
-    vegetable: '#5B9C4E',
-    protein: '#A6432B',
-    breakfast: '#D98A2B',
-    snack: '#8E6FC4',
-    hygiene: '#3AA0A0',
-    baby: '#D46A9F',
-    unknown: '#8A8880'
-  }
-};
+export { COLORS } from './palette';
+export { RADII } from './palette';
+import { COLORS } from './palette';
+import type { TextStyle } from 'react-native';
 
 export const SPACING = {
   xs: 4,
@@ -59,12 +12,6 @@ export const SPACING = {
   touch: 48 // 48px minimum touch target for accessibility
 };
 
-export const RADII = {
-  sm: 4,
-  md: 8,
-  lg: 16,
-  full: 9999
-};
 /**
  * Typography.
  *
@@ -79,6 +26,18 @@ export const FONTS = {
   serifItalic: 'Newsreader_500Medium_Italic',
 } as const;
 
+export const TYPOGRAPHY = {
+  pageTitle: { fontFamily: FONTS.serifSemi, fontSize: 34, lineHeight: 40, letterSpacing: -0.6 },
+  heroTitle: { fontFamily: FONTS.serifSemi, fontSize: 28, lineHeight: 34, letterSpacing: -0.4 },
+  sectionTitle: { fontFamily: FONTS.serifSemi, fontSize: 22, lineHeight: 28, letterSpacing: -0.2 },
+  metric: { fontFamily: FONTS.serifSemi, fontSize: 36, lineHeight: 42, fontVariant: ['tabular-nums'] },
+} satisfies Record<string, TextStyle>;
+
+export const SURFACE_SHADOW = {
+  boxShadow: '0 2px 6px rgba(107, 74, 47, 0.045)',
+  borderCurve: 'continuous',
+} as const;
+
 /**
  * The shared card treatment for screens still written in StyleSheet.
  *
@@ -89,13 +48,9 @@ export const FONTS = {
  * can actually delineate one.
  */
 export const CARD_ELEVATION = {
-  borderWidth: 2,
+  borderWidth: 1,
   // A heavier near edge. Reads as a thin physical card rather than an outline.
-  borderBottomWidth: 3,
+  borderBottomWidth: 1,
   borderColor: COLORS.borderSoft,
-  shadowColor: COLORS.shadow,
-  shadowOpacity: 0.07,
-  shadowRadius: 8,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 2,
+  ...SURFACE_SHADOW,
 } as const;

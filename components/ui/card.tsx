@@ -1,40 +1,16 @@
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
-import { COLORS } from '../../constants/theme';
+import { SURFACE_SHADOW } from '../../constants/theme';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
 
-/**
- * The surface almost everything sits on.
- *
- * Two things make a card read as a card: it is lighter than the ground, and it
- * casts a shadow onto it. This had neither — #FFFBF6 on #FBF6EE is a contrast
- * ratio of 1.04:1, so the "cards" were invisible and every screen looked like
- * one flat slab with lines drawn on it.
- *
- * The shadow is warm brown rather than grey. A grey shadow over sand reads as
- * dirt, which is a surprisingly big part of why the old palette felt muddy.
- */
-/**
- * Barely there, and deliberately so.
- *
- * The edge defines the card; the shadow only settles it onto the page. The
- * bottom border is a pixel heavier than the other three — the same trick the
- * reference card uses. It reads as a thin object with a visible near edge,
- * which is what makes it feel like a physical thing rather than a rectangle.
- */
-export const cardShadow = {
-  shadowColor: COLORS.shadow,
-  shadowOpacity: 0.07,
-  shadowRadius: 8,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 2,
-};
+/** A quiet surface shared by every screen. */
+export const cardShadow = SURFACE_SHADOW;
 
 export function Card({ className, style, ...props }: ViewProps) {
   return (
     <View
-      className={cn('rounded-lg border-2 border-b-[3px] border-hairline bg-card p-card', className)}
+      className={cn('rounded-lg border border-hairline bg-card p-card', className)}
       style={[cardShadow, style]}
       {...props}
     />
@@ -47,7 +23,7 @@ export function Card({ className, style, ...props }: ViewProps) {
 export function Panel({ className, ...props }: ViewProps) {
   return (
     <View
-      className={cn('rounded-lg border-2 border-b-[3px] border-hairline bg-subtle p-card', className)}
+      className={cn('rounded-lg border border-hairline bg-subtle p-card', className)}
       {...props}
     />
   );

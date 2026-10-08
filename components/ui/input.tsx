@@ -46,6 +46,7 @@ export function Input({
       ) : null}
 
       <TextInput
+        accessibilityLabel={label ?? props.placeholder}
         placeholderTextColor={COLORS.textSecondary}
         onFocus={e => {
           setFocused(true);
@@ -56,7 +57,7 @@ export function Input({
           onBlur?.(e);
         }}
         className={cn(
-          'h-12 rounded-md border-[1.5px] bg-card px-3.5 text-body text-ink',
+          'min-h-[52px] rounded-md border bg-card px-4 py-3 text-body text-ink',
           error ? 'border-critical' : focused ? 'border-brand' : 'border-outline',
           className,
         )}

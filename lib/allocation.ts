@@ -1,4 +1,5 @@
-import { BoxRules, BulkLot, InventoryItem, isUsableCondition } from './store';
+import type { BoxRules, BulkLot, InventoryItem } from './store';
+import { isUsableStock } from './stock';
 
 /**
  * Turns everything the pantry holds into one pool the allocator can draw from.
@@ -13,10 +14,10 @@ import { BoxRules, BulkLot, InventoryItem, isUsableCondition } from './store';
  *    being invisible to the engine.
  */
 export function buildStockUnits(inventory: InventoryItem[], bulkLots: BulkLot[] = []): InventoryItem[] {
-  const usableItems = inventory.filter(i => isUsableCondition(i.condition) && i.count > 0);
+  const usableItems = inventory.filter(i => isUsableStock(i) && i.count > 0);
 
   const bulkAsItems: InventoryItem[] = bulkLots
-    .filter(lot => lot.est_units > 0)
+    .filter(lot => isUsableStock(lot) && lot.est_units > 0)
     .map(lot => ({
       id: lot.id,
       name: `Bulk ${lot.category} (${lot.weight_lbs} lb lot)`,
@@ -86,7 +87,7 @@ export function computeAllocation(
   categories.forEach(cat => {
     const baseRule = boxRules[cat] || 0;
     // Scale rule per box (min 1 if rule > 0)
-    const scaledNeed = Math.max(0, Math.round(baseRule * familyScale));
+    const scaledNeed = baseRule > 0 ? Math.max(1, Math.round(baseRule * familyScale)) : 0;
     perBoxNeeds[cat] = scaledNeed;
 
     // Calculate current total stock in this category
@@ -140,6 +141,7 @@ export function computeAllocation(
     const catItems = inventory
       .filter(i => i.category === cat)
       .sort((a, b) => {
+        if (!a.expiration && !b.expiration) return 0;
         if (!a.expiration) return 1;
         if (!b.expiration) return -1;
         return new Date(a.expiration).getTime() - new Date(b.expiration).getTime();

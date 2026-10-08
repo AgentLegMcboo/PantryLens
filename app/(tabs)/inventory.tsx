@@ -1,13 +1,11 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useAppRouter } from '../../components/app-navigation';
+import { useWorkspaceLayout } from '../../components/workspace-layout';
 import React, { useState } from 'react';
 import {
   Alert,
   FlatList,
   SectionList,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
   Pressable,
   TextInput,
   View,
@@ -26,6 +24,7 @@ import {
   EmptyState,
   Input,
   ItemThumb,
+  PageHeading,
   Row,
   Sheet,
   Stepper,
@@ -58,13 +57,14 @@ function daysOnShelf(dateAdded: string): number {
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
-  { id: 'grain', label: 'Grain' },
+  { id: 'grain', label: 'Grains' },
   { id: 'vegetable', label: 'Vegetables' },
   { id: 'protein', label: 'Protein' },
   { id: 'breakfast', label: 'Breakfast' },
   { id: 'snack', label: 'Snacks' },
   { id: 'hygiene', label: 'Hygiene' },
   { id: 'baby', label: 'Baby' },
+  { id: 'unknown', label: 'Other' },
 ];
 
 /**
@@ -131,7 +131,8 @@ const SORTS = [
 ] as const;
 
 export default function InventoryScreen() {
-  const router = useRouter();
+  const router = useAppRouter();
+  const { wide, gutter } = useWorkspaceLayout();
   const {
     inventory,
     locations,
@@ -157,12 +158,14 @@ export default function InventoryScreen() {
    * of tedium that makes people stop keeping the inventory accurate.
    */
   const [selected, setSelected] = useState<Record<string, boolean>>({});
+  const [selecting, setSelecting] = useState(false);
+  const [controlSheet, setControlSheet] = useState<'sort' | 'group' | null>(null);
   const [recategorising, setRecategorising] = useState(false);
   const [relocating, setRelocating] = useState(false);
   /** Which rows the exit sheet is about: a selection, or the single row swiped. */
   const [exitIds, setExitIds] = useState<string[] | null>(null);
   const [managingPlaces, setManagingPlaces] = useState(false);
-  const [groupBy, setGroupBy] = useState<GroupBy>('place');
+  const [groupBy, setGroupBy] = useState<GroupBy>('category');
   /** Sections the volunteer has folded away, by section id. */
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   /**
@@ -250,14 +253,15 @@ export default function InventoryScreen() {
   })();
 
   const selectedIds = Object.keys(selected).filter(id => selected[id]);
-  const picking = selectedIds.length > 0;
+  const picking = selecting || selectedIds.length > 0;
 
   const toggleSelect = (id: string) => {
     cueTap();
+    setSelecting(true);
     setSelected(prev => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const clearSelection = () => setSelected({});
+  const clearSelection = () => { setSelected({}); setSelecting(false); };
 
   /** Applies an action to the picked rows, then leaves picking mode. */
   const runOnSelection = async (
@@ -319,9 +323,13 @@ export default function InventoryScreen() {
     ]);
   };
 
-  const handleManualAdd = () => {
+  const [adding, setAdding] = useState(false);
+  const handleManualAdd = async () => {
     if (!newName.trim()) return;
-    addItems(
+    if (adding) return;
+    setAdding(true);
+    try {
+    const result = await addItems(
       [
         {
           name: newName,
@@ -336,6 +344,9 @@ export default function InventoryScreen() {
     setNewCount(1);
     setNewExp('');
     setModalVisible(false);
+    if (result === 'queued') Alert.alert('Saved on this device', 'This item will appear in inventory when sync completes.');
+    } catch (e: any) { Alert.alert('Could not add item', e.message ?? 'Please retry. Your entry is still here.'); }
+    finally { setAdding(false); }
   };
 
   const renderItemRow = ({ item }: { item: InventoryItem }) => {
@@ -346,7 +357,13 @@ export default function InventoryScreen() {
     const isSelected = !!selected[item.id];
 
     const row = (
+      <Card className="rounded-none border-0 border-b border-hairline px-4 py-4" style={{ boxShadow:'none', backgroundColor:isSelected?COLORS.primaryTint:COLORS.cardSurface }}>
+        <View className="flex-row flex-wrap items-center gap-3">
       <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={`${item.name}, ${item.count} units. ${picking ? 'Toggle selection.' : 'Open item details.'}`}
+        accessibilityState={picking ? { selected: isSelected } : undefined}
+        style={({ pressed }) => ({ flex: 1, minWidth: 152, opacity: pressed ? 0.65 : 1 })}
         // In picking mode a tap picks; otherwise it opens. A long press starts
         // picking from anywhere, which is the gesture people already expect from
         // a photo library.
@@ -358,7 +375,6 @@ export default function InventoryScreen() {
         onLongPress={() => toggleSelect(item.id)}
         delayLongPress={250}
       >
-        <Card className={isSelected ? 'mb-3 border-brand bg-subtle' : 'mb-3'}>
           <View className="flex-row items-start gap-3">
             {picking && (
               <MaterialCommunityIcons
@@ -383,7 +399,7 @@ export default function InventoryScreen() {
                 {item.name}
               </Text>
               <Text variant="micro" tone="soft" className="mt-1">
-                {item.expiration ? `Expires ${item.expiration}` : 'No expiry recorded'}
+                {wide ? CATEGORIES.find(c => c.id === item.category)?.label : item.expiration ? `Expires ${new Date(`${item.expiration}T00:00:00`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}` : 'No expiry recorded'}
                 {item.date_added ? ` · on shelf ${daysOnShelf(item.date_added)}d` : ''}
               </Text>
               {placeName ? (
@@ -400,7 +416,7 @@ export default function InventoryScreen() {
               ) : null}
 
               {/* At most one badge. Damage outranks expiry — it blocks packing. */}
-              {damaged ? (
+              {!wide && (damaged ? (
                 <Badge
                   label={CONDITION_LABELS[item.condition || 'ok']}
                   tone="critical"
@@ -408,8 +424,13 @@ export default function InventoryScreen() {
                 />
               ) : isExpiringSoon ? (
                 <Badge label="Use first" tone="warn" className="mt-2" />
-              ) : null}
+              ) : null)}
             </View>
+
+          </View>
+      </Pressable>
+
+            {wide && <View style={{width:128,gap:5}}><Text variant="label" tone="soft">{item.expiration ? new Date(`${item.expiration}T00:00:00`).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}) : 'No expiry'}</Text>{damaged ? <Badge label={CONDITION_LABELS[item.condition || 'ok']} tone="critical" /> : isExpiringSoon ? <Badge label="Use first" tone="warn" /> : <Badge label="Good condition" tone="good" />}</View>}
 
             {/* The stepper is meaningless while picking — the row is a checkbox
                 then, and a control that also changes stock would fight the tap. */}
@@ -433,7 +454,6 @@ export default function InventoryScreen() {
             )}
           </View>
         </Card>
-      </Pressable>
     );
 
     // Swiping while picking would fight the selection, so the gesture is only
@@ -470,8 +490,11 @@ export default function InventoryScreen() {
   };
 
   return (
-    <View className="flex-1 bg-canvas">
-      <View className="px-gutter pt-4 gap-4">
+    <View className="flex-1 w-full max-w-[1200px] self-center bg-canvas">
+      <View style={{paddingHorizontal:gutter,paddingTop:gutter,gap:20}}>
+        {!picking && <PageHeading title="Inventory"
+          description={`${inventory.length} items · ${inventory.reduce((sum, item) => sum + item.count, 0).toLocaleString()} counted units on hand`}
+          action={wide ? <Button label="Add item" icon={<MaterialCommunityIcons name="plus" size={18} color={COLORS.textOnPrimary} />} onPress={() => setModalVisible(true)} /> : undefined} />}
         {picking ? (
           /* One bar, one job. Search and category filters are not what anyone
              wants once they have already chosen what they are acting on. */
@@ -479,6 +502,7 @@ export default function InventoryScreen() {
             <View className="flex-row items-center gap-3">
               <Pressable
                 onPress={clearSelection}
+                accessibilityRole="button"
                 accessibilityLabel="Cancel selection"
                 hitSlop={8}
                 className="h-12 w-12 items-center justify-center rounded-md border-[1.5px] border-outline bg-card"
@@ -499,7 +523,8 @@ export default function InventoryScreen() {
                   );
                 }}
                 hitSlop={8}
-                className="px-2 py-2"
+                accessibilityRole="button"
+                className="min-h-[44px] px-2 py-2"
               >
                 <Text variant="label" tone="brand" className="font-bold">
                   {filteredItems.every(i => selected[i.id]) ? 'None' : 'All'}
@@ -511,6 +536,7 @@ export default function InventoryScreen() {
               {locations.length > 0 && (
                 <Button
                   label="Move to"
+                  disabled={selectedIds.length === 0}
                   variant="secondary"
                   size="compact"
                   className="flex-1 justify-center"
@@ -526,6 +552,7 @@ export default function InventoryScreen() {
               )}
               <Button
                 label="Category"
+                disabled={selectedIds.length === 0}
                 variant="secondary"
                 size="compact"
                 className="flex-1 justify-center"
@@ -536,6 +563,7 @@ export default function InventoryScreen() {
               />
               <Button
                 label="Take off shelf"
+                disabled={selectedIds.length === 0}
                 variant="critical"
                 size="compact"
                 className="flex-1 justify-center"
@@ -552,34 +580,35 @@ export default function InventoryScreen() {
           </View>
         ) : (
         <View className="flex-row items-center gap-3">
-          <View className="h-12 flex-1 flex-row items-center gap-2 rounded-md border-[1.5px] border-outline bg-card px-3">
+          <View className="min-h-[52px] flex-1 flex-row items-center gap-2 rounded-md border border-hairline bg-card px-4">
             <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
             <TextInput
               className="flex-1 text-body text-ink"
               placeholder="Search items"
+              accessibilityLabel="Search inventory"
               value={search}
               onChangeText={setSearch}
               placeholderTextColor={COLORS.textSecondary}
             />
             {search ? (
-              <Pressable onPress={() => setSearch('')} hitSlop={8}>
+              <Pressable accessibilityRole="button" accessibilityLabel="Clear search" onPress={() => setSearch('')} className="min-h-[44px] min-w-[44px] items-center justify-center">
                 <MaterialCommunityIcons name="close-circle" size={18} color={COLORS.textSecondary} />
               </Pressable>
             ) : null}
           </View>
 
-          <Pressable
+          {!wide && <Pressable
             onPress={() => setModalVisible(true)}
             accessibilityLabel="Add an item by hand"
+            accessibilityRole="button"
             style={({ pressed }) => ({
-              borderBottomWidth: pressed ? 2 : 4,
-              borderBottomColor: COLORS.primaryDeep,
-              transform: [{ translateY: pressed ? 2 : 0 }],
+              opacity: pressed ? 0.7 : 1,
             })}
-            className="h-12 w-12 items-center justify-center rounded-md bg-brand"
+            className="h-[52px] w-[52px] items-center justify-center rounded-md bg-brand"
           >
             <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
-          </Pressable>
+          </Pressable>}
+          <Button label="Select" variant="secondary" size="compact" disabled={filteredItems.length === 0} onPress={() => setSelecting(true)} />
         </View>
         )}
 
@@ -636,7 +665,7 @@ export default function InventoryScreen() {
         stickySectionHeadersEnabled={groupBy !== 'none'}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerClassName="px-gutter pt-4 pb-28"
+        contentContainerStyle={{ paddingHorizontal: gutter, paddingTop: 12, paddingBottom: 48 }}
         renderSectionHeader={({ section }) => {
           if (groupBy === 'none' || picking) return null;
           const isCollapsed = !!collapsed[section.id];
@@ -646,16 +675,19 @@ export default function InventoryScreen() {
                 cueTap();
                 setCollapsed(prev => ({ ...prev, [section.id]: !prev[section.id] }));
               }}
+              accessibilityRole="button"
+              accessibilityLabel={`${section.title}, ${section.units} units. ${isCollapsed ? 'Expand' : 'Collapse'} section.`}
+              accessibilityState={{expanded:!isCollapsed}}
               // Opaque, because it sticks: a translucent header would let rows
               // scroll through the text behind it.
-              className="mb-3 flex-row items-center gap-2 bg-canvas pb-2 pt-1"
+              className="flex-row items-center gap-2 bg-canvas pb-3 pt-4"
             >
               <MaterialCommunityIcons
                 name={isCollapsed ? 'chevron-right' : 'chevron-down'}
                 size={20}
                 color={COLORS.textSecondary}
               />
-              <Text variant="heading" className="flex-1">
+              <Text variant="label" className="flex-1 font-semibold">
                 {section.title}
               </Text>
               {/* Units, not rows. "12 tins" is the number a volunteer standing in
@@ -670,15 +702,15 @@ export default function InventoryScreen() {
         }}
         ListHeaderComponent={
           picking ? null : (
-            <View className="mb-4 flex-row items-center justify-between gap-3">
+            <View className="mb-1 flex-row flex-wrap items-center justify-between gap-2">
               <Pressable
                 onPress={() => {
                   cueTap();
-                  const i = GROUPS.findIndex(g => g.id === groupBy);
-                  setGroupBy(GROUPS[(i + 1) % GROUPS.length].id);
+                  setControlSheet('group');
                 }}
-                className="flex-row items-center gap-1"
-                accessibilityLabel={`Grouped ${GROUPS.find(g => g.id === groupBy)?.label}. Tap to change.`}
+                className="min-h-[44px] flex-row items-center gap-2"
+                accessibilityRole="button"
+                accessibilityLabel={`Grouping: ${GROUPS.find(g => g.id === groupBy)?.label}. Choose grouping.`}
               >
                 <MaterialCommunityIcons
                   name="view-agenda-outline"
@@ -698,7 +730,8 @@ export default function InventoryScreen() {
                   }}
                   hitSlop={8}
                   accessibilityLabel="Manage places"
-                  className="flex-row items-center gap-1"
+                  className="min-h-[44px] flex-row items-center gap-1"
+                  accessibilityRole="button"
                 >
                   <MaterialCommunityIcons
                     name="map-marker-outline"
@@ -713,11 +746,11 @@ export default function InventoryScreen() {
 
               <Pressable
                 onPress={() => {
-                  const i = SORTS.findIndex(s => s.id === sortBy);
-                  setSortBy(SORTS[(i + 1) % SORTS.length].id);
+                  setControlSheet('sort');
                 }}
-                className="flex-row items-center gap-1"
-                accessibilityLabel={`Sorted by ${SORTS.find(s => s.id === sortBy)?.label}. Tap to change.`}
+                className="min-h-[44px] flex-row items-center gap-2"
+                accessibilityRole="button"
+                accessibilityLabel={`Sort: ${SORTS.find(s => s.id === sortBy)?.label}. Choose sort order.`}
               >
                 <MaterialCommunityIcons name="swap-vertical" size={16} color={COLORS.primaryDark} />
                 <Text variant="micro" tone="brand" className="font-semibold">
@@ -753,6 +786,19 @@ export default function InventoryScreen() {
           />
         }
       />
+
+      <Sheet
+        visible={controlSheet !== null}
+        onClose={() => setControlSheet(null)}
+        title={controlSheet === 'sort' ? 'Sort inventory' : 'Group inventory'}
+        subtitle="Choose how you want to see your shelves."
+      >
+        {controlSheet === 'sort' ? SORTS.map(option => <Row key={option.id} label={option.label}
+          right={sortBy === option.id ? <MaterialCommunityIcons name="check" size={21} color={COLORS.primary} /> : undefined}
+          onPress={() => { setSortBy(option.id); setControlSheet(null); }} />) : GROUPS.map(option => <Row key={option.id} label={option.label}
+          right={groupBy === option.id ? <MaterialCommunityIcons name="check" size={21} color={COLORS.primary} /> : undefined}
+          onPress={() => { setGroupBy(option.id); setControlSheet(null); }} />)}
+      </Sheet>
 
       <Sheet
         visible={managingPlaces}
@@ -846,25 +892,7 @@ export default function InventoryScreen() {
         </View>
       </Sheet>
 
-      <Modal
-        visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
-          <View className="flex-1 justify-end bg-black/50">
-            <View className="rounded-t-lg bg-canvas px-gutter pb-10 pt-6 gap-4">
-              <View className="flex-row items-center justify-between">
-                <Text variant="title">Add an item</Text>
-                <Pressable onPress={() => setModalVisible(false)} hitSlop={8}>
-                  <MaterialCommunityIcons name="close" size={24} color={COLORS.textPrimary} />
-                </Pressable>
-              </View>
-
+      <Sheet visible={modalVisible} onClose={() => setModalVisible(false)} title="Add an item" subtitle="Enter the package details and quantity.">
               <Input
                 label="Name"
                 placeholder="Canned black beans 15 oz"
@@ -905,11 +933,8 @@ export default function InventoryScreen() {
                 </View>
               </View>
 
-              <Button label="Add to inventory" block className="mt-2" onPress={handleManualAdd} />
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+              <Button label="Add to inventory" block className="mt-2" loading={adding} onPress={handleManualAdd} />
+      </Sheet>
     </View>
   );
 }

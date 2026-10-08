@@ -10,6 +10,7 @@ import {
   CardHeader,
   categoryIcon,
   Input,
+  PageHeading,
   Row,
   Segmented,
   Stepper,
@@ -49,15 +50,19 @@ export default function SettingsScreen() {
 
 
   const [pantryName, setPantryName] = useState(settings.pantryName);
+  const [dropOffDetails, setDropOffDetails] = useState(settings.dropOffDetails);
+  const isAdmin = settings.userRole === 'admin';
+  const adminProps = { pointerEvents: isAdmin ? 'auto' as const : 'none' as const, style: { opacity: isAdmin ? 1 : 0.65 } };
   const [savingName, setSavingName] = useState(false);
 
   // The field is seeded from the store, which is empty until the pantry loads.
   useEffect(() => {
     setPantryName(settings.pantryName);
-  }, [settings.pantryName]);
+    setDropOffDetails(settings.dropOffDetails);
+  }, [settings.pantryName, settings.dropOffDetails]);
 
   const categories = Object.keys(boxRules) as (keyof BoxRules)[];
-  const nameChanged = pantryName.trim() !== settings.pantryName;
+  const nameChanged = pantryName.trim() !== settings.pantryName || dropOffDetails.trim() !== settings.dropOffDetails;
 
   const handleSavePantryName = async () => {
     const trimmed = pantryName.trim();
@@ -68,7 +73,7 @@ export default function SettingsScreen() {
 
     setSavingName(true);
     try {
-      await updateSettings({ pantryName: trimmed });
+      await updateSettings({ pantryName: trimmed, dropOffDetails: dropOffDetails.trim() });
     } catch (err: any) {
       // Admin-only under RLS, so a volunteer tapping Save gets told why.
       Alert.alert(
@@ -99,19 +104,22 @@ export default function SettingsScreen() {
 
   return (
     <KeyboardScreen>
+      <PageHeading title="Settings" description="Your pantry, packing rules, and personal preferences." />
+      {!isAdmin && <Text variant="label" tone="soft">Pantry settings are managed by your coordinator. You can view them here and change your own feel & sound preferences.</Text>}
       <FadeInUp index={0}>
-        <Card className="gap-4">
+        <Card className="gap-4" {...adminProps}>
           <Input
             label="Pantry name"
             value={pantryName}
             onChangeText={setPantryName}
             hint="What every volunteer sees at the top of the app."
           />
+          <Input label="Donation drop-off details" value={dropOffDetails} onChangeText={setDropOffDetails} placeholder="Address, entrance, and opening hours" hint="Included in the donation request. Leave blank to omit." />
           {/* Only appears once there is something to save — a Save button that
               is always there is a Save button nobody reads. */}
           {nameChanged && (
             <Button
-              label="Save the new name"
+              label="Save pantry details"
               loading={savingName}
               onPress={handleSavePantryName}
             />
@@ -160,7 +168,7 @@ export default function SettingsScreen() {
       </FadeInUp>
 
       <FadeInUp index={2}>
-        <Card>
+        <Card {...adminProps}>
           <CardHeader
             title="What goes in a box"
             subtitle="Items per category in one standard box, for a family of four."
@@ -175,7 +183,7 @@ export default function SettingsScreen() {
                 <Stepper
                   value={boxRules[cat]}
                   min={0}
-                  onChange={next => updateBoxRules({ [cat]: next })}
+                  onChange={next => updateBoxRules({ [cat]: next }).catch(e => Alert.alert('Could not save', e.message))}
                 />
               }
             />
@@ -184,7 +192,7 @@ export default function SettingsScreen() {
       </FadeInUp>
 
       <FadeInUp index={3}>
-        <Card>
+        <Card {...adminProps}>
           <CardHeader
             title="Tell me when stock is low"
             subtitle="Below this total, a category starts showing up on the dashboard and in Needs."
@@ -199,7 +207,7 @@ export default function SettingsScreen() {
                 <Stepper
                   value={thresholds[cat]}
                   min={1}
-                  onChange={next => updateThresholds({ [cat]: next })}
+                  onChange={next => updateThresholds({ [cat]: next }).catch(e => Alert.alert('Could not save', e.message))}
                 />
               }
             />
@@ -208,7 +216,7 @@ export default function SettingsScreen() {
       </FadeInUp>
 
       <FadeInUp index={4}>
-        <Card>
+        <Card {...adminProps}>
           <CardHeader
             title="Flag stock as use-first"
             subtitle="How far ahead to look when deciding what is about to expire."
@@ -222,7 +230,7 @@ export default function SettingsScreen() {
       </FadeInUp>
 
       <FadeInUp index={5}>
-        <Card>
+        <Card {...adminProps}>
           <CardHeader
             title="Usual family size"
             subtitle="What the dashboard and Build Boxes assume before anyone changes it."

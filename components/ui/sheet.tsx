@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as React from 'react';
-import { Modal, Pressable, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../../constants/theme';
 import { cn } from '../../lib/cn';
@@ -33,15 +33,16 @@ export function Sheet({
   className?: string;
 }) {
   const insets = useSafeAreaInsets();
+  const desktop = useWindowDimensions().width >= 760;
 
   return (
     <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
-      <Pressable className="flex-1 justify-end bg-black/40" onPress={onClose}>
-        {/* Swallows taps so a press inside the sheet never dismisses it. */}
-        <Pressable
-          onPress={() => {}}
-          className={cn('max-h-[85%] rounded-t-lg bg-canvas', className)}
-          style={{ paddingBottom: insets.bottom + 16 }}
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{flex:1,justifyContent:desktop?'center':'flex-end',alignItems:desktop?'center':'stretch',backgroundColor:'rgba(43,36,32,0.35)'}}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Dismiss dialog" onPress={onClose} style={{position:'absolute',top:0,bottom:0,left:0,right:0}} />
+        <View
+          accessibilityViewIsModal
+          className={cn('max-h-[85%] rounded-t-lg bg-card', className)}
+          style={{ paddingBottom: insets.bottom + 16, width: desktop ? 540 : '100%', borderRadius:desktop?20:undefined }}
         >
           <View className="items-center pt-3">
             <View className="h-1 w-10 rounded-full bg-outline" />
@@ -60,20 +61,22 @@ export function Sheet({
               onPress={onClose}
               hitSlop={10}
               accessibilityLabel="Close"
-              className="h-9 w-9 items-center justify-center rounded-full bg-subtle"
+              accessibilityRole="button"
+              className="h-11 w-11 items-center justify-center rounded-md bg-subtle"
             >
               <MaterialCommunityIcons name="close" size={18} color={COLORS.textPrimary} />
             </Pressable>
           </View>
 
           <ScrollView
+            keyboardShouldPersistTaps="handled"
             contentContainerClassName="px-gutter pb-4 gap-3"
             showsVerticalScrollIndicator={false}
           >
             {children}
           </ScrollView>
-        </Pressable>
-      </Pressable>
+        </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

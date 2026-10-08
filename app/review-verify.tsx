@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
@@ -19,6 +19,7 @@ import {
 } from '../lib/store';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
+import { clearSavedCapture } from '../lib/capture-queue';
 
 /**
  * Confirming what the scanner found, against the photo it found it in.
@@ -69,6 +70,7 @@ export default function ReviewVerifyScreen() {
     draftSource,
     defaultLocationFor,
     pendingBarcode,
+    draftLocationId,
     setPendingBarcode,
   } = usePantryStore();
 
@@ -80,7 +82,7 @@ export default function ReviewVerifyScreen() {
    * carrying it. Asking per item would be nonsense; asking once here is exactly
    * when they know the answer.
    */
-  const [batchLocation, setBatchLocation] = useState<string | null>(null);
+  const [batchLocation, setBatchLocation] = useState<string | null>(params.source === 'shelf_audit' ? draftLocationId : null);
 
   /**
    * Whether the pantry has told the app what its bins are for.
@@ -105,6 +107,8 @@ export default function ReviewVerifyScreen() {
     })),
   );
   const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const savingRef = useRef(false);
   // Which photo is on screen, when the scan covered more than one.
   const [photoIndex, setPhotoIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -128,6 +132,8 @@ export default function ReviewVerifyScreen() {
   const allVerified = draftItems.length > 0 && verifiedCount === draftItems.length;
 
   const updateItemAtIndex = (index: number, updates: Partial<InventoryItem>) => {
+    const uid = draftItems[index].uid;
+    setVerifiedIds(prev => ({ ...prev, [uid]: false }));
     setDraftItems(prev => {
       const next = [...prev];
       next[index] = { ...next[index], ...updates };
@@ -233,6 +239,9 @@ export default function ReviewVerifyScreen() {
   }, [pendingBarcode]);
 
   const commit = async () => {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    let committed = false;
     setSaving(true);
     try {
       /**
@@ -251,7 +260,18 @@ export default function ReviewVerifyScreen() {
           batchLocation ?? defaultLocationFor((row.category ?? 'unknown') as any),
         source_org: draftSource,
       }));
-      await addItems(rows, source);
+      const result = await addItems(rows, source);
+      committed = true;
+      setSaved(true);
+      if (settings.pantryId && usePantryStore.getState().session?.user.id) {
+        await clearSavedCapture(usePantryStore.getState().session!.user.id, settings.pantryId).catch(() => {});
+      }
+      if (result === 'queued') {
+        cueSuccess();
+        usePantryStore.getState().setDraft([]);
+        Alert.alert('Saved on this device', 'Your verified intake is waiting to sync. It will appear in inventory after the server confirms it.', [{ text: 'Back to pantry', onPress: () => router.replace('/(tabs)') }]);
+        return;
+      }
 
       /**
        * Teach the catalogue what this pantry just agreed to.
@@ -306,9 +326,10 @@ export default function ReviewVerifyScreen() {
       }
 
       cueSuccess();
+      usePantryStore.getState().setDraft([]);
       Alert.alert(
         'Saved to inventory',
-        `${draftItems.length} item${draftItems.length === 1 ? '' : 's'} added.`,
+        source === 'shelf_audit' ? 'Counts for the selected shelf have been replaced.' : `${draftItems.length} item${draftItems.length === 1 ? '' : 's'} added.`,
         [{ text: 'View Inventory', onPress: () => router.replace('/(tabs)/inventory') }]
       );
     } catch (err: any) {
@@ -317,11 +338,18 @@ export default function ReviewVerifyScreen() {
       Alert.alert('Could not save', err?.message ?? 'Please try again.');
     } finally {
       setSaving(false);
+      if (!committed) savingRef.current = false;
     }
   };
 
+  const confirmCommit = () => {
+    if (source === 'shelf_audit') {
+      const shelf = locations.find(l => l.id === draftLocationId)?.name ?? 'the selected shelf';
+      Alert.alert('Replace this shelf’s counts?', `The verified items will replace all recorded stock at ${shelf}. Include every item on that shelf; items absent from this audit will be removed.`, [{ text: 'Keep reviewing', style: 'cancel' }, { text: 'Replace shelf counts', onPress: commit }]);
+    } else commit();
+  };
   const handleSaveToInventory = () => {
-    if (draftItems.length === 0 || saving) return;
+    if (draftItems.length === 0 || savingRef.current) return;
 
     // A box drawn by hand starts with no name. Saving it would file "Unlabeled
     // Item" into the pantry, which is the one thing a hand-drawn box was meant
@@ -335,22 +363,27 @@ export default function ReviewVerifyScreen() {
       return;
     }
 
-    // Unconfirmed rows are a warning, not a wall. A volunteer who has looked at
-    // the photo and is happy should not have to tap nineteen boxes to prove it.
+    // Uncertain detections need an individual decision before a batch can save.
+    const uncertain = draftItems.find(i => !verifiedIds[i.uid] && ((i.confidence ?? 1) < 0.7 || i.category === 'unknown' || !isUsableCondition(i.condition)));
+    if (uncertain) {
+      setPhotoIndex(uncertain.imageIndex ?? 0); setSelectedId(uncertain.uid);
+      Alert.alert('Check this item first', 'This item is uncertain or needs inspection. Confirm its name, category, quantity, and condition before saving.');
+      return;
+    }
     const unverified = draftItems.length - verifiedCount;
     if (unverified > 0) {
       cueWarn();
       Alert.alert(
         `${unverified} item${unverified === 1 ? '' : 's'} not confirmed`,
-        'Tap a glowing box to check it against the photo, or save everything as the scanner read it.',
+        'Compare every remaining name and count against the donation before confirming the batch.',
         [
           { text: 'Keep checking', style: 'cancel' },
-          { text: 'Save anyway', style: 'destructive', onPress: commit },
+          { text: 'I checked all remaining items', onPress: () => { setVerifiedIds(Object.fromEntries(draftItems.map(i => [i.uid, true]))); confirmCommit(); } },
         ],
       );
       return;
     }
-    commit();
+    confirmCommit();
   };
 
   if (draftItems.length === 0) {
@@ -479,7 +512,13 @@ export default function ReviewVerifyScreen() {
         </View>
       )}
 
-      {locations.length > 0 && (
+      {source === 'shelf_audit' && (
+        <Card className="gap-2">
+          <Text variant="label">Auditing: {locations.find(loc => loc.id === draftLocationId)?.name ?? 'Selected shelf'}</Text>
+          <Text variant="micro" tone="soft">These verified counts will replace only this shelf. Other shelves stay as they are.</Text>
+        </Card>
+      )}
+      {source !== 'shelf_audit' && locations.length > 0 && (
         <View className="gap-2">
           <Text variant="label" tone="soft" className="font-semibold">
             {autoFiles ? 'Send the whole batch to one place?' : 'Where is this going?'}
@@ -553,9 +592,10 @@ export default function ReviewVerifyScreen() {
       )}
 
       <Button
-        label={`Add ${draftItems.length} item${draftItems.length === 1 ? '' : 's'} to inventory`}
+        label={saved ? 'Intake saved' : source === 'shelf_audit' ? 'Replace this shelf with verified counts' : `Add ${draftItems.length} item${draftItems.length === 1 ? '' : 's'} to inventory`}
         block
         loading={saving}
+        disabled={saved}
         icon={<MaterialCommunityIcons name="database-check" size={20} color={COLORS.textOnPrimary} />}
         onPress={handleSaveToInventory}
       />

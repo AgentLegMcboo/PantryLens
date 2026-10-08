@@ -41,23 +41,21 @@ export function Segmented<T extends string | number>({
             }}
             className={cn(
               'min-h-[44px] flex-1 flex-row items-center justify-center gap-1.5 rounded-md px-2',
-              // The lip again, so the selected tab reads as raised out of the
-              // trough rather than merely tinted.
-              active && 'border-b-[3px] border-brand-deep bg-brand',
+              active && 'bg-card',
             )}
+            style={({ pressed }) => ({ opacity: pressed ? 0.7 : 1 })}
           >
             {option.icon ? (
               <MaterialCommunityIcons
                 name={option.icon}
                 size={16}
-                color={active ? COLORS.textOnPrimary : COLORS.textSecondary}
+                color={active ? COLORS.primary : COLORS.textSecondary}
               />
             ) : null}
             <Text
               variant="label"
-              tone={active ? 'on' : 'soft'}
-              numberOfLines={1}
-              className="font-bold"
+              tone={active ? 'brand' : 'soft'}
+              className="shrink text-center font-semibold"
             >
               {option.label}
             </Text>

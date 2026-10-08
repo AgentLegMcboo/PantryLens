@@ -1,15 +1,16 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useAppRouter } from '../components/app-navigation';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
-import { Button, Chip, Screen, Text } from '../components/ui';
+import { Button, Chip, PageHeading, Screen, Text } from '../components/ui';
 import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { processImageScan, ScanError } from '../lib/ai_vision';
 import { SOURCE_ORG_LABELS, type SourceOrg, usePantryStore } from '../lib/store';
+import { SaveCaptureButton } from '../components/save-capture-button';
 
 /**
  * Photographing a donation.
@@ -33,9 +34,10 @@ type Shot = PreparedPhoto;
 const SOURCES: SourceOrg[] = ['grocery', 'food_bank', 'drive', 'individual', 'other'];
 
 export default function LogDonationScreen() {
-  const router = useRouter();
+  const router = useAppRouter();
   const setDraft = usePantryStore(state => state.setDraft);
   const setDraftSource = usePantryStore(state => state.setDraftSource);
+  const setDraftLocation = usePantryStore(state => state.setDraftLocation);
 
   const [shots, setShots] = useState<Shot[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -152,9 +154,10 @@ export default function LogDonationScreen() {
       log.debug('scan', `navigating to review with ${candidates.length} draft row(s)`);
       // The photos travel with the draft: review draws the detection boxes back
       // onto them, so the item and the thing on the shelf stay connected.
+      setDraftLocation(null);
       setDraft(
         candidates as any,
-        shots.map(s => ({ uri: s.uri, width: s.width, height: s.height })),
+        shots.map(s => ({ uri: `data:image/jpeg;base64,${s.base64}`, width: s.width, height: s.height })),
       );
       setDraftSource(sourceOrg);
 
@@ -193,10 +196,11 @@ export default function LogDonationScreen() {
   const atLimit = shots.length >= MAX_PHOTOS;
 
   return (
-    <Screen>
+    <Screen contentContainerClassName="max-w-[800px]">
+      <PageHeading title="Add a donation" description="Photograph the labels. Review each item. Save to your shelves." />
       {shots.length === 0 ? (
-        <Pressable onPress={handleTakePhoto}>
-          <View className="h-56 items-center justify-center rounded-lg border-2 border-dashed border-brand-light bg-subtle px-8">
+        <Pressable accessibilityRole="button" accessibilityLabel="Photograph a donation" onPress={handleTakePhoto} style={({pressed}) => ({opacity:pressed?0.7:1})}>
+          <View className="h-56 items-center justify-center rounded-lg border border-dashed border-outline bg-card px-8">
             <MaterialCommunityIcons name="camera-outline" size={40} color={COLORS.primaryLight} />
             <Text variant="heading" className="mt-3">
               Photograph the donation
@@ -276,6 +280,7 @@ export default function LogDonationScreen() {
         icon={<MaterialCommunityIcons name="auto-fix" size={20} color={COLORS.textOnPrimary} />}
         onPress={handleDetectItems}
       />
+      {shots.length > 0 && <SaveCaptureButton shots={shots} mode="donation" sourceOrg={sourceOrg} disabled={isAnalyzing} />}
 
       <Text variant="micro" tone="soft" className="text-center">
         {shots.length === 0

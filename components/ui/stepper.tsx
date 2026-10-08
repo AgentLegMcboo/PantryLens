@@ -37,20 +37,26 @@ export function Stepper({
       <Pressable
         onPress={() => step(-1)}
         disabled={value <= min}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: value <= min }}
         accessibilityLabel="Decrease"
+        style={({ pressed }) => ({ opacity: pressed ? 0.5 : value <= min ? 0.35 : 1 })}
         className={cn('h-11 w-11 items-center justify-center', value <= min && 'opacity-35')}
       >
         <MaterialCommunityIcons name="minus" size={18} color={COLORS.textPrimary} />
       </Pressable>
 
-      <Text variant="heading" className="min-w-[36px] text-center font-bold">
+      <Text variant="heading" className="min-w-[36px] text-center font-bold" style={{ fontVariant: ['tabular-nums'] }}>
         {value}
       </Text>
 
       <Pressable
         onPress={() => step(1)}
         disabled={value >= max}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: value >= max }}
         accessibilityLabel="Increase"
+        style={({ pressed }) => ({ opacity: pressed ? 0.5 : value >= max ? 0.35 : 1 })}
         className={cn('h-11 w-11 items-center justify-center', value >= max && 'opacity-35')}
       >
         <MaterialCommunityIcons name="plus" size={18} color={COLORS.textPrimary} />

@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useAppRouter } from '../components/app-navigation';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
@@ -11,16 +11,10 @@ import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { usePantryStore } from '../lib/store';
+import { SaveCaptureButton } from '../components/save-capture-button';
 
 const MAX_SHOTS = 6;
 
-const SECTIONS = [
-  'Canned goods (Shelf A)',
-  'Dry grains & rice (Shelf B)',
-  'Breakfast & cereals (Shelf C)',
-  'Proteins & beans (Shelf D)',
-  'Hygiene & baby products',
-];
 
 /**
  * Re-counting a shelf.
@@ -35,10 +29,12 @@ const SECTIONS = [
  * scanned a donation already knows how this works.
  */
 export default function ShelfAuditScreen() {
-  const router = useRouter();
+  const router = useAppRouter();
   const setDraft = usePantryStore(state => state.setDraft);
+  const { locations, setDraftLocation, setDraftSource } = usePantryStore();
 
-  const [section, setSection] = useState(SECTIONS[0]);
+  const [locationId, setLocationId] = useState<string | null>(null);
+  const section = locations.find(l => l.id === locationId)?.name ?? '';
   const [shots, setShots] = useState<PreparedPhoto[]>([]);
   const [isAuditing, setIsAuditing] = useState(false);
 
@@ -94,6 +90,7 @@ export default function ShelfAuditScreen() {
    * writes fiction into live inventory is worse than one that does nothing.
    */
   const handleRunAudit = async () => {
+    if (!locationId) { Alert.alert('Choose a shelf first', 'Select a configured pantry location. This audit will replace only that location’s counts.'); return; }
     if (shots.length === 0) {
       log.warn('scan', 'audit pressed with no photos attached');
       cueWarn();
@@ -112,8 +109,9 @@ export default function ShelfAuditScreen() {
       log.debug('scan', `audit produced ${candidates.length} draft row(s)`);
       setDraft(
         candidates as any,
-        shots.map(s => ({ uri: s.uri, width: s.width, height: s.height })),
+        shots.map(s => ({ uri: `data:image/jpeg;base64,${s.base64}`, width: s.width, height: s.height })),
       );
+      setDraftLocation(locationId); setDraftSource(null);
 
       const toReview = () =>
         router.push({ pathname: '/review-verify', params: { source: 'shelf_audit' } });
@@ -125,7 +123,7 @@ export default function ShelfAuditScreen() {
         Alert.alert(
           `Read ${photosRead} of ${photosSent} photos`,
           'One or more photos could not be read, so part of the shelf is missing from this count. Re-shoot it before you save.',
-          [{ text: 'Review the counts', onPress: toReview }],
+          [{ text: 'Retake missing photos', style: 'cancel' }],
         );
         return;
       }
@@ -153,11 +151,13 @@ export default function ShelfAuditScreen() {
         <Card>
           <CardHeader
             title="Which shelf?"
-            subtitle="Rows land tagged as an audit, so you can tell a re-count from an intake."
+            subtitle="Verified counts replace the stock at this location. Include every item on the shelf."
           />
 
-          {SECTIONS.map((sec, i) => {
-            const active = sec === section;
+          {locations.length === 0 && <Text variant="label" tone="soft">Create a location in Inventory → Places before running a shelf audit.</Text>}
+          {locations.map((loc, i) => {
+            const sec = loc.name;
+            const active = loc.id === locationId;
             return (
               <Pressable
                 key={sec}
@@ -165,10 +165,10 @@ export default function ShelfAuditScreen() {
                 accessibilityState={{ selected: active }}
                 onPress={() => {
                   cueTap();
-                  setSection(sec);
+                  setLocationId(loc.id);
                 }}
                 className={`min-h-[56px] flex-row items-center gap-3 py-2 ${
-                  i === SECTIONS.length - 1 ? '' : 'border-b border-hairline'
+                  i === locations.length - 1 ? '' : 'border-b border-hairline'
                 }`}
               >
                 <MaterialCommunityIcons
@@ -254,6 +254,7 @@ export default function ShelfAuditScreen() {
             }
             onPress={handleRunAudit}
           />
+          {shots.length > 0 && <SaveCaptureButton shots={shots} mode="shelf_audit" locationId={locationId} disabled={isAuditing} />}
 
           <Text variant="micro" tone="soft" className="text-center">
             {shots.length === 0

@@ -2,6 +2,7 @@ import * as React from 'react';
 import { ScrollView, View, type ScrollViewProps } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
+import { useWorkspaceLayout } from '../workspace-layout';
 
 /**
  * The standard page body: one gutter, one rhythm between blocks.
@@ -13,11 +14,15 @@ import { Text } from './text';
 export function Screen({ className, contentContainerClassName, ...props }: ScrollViewProps & {
   contentContainerClassName?: string;
 }) {
+  const { gutter } = useWorkspaceLayout();
   return (
     <ScrollView
       className={cn('flex-1 bg-canvas', className)}
-      contentContainerClassName={cn('px-gutter pt-gutter pb-16 gap-gap', contentContainerClassName)}
+      contentContainerClassName={cn('w-full max-w-[1200px] self-center pb-12 gap-6', contentContainerClassName)}
+      contentContainerStyle={{ paddingHorizontal: gutter, paddingTop: gutter }}
       showsVerticalScrollIndicator={false}
+      keyboardShouldPersistTaps="handled"
+      keyboardDismissMode="on-drag"
       {...props}
     />
   );
