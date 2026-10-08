@@ -1,8 +1,7 @@
-import { useAppRouter } from '../components/app-navigation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
-import { useLocalSearchParams } from 'expo-router';
-import React, { useMemo, useRef, useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { computeAllocation, isBulkUnit } from '../lib/allocation';
@@ -27,7 +26,7 @@ import { type PackLine, usePantryStore } from '../lib/store';
  * progress you can see is what makes a long pick list bearable.
  */
 export default function PackingChecklistScreen() {
-  const router = useAppRouter();
+  const router = useRouter();
   const params = useLocalSearchParams();
   const { inventory, bulkLots, boxRules, locations, settings, packBoxes } = usePantryStore();
   // Build always passes this. The fallback only matters if the screen is opened
@@ -82,7 +81,6 @@ export default function PackingChecklistScreen() {
    */
   const [runId] = useState(() => Crypto.randomUUID());
   const [packing, setPacking] = useState(false);
-  const packingRef = useRef(false);
 
   const [checked, setChecked] = useState<Record<string, boolean>>({});
 
@@ -104,8 +102,7 @@ export default function PackingChecklistScreen() {
   };
 
   const handleFinish = async () => {
-    if (packingRef.current || !allDone) return;
-    packingRef.current = true;
+    if (packing) return;
 
     const lines: PackLine[] = plan.allocatedItems.map(a => ({
       kind: isBulkUnit(a.item) ? 'lot' : 'item',
@@ -162,7 +159,6 @@ export default function PackingChecklistScreen() {
         ],
       );
     } finally {
-      packingRef.current = false;
       setPacking(false);
     }
   };

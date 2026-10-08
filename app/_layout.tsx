@@ -21,7 +21,7 @@ import { Newsreader_600SemiBold } from '@expo-google-fonts/newsreader/600SemiBol
 import { Newsreader_500Medium_Italic } from '@expo-google-fonts/newsreader/500Medium_Italic';
 import { BrandSplash } from '../components/brand-splash';
 import { StackHeader } from '../components/app-header';
-import { AppState, Platform, View } from 'react-native';
+import { View } from 'react-native';
 
 export default function RootLayout() {
   const initialize = usePantryStore(state => state.initialize);
@@ -70,23 +70,12 @@ export default function RootLayout() {
   const ready = fontsLoaded && onboarded !== null;
 
   useEffect(() => {
-    if (__DEV__ && segments[0] === 'preview') {
-      usePantryStore.setState({ onboarded: true, isLoaded: true });
-    } else initialize();
+    initialize();
     // Restore the volunteer's haptics/sound choices before any cue can fire.
     loadFeedbackPrefs();
   }, [initialize]);
 
   useEffect(() => {
-    const retry = () => { if (!(__DEV__ && segments[0] === 'preview')) usePantryStore.getState().flushIntakes(); };
-    const subscription = AppState.addEventListener('change', state => { if (state === 'active') retry(); });
-    const timer = setInterval(retry, 30_000);
-    if (Platform.OS === 'web') window.addEventListener('online', retry);
-    return () => { subscription.remove(); clearInterval(timer); if (Platform.OS === 'web') window.removeEventListener('online', retry); };
-  }, [segments[0]]);
-
-  useEffect(() => {
-    if (__DEV__ && segments[0] === 'preview') return;
     if (!isLoaded || onboarded === null) return;
 
     const onOnboarding = segments[0] === 'onboarding';
@@ -167,7 +156,7 @@ export default function RootLayout() {
         <View style={{ flex: 1, backgroundColor: COLORS.background }} />
       )}
       {/* Sits above every screen. Non-interactive, so it never eats a tap. */}
-      <GrainOverlay opacity={0.10} />
+      <GrainOverlay opacity={0.45} />
       {!splashDone && <BrandSplash hold={!ready} onDone={() => setSplashDone(true)} />}
     </SafeAreaProvider>
     </GestureHandlerRootView>

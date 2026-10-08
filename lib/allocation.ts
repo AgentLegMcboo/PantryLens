@@ -1,7 +1,6 @@
 import { allowedInBox } from './diet';
 import { DEFAULT_WARNING_DAYS, isPastDate, todayISO, windowEndISO } from './expiry';
-import type { BoxRules, BulkLot, InventoryItem } from './store';
-const isUsableCondition = (condition: InventoryItem['condition']) => !condition || condition === 'ok';
+import { BoxRules, BulkLot, InventoryItem, isUsableCondition } from './store';
 
 /** What was on the shelf but kept out of the boxes, and why. */
 export interface ExcludedStock {
@@ -195,7 +194,7 @@ export function computeAllocation(
   categories.forEach(cat => {
     const baseRule = boxRules[cat] || 0;
     // Scale rule per box (min 1 if rule > 0)
-    const scaledNeed = baseRule > 0 ? Math.max(1, Math.round(baseRule * familyScale)) : 0;
+    const scaledNeed = Math.max(0, Math.round(baseRule * familyScale));
     perBoxNeeds[cat] = scaledNeed;
 
     // Calculate current total stock in this category

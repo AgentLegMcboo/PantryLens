@@ -1,5 +1,5 @@
-import { useAppRouter } from '../components/app-navigation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { COLORS } from '../constants/theme';
@@ -80,7 +80,7 @@ const SECTION_BLURB: Record<AuditStatus, string> = {
 };
 
 export default function AuditReviewScreen() {
-  const router = useAppRouter();
+  const router = useRouter();
   const { auditDraft, locations, inventory, applyShelfAudit, setAuditDraft, currentScan, setCurrentScan } =
     usePantryStore();
 

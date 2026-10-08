@@ -1,13 +1,12 @@
-import { useAppRouter } from '../../components/app-navigation';
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
 import { FadeInUp } from "../../components/motion";
 import {
-  PageHeading,
   Button,
   Card,
   CategoryIcon,
@@ -42,8 +41,8 @@ const EXAMPLES: Record<string, string> = {
 };
 
 export default function NeedsScreen() {
-  const router = useAppRouter();
-  const { inventory, bulkLots, boxRules, boxTemplates, thresholds, settings } = usePantryStore();
+  const router = useRouter();
+  const { inventory, bulkLots, boxRules, thresholds, settings } = usePantryStore();
 
   // The pantry's own drop-off details. This line used to be hardcoded, so every
   // pantry's message sent donors to the same invented rear entrance. With
@@ -54,14 +53,13 @@ export default function NeedsScreen() {
   // The pantry's own target, not the number 12 that used to sit here. Every
   // "stopping boxes going out" figure below is measured against it, so a pantry
   // serving sixty families no longer asks donors for enough food for twelve.
-  const defaultBox = boxTemplates.find(t => t.is_default);
   const plan = computeAllocation(
     inventory,
     boxRules,
     settings.boxTarget,
-    defaultBox?.scales_with_family === false ? 4 : settings.defaultFamilySize,
+    settings.defaultFamilySize,
     bulkLots,
-    { warningDays: settings.expirationWarningDays, excludes: defaultBox?.excludes_tags, requires: defaultBox?.requires_tags },
+    { warningDays: settings.expirationWarningDays },
   );
 
   const [flyerOpen, setFlyerOpen] = useState(false);
@@ -122,7 +120,6 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
   if (deficits.length === 0) {
     return (
       <Screen>
-      <PageHeading title="Donation needs" description="Help your community give what your pantry needs most." />
         <FadeInUp index={0}>
           <View className="items-center px-6 py-16">
             <MaterialCommunityIcons

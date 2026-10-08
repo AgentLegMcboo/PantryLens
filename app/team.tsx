@@ -1,4 +1,3 @@
-import { useAppRouter } from '../components/app-navigation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import React, { useEffect, useState } from 'react';

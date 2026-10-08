@@ -1,8 +1,9 @@
 /**
  * Turning a UPC into a product.
  *
- * Validated barcodes can improve the model's label reading. Provider records
- * can still be incomplete or incorrect, so volunteers confirm the package.
+ * A barcode is the one thing in this pipeline that is not a guess, so it is
+ * worth a lot: a hit here replaces the vision model's reading of a label with
+ * the manufacturer's own name for the product, at confidence 1.
  *
  * Two providers, in order of how well they know American shelf-stable food:
  * USDA FoodData Central's Branded dataset first, Open Food Facts second. OFF is
@@ -10,8 +11,9 @@
  * for a US pantry — but it is free, needs no key, and catches things USDA misses,
  * so it stays as the fallback.
  *
- * Positive matches are cached for 30 days. Misses are retried so an outage or
- * an incomplete provider record cannot permanently hide a product.
+ * Everything is cached in `barcode_cache`, including misses. A barcode nobody
+ * can identify is a fact worth remembering; without it, every scan of the same
+ * unknown tin re-asks both APIs.
  */
 
 export interface BarcodeProduct {
@@ -148,9 +150,7 @@ function gtinCheckDigit(payload: string): number {
  * worse than none. The scanner is configured to the three formats handled here.
  */
 export function normaliseBarcode(raw: unknown): string | null {
-  const input = String(raw ?? '').trim()
-  if (!/^[\d\s-]+$/.test(input)) return null
-  const digits = input.replace(/[\s-]/g, '')
+  const digits = String(raw ?? '').replace(/\D/g, '')
   if (![8, 12, 13, 14].includes(digits.length)) return null
 
   const payload = digits.slice(0, -1)
@@ -167,15 +167,13 @@ export function normaliseBarcode(raw: unknown): string | null {
  * caller falls back to the vision model's own category when nothing matches.
  * Order matters — the first hit wins, so the narrow rules come first.
  */
-export function mapCategory(haystack: string): string | null {
-  const h = haystack.toLowerCase().replace(/[-_]/g, ' ')
-  const has = (...needles: string[]) => needles.some((n) => new RegExp(`\\b${n.replace(/[-_]/g, ' ')}(?:s)?\\b`).test(h))
+function mapCategory(haystack: string): string | null {
+  const h = haystack.toLowerCase()
+  const has = (...needles: string[]) => needles.some((n) => h.includes(n))
 
   if (has('infant', 'baby-food', 'baby food', 'formula', 'diaper')) return 'baby'
   if (has('soap', 'shampoo', 'toothpaste', 'deodorant', 'detergent', 'hygiene', 'toilet-paper',
           'paper-towel', 'personal-care', 'household')) return 'hygiene'
-  if (has('granola bar', 'snack bar', 'protein bar', 'popcorn', 'cracker', 'cookie', 'candy', 'pretzel', 'potato chip')) return 'snack'
-  if (has('green bean', 'green beans', 'string bean', 'sweet pea')) return 'vegetable'
   if (has('cereal', 'breakfast', 'oatmeal', 'oats', 'granola', 'pancake', 'syrup')) return 'breakfast'
   if (has('bean', 'legume', 'peanut-butter', 'peanut butter', 'nut-butter', 'meat', 'poultry',
           'chicken', 'tuna', 'salmon', 'fish', 'sardine', 'protein', 'lentil', 'chickpea',
@@ -247,8 +245,8 @@ async function lookupUsda(barcode: string, apiKey: string): Promise<BarcodeProdu
   const foods: any[] = Array.isArray(data?.foods) ? data.foods : []
 
   // Leading zeros differ between datasets, so compare numerically-ish.
-  const wanted = barcode.padStart(14, '0')
-  const hit = foods.find((f) => normaliseBarcode(f?.gtinUpc)?.padStart(14, '0') === wanted)
+  const wanted = barcode.replace(/^0+/, '')
+  const hit = foods.find((f) => String(f?.gtinUpc ?? '').replace(/^0+/, '') === wanted)
   if (!hit) return null
 
   const brand = String(hit.brandName ?? hit.brandOwner ?? '').trim() || null
@@ -275,7 +273,7 @@ async function lookupUsda(barcode: string, apiKey: string): Promise<BarcodeProdu
 async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeProduct | null> {
   const url =
     `https://world.openfoodfacts.org/api/v2/product/${barcode}.json` +
-    `?fields=code,product_name,brands,quantity,categories_tags,image_front_small_url,image_front_url` +
+    `?fields=product_name,brands,quantity,categories_tags,image_front_small_url,image_front_url` +
     // Already in the same response, previously unasked for and discarded.
     `,allergens_tags,traces_tags,ingredients_analysis_tags`
 
@@ -284,7 +282,6 @@ async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeProduct | nu
   })
 
   const product = data?.product
-  if (data?.status !== 1 || normaliseBarcode(product?.code)?.padStart(14, '0') !== barcode.padStart(14, '0')) return null
   const name = String(product?.product_name ?? '').trim()
   if (!name) return null
 
@@ -315,14 +312,11 @@ async function readCache(barcodes: string[], supabaseUrl: string, serviceKey: st
 
   const list = barcodes.map((b) => `"${b}"`).join(',')
   const data = await getJson(
-    `${supabaseUrl}/rest/v1/barcode_cache?barcode=in.(${list})&select=barcode,name,brand,category,image_url,diet_tags,source,fetched_at`,
+    `${supabaseUrl}/rest/v1/barcode_cache?barcode=in.(${list})&select=barcode,name,brand,category,image_url,diet_tags,source`,
     { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
   )
 
   for (const row of Array.isArray(data) ? data : []) {
-    // A provider outage is not evidence that a product does not exist.
-    // Retry old misses and refresh positive entries after 30 days.
-    if (!row.name || row.source === 'miss' || Date.now() - new Date(row.fetched_at).getTime() > 30 * 86400000) continue
     found.set(row.barcode, {
       barcode: row.barcode,
       name: row.name ? tidyName(row.name) : row.name,
@@ -353,7 +347,7 @@ async function writeCache(
         Prefer: 'resolution=merge-duplicates,return=minimal',
       },
       body: JSON.stringify(
-        rows.filter(r => r.source !== 'miss').map((r) => ({
+        rows.map((r) => ({
           barcode: r.barcode,
           name: r.name,
           brand: r.brand,
@@ -361,7 +355,6 @@ async function writeCache(
           image_url: r.imageUrl,
           diet_tags: r.dietTags ?? [],
           source: r.source === 'cache' ? 'openfoodfacts' : r.source,
-          fetched_at: new Date().toISOString(),
         })),
       ),
     })
@@ -378,7 +371,7 @@ async function writeCache(
  * from the map — that would mean it never validated.
  */
 export async function resolveBarcodes(barcodes: string[]): Promise<Map<string, BarcodeProduct>> {
-  const unique = [...new Set(barcodes.map(normaliseBarcode).filter((b): b is string => !!b))]
+  const unique = [...new Set(barcodes)]
   const resolved = new Map<string, BarcodeProduct>()
   if (unique.length === 0) return resolved
 

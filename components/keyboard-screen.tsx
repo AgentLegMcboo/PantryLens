@@ -13,7 +13,6 @@ import {
   ScrollViewProps,
 } from 'react-native';
 import { cn } from '../lib/cn';
-import { useWorkspaceLayout } from './workspace-layout';
 
 /**
  * `Screen`, for pages that contain a text field.
@@ -43,7 +42,6 @@ export function KeyboardScreen({
 }: ScrollViewProps & { children: React.ReactNode }) {
   // Null outside a navigator that renders a header (tab screens, modals with
   // headerShown: false), in which case there is nothing to offset by.
-  const { gutter } = useWorkspaceLayout();
   const headerHeight = useContext(HeaderHeightContext) ?? 0;
 
   return (
@@ -55,10 +53,9 @@ export function KeyboardScreen({
       <ScrollView
         className={cn('flex-1 bg-canvas', className)}
         contentContainerClassName={cn(
-          'w-full max-w-[1200px] self-center pb-12 gap-6',
+          'px-gutter pt-gutter pb-16 gap-gap',
           contentContainerClassName,
         )}
-        contentContainerStyle={{paddingHorizontal:gutter,paddingTop:gutter}}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}

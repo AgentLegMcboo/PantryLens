@@ -2,30 +2,12 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import type { AuditWrite, CountedRow } from './audit';
 import { normaliseDietTags, type DietTag } from './diet';
-import { finishScan, SCAN_PHOTO_BUCKET, type ScanOutcome, type StartedScan } from './scan-history';
+import { SCAN_PHOTO_BUCKET, type StartedScan } from './scan-history';
 import { itemsPerBox, normaliseRules } from './box-presets';
 import { log } from './log';
 import { ADMIN_ONLY_MESSAGE, asRole, canEditPantry, type PantryRole } from './permissions';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
-import * as Crypto from 'expo-crypto';
-import { createOutbox, isNetworkError, type IntakeJob } from './outbox';
-
-const intakeOutbox = createOutbox(AsyncStorage, 'pantrylens.intake-outbox.v1');
-let flushPromise: Promise<void> | null = null;
-function requireAdmin(settings: Settings): asserts settings is Settings & { pantryId: string } {
-  if (!settings.pantryId) throw new Error('Choose a pantry before saving.');
-  if (!canEditPantry(settings.userRole)) throw new Error('Only a pantry admin can change these settings.');
-}
-async function sendIntake(job: IntakeJob) {
-  const { error } = await supabase.rpc('commit_intake', {
-    batch_id: job.id, target_pantry: job.pantryId, intake_source: job.source,
-    target_location: job.locationId, intake_items: job.items,
-    intake_photos: job.photos, captured_at: job.createdAt,
-  });
-  if (error) throw error;
-  if (job.scan) await finishScan(job.scan.id, job.scan.outcomes);
-}
 
 export type Category = 'grain' | 'vegetable' | 'protein' | 'breakfast' | 'snack' | 'hygiene' | 'baby' | 'unknown';
 
@@ -73,7 +55,7 @@ export interface PendingBarcode {
   dietTags: DietTag[];
 }
 
-/** A review photo; durable intake jobs and verified scan history retain it. */
+/** A photo held only for the length of a review, never persisted. */
 export interface ScanPhoto {
   uri: string;
   width: number;
@@ -324,7 +306,6 @@ export interface Settings {
    * so every flyer a pantry printed asked donors for enough food for twelve
    * families, whether they served six or sixty, and nobody had chosen that.
    */
-  dropOffDetails: string;
   boxTarget: number;
   /** What this signed-in person may do here. Enforced by the database, not by this. */
   userRole: PantryRole;
@@ -513,13 +494,6 @@ interface AppState {
   pendingBarcode: PendingBarcode | null;
   /** Who the draft being reviewed came from, carried from the intake screen. */
   draftSource: SourceOrg | null;
-  draftLocationId: string | null;
-  draftCapturedAt: string | null;
-  pendingIntakes: number;
-  syncError: string | null;
-  syncing: boolean;
-  flushIntakes: () => Promise<void>;
-  setDraftLocation: (id: string | null) => void;
   /**
    * The open scan record the current draft belongs to, if one was opened.
    *
@@ -573,14 +547,12 @@ interface AppState {
     source?: 'donation' | 'shelf_audit' | 'manual',
     /** The scan record these rows came from, when there is one. */
     scanId?: string | null,
-    scanOutcomes?: ScanOutcome[],
-  ) => Promise<'synced' | 'queued'>;
+  ) => Promise<void>;
   updateItem: (id: string, updates: Partial<InventoryItem>) => Promise<void>;
   deleteItem: (id: string) => Promise<void>;
   deleteItems: (ids: string[]) => Promise<void>;
   updateItems: (ids: string[], updates: Partial<InventoryItem>) => Promise<void>;
   getItem: (id: string) => InventoryItem | undefined;
-  deductItems: (itemsToDeduct: { id: string; count: number }[], packingId: string) => Promise<void>;
   packBoxes: (pack: {
     runId: string;
     boxCount: number;
@@ -608,10 +580,9 @@ interface AppState {
   }) => Promise<BoxTemplate>;
   deleteBoxTemplate: (id: string) => Promise<void>;
   setDefaultBoxTemplate: (id: string) => Promise<void>;
-  updateBoxRules: (updates: Partial<BoxRules>) => Promise<void>;
   updateThresholds: (updates: Partial<CategoryThresholds>) => Promise<void>;
   
-  setDraft: (items: InventoryItem[], photos?: ScanPhoto[], capturedAt?: string) => void;
+  setDraft: (items: InventoryItem[], photos?: ScanPhoto[]) => void;
   setPendingBarcode: (value: PendingBarcode | null) => void;
   setDraftSource: (value: SourceOrg | null) => void;
   setAuditDraft: (value: AppState['auditDraft']) => void;
@@ -676,7 +647,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
     inviteCode: '',
     dropoffLocation: '',
     dropoffHours: '',
-    dropOffDetails: '',
   },
   activities: [],
   members: [],
@@ -689,36 +659,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
   currentScanPhotos: [],
   pendingBarcode: null,
   draftSource: null,
-  draftLocationId: null,
-  draftCapturedAt: null,
-  pendingIntakes: 0,
-  syncing: false,
-  syncError: null,
-  setDraftLocation: id => set({ draftLocationId: id }),
-  flushIntakes: async () => {
-    if (flushPromise) return flushPromise;
-    flushPromise = (async () => {
-      const userId = get().session?.user.id;
-      if (!userId) return;
-      set({ syncing: true });
-      try {
-        const jobs = (await intakeOutbox.list()).filter(j => j.userId === userId);
-        set({ pendingIntakes: jobs.length });
-        for (const job of jobs) {
-          if (get().session?.user.id !== userId) break;
-          await sendIntake(job);
-          await intakeOutbox.remove(job.id);
-          set({ pendingIntakes: (await intakeOutbox.list()).filter(j => j.userId === userId).length, syncError: null });
-        }
-        if (jobs.length) await get().fetchData();
-      } catch (error: any) {
-        set({ syncError: isNetworkError(error) ? 'Waiting for a connection. Your intake is saved on this device.' : (error?.message ?? 'Sync failed. Your intake is still saved on this device.') });
-      } finally {
-        set({ syncing: false });
-      }
-    })().finally(() => { flushPromise = null; });
-    return flushPromise;
-  },
   auditDraft: null,
   currentScan: null,
 
@@ -739,7 +679,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       set({ session });
-      if (session) { get().fetchData(); get().flushIntakes(); }
+      if (session) get().fetchData();
       else set({ isLoaded: true });
     });
 
@@ -747,7 +687,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
       set({ session });
       if (session) {
         get().fetchData();
-        get().flushIntakes();
       } else {
         // Clear state on sign out
         unsubscribeFromPantry();
@@ -756,9 +695,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
           bulkLots: [],
           activities: [],
           locations: [],
-          currentDraft: [], currentScanPhotos: [], draftSource: null, draftLocationId: null, draftCapturedAt: null,
-          pendingIntakes: 0, syncError: null,
-          currentScan: null, auditDraft: null, pendingBarcode: null,
           boxTemplates: [],
           readyBoxes: [],
           boxFolders: [],
@@ -774,7 +710,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
             inviteCode: '',
             dropoffLocation: '',
             dropoffHours: '',
-            dropOffDetails: '',
           },
           isLoaded: true,
           // Signing out in development drops you back at the intro too, so it is
@@ -791,17 +726,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
     try {
       // 1. Get user's pantry
-      let membership = supabase
+      const { data: members } = await supabase
         .from('pantry_members')
         .select('pantry_id, role, pantries(name, invite_code, box_rules, thresholds, lbs_per_unit, settings)')
-        .eq('user_id', session.user.id);
-      if (get().settings.pantryId) membership = membership.eq('pantry_id', get().settings.pantryId!);
-      const { data: members, error: membershipError } = await membership
+        .eq('user_id', session.user.id)
         .limit(1)
-        .maybeSingle();
-
-      if (membershipError) throw membershipError;
-      if (get().session?.user.id !== session.user.id) return;
+        .single();
 
       if (!members?.pantries) {
         log.warn('store', 'signed in but not a member of any pantry');
@@ -828,9 +758,8 @@ export const usePantryStore = create<AppState>((set, get) => ({
             expirationWarningDays: (stored.expiration_warning_days as number) ?? 30,
             defaultFamilySize: (stored.default_family_size as number) ?? 4,
             boxTarget: (stored.box_target as number) ?? DEFAULT_BOX_TARGET,
-            dropoffLocation: text(stored.dropoff_location) || text(stored.drop_off_details),
+            dropoffLocation: text(stored.dropoff_location),
             dropoffHours: text(stored.dropoff_hours),
-            dropOffDetails: text(stored.drop_off_details),
           },
           boxRules: (pantry.box_rules as BoxRules) || DEFAULT_BOX_RULES,
           thresholds: (pantry.thresholds as CategoryThresholds) || DEFAULT_THRESHOLDS,
@@ -843,13 +772,13 @@ export const usePantryStore = create<AppState>((set, get) => ({
         // latency back to back, and the launch splash was held open for every
         // millisecond of it. Issued together they cost one.
         const [
-          { data: invData, error: invError },
-          { data: lotData, error: lotError },
-          { data: actData, error: actError },
-          { data: locData, error: locError },
-          { data: tplData, error: tplError },
-          { data: runData, error: runError },
-          { data: folderData, error: folderError },
+          { data: invData },
+          { data: lotData },
+          { data: actData },
+          { data: locData },
+          { data: tplData },
+          { data: runData },
+          { data: folderData },
         ] = await Promise.all([
           supabase
             .from('inventory')
@@ -894,8 +823,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
             .order('sort_order', { ascending: true })
             .order('name', { ascending: true }),
         ]);
-        if (invError || lotError || actError || locError || tplError || runError || folderError) throw invError || lotError || actError || locError || tplError || runError || folderError;
-        if (get().session?.user.id !== session.user.id || get().settings.pantryId !== pantryId) return;
 
         log.debug(
           'store',
@@ -928,13 +855,10 @@ export const usePantryStore = create<AppState>((set, get) => ({
           // changes. The pantry row's own box_rules stays as the fallback for a
           // pantry that somehow has no templates.
           ...(defaultBox ? { boxRules: defaultBox.rules } : null),
-          ...(get().pendingIntakes === 0 ? { syncError: null } : {}),
           isLoaded: true
         });
 
         subscribeToPantry(pantryId, () => scheduleRefetch(() => get().fetchData()));
-        const { settings, inventory, bulkLots, activities, locations, boxRules, thresholds, lbsPerUnit } = get();
-        await AsyncStorage.setItem(`pantrylens.snapshot.${session.user.id}`, JSON.stringify({ settings, inventory, bulkLots, activities, locations, boxRules, thresholds, lbsPerUnit })).catch(error => log.warn('store', 'could not cache the pantry for offline use', error));
 
         // Not in the batch above: the roster is a function call, it is only
         // read on the Team screen, and it must not be able to fail the launch.
@@ -945,15 +869,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
         set({ isLoaded: true });
       }
     } catch (err) {
-      if (get().session?.user.id !== session.user.id) return;
       log.error('store', 'fetchData failed', err);
-      if (isNetworkError(err) && !get().settings.pantryId) {
-        try {
-          const saved = await AsyncStorage.getItem(`pantrylens.snapshot.${session.user.id}`);
-          if (saved && get().session?.user.id === session.user.id) set(JSON.parse(saved));
-        } catch (error) { log.warn('store', 'could not restore offline pantry snapshot', error); }
-      }
-      set({ syncError: isNetworkError(err) ? 'Offline · showing the last saved pantry snapshot.' : 'Could not refresh pantry data. Try again.' });
       set({ isLoaded: true });
     }
   },
@@ -962,8 +878,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     // Closed before the session goes, or the socket keeps trying to reconnect
     // with credentials that no longer exist.
     unsubscribeFromPantry();
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    await supabase.auth.signOut();
   },
 
   // Storage alone is not enough — the router reads this from state, so both
@@ -991,7 +906,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const previous = get().bulkLots;
     set({ bulkLots: previous.filter(l => l.id !== id) });
 
-    const { error } = await supabase.from('bulk_lots').delete().eq('id', id).select('id').single();
+    const { error } = await supabase.from('bulk_lots').delete().eq('id', id);
     if (error) {
       log.error('store', `could not delete bulk lot ${id}`, error);
       set({ bulkLots: previous });
@@ -1001,7 +916,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
   updateLbsPerUnit: async (updates: Partial<LbsPerUnit>) => {
     const { settings, lbsPerUnit } = get();
-    requireAdmin(settings);
+    if (!settings.pantryId) return;
     const next = { ...lbsPerUnit, ...updates };
     set({ lbsPerUnit: next });
     await writePantryRow({ lbs_per_unit: next }, settings.pantryId, settings.userRole, () =>
@@ -1134,7 +1049,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const previous = get().locations;
     set({ locations: previous.map(l => (l.id === id ? { ...l, categories } : l)) });
 
-    const { error } = await supabase.from('locations').update({ categories }).eq('id', id).select('id').single();
+    const { error } = await supabase.from('locations').update({ categories }).eq('id', id);
     if (error) {
       log.error('store', 'could not set location categories', error);
       set({ locations: previous });
@@ -1313,7 +1228,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const previous = get().locations;
     set({ locations: previous.map(l => (l.id === id ? { ...l, name: trimmed } : l)) });
 
-    const { error } = await supabase.from('locations').update({ name: trimmed }).eq('id', id).select('id').single();
+    const { error } = await supabase.from('locations').update({ name: trimmed }).eq('id', id);
     if (error) {
       log.error('store', 'could not rename location', error);
       set({ locations: previous });
@@ -1338,7 +1253,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
       ),
     });
 
-    const { error } = await supabase.from('locations').delete().eq('id', id).select('id').single();
+    const { error } = await supabase.from('locations').delete().eq('id', id);
     if (error) {
       log.error('store', 'could not delete location', error);
       set({ locations: previous, inventory: previousInventory });
@@ -1346,7 +1261,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     }
   },
 
-  addItems: async (items: Partial<InventoryItem>[], source = 'donation', scanId = null, scanOutcomes = []) => {
+  addItems: async (items: Partial<InventoryItem>[], source = 'donation', scanId = null) => {
     const { settings } = get();
     if (!settings.pantryId) {
       // Silently dropping the write here is how a volunteer ends up believing
@@ -1361,15 +1276,15 @@ export const usePantryStore = create<AppState>((set, get) => ({
       // background: without it the only way to find the row again would be to
       // trust that Postgres returned the inserted rows in the order they were
       // sent, which it does not promise.
-      id: item.id ?? Crypto.randomUUID(),
+      ...(item.id ? { id: item.id } : {}),
       pantry_id: settings.pantryId,
       name: item.name?.trim() || 'Unlabeled Item',
       category: item.category || 'unknown',
-      count: item.count ?? 1,
+      count: parseInt(String(item.count), 10) || 1,
       expiration: item.expiration || null,
       date_added: new Date().toISOString().split('T')[0],
       source: source,
-      confidence: item.confidence ?? 1.0,
+      confidence: item.confidence || 1.0,
       // The inspection result and donor have to travel with the row. Leaving
       // them out silently defaulted every item to 'ok', so a can a volunteer had
       // just flagged as dented went straight back into box building.
@@ -1384,34 +1299,22 @@ export const usePantryStore = create<AppState>((set, get) => ({
       scan_id: scanId,
     }));
 
-    if (!newItems.length) throw new Error('There are no items to save.');
-    if (newItems.some(i => !Number.isInteger(i.count) || i.count < 1)) throw new Error('Every quantity must be a positive whole number.');
-    const userId = get().session?.user.id;
-    if (!userId) throw new Error('Sign in before saving an intake.');
-    const locationId = source === 'shelf_audit' ? get().draftLocationId : null;
-    if (source === 'shelf_audit' && !locationId) throw new Error('Choose the shelf being audited before replacing its counts.');
-    const job: IntakeJob = {
-      id: Crypto.randomUUID(), userId, pantryId: settings.pantryId, source, locationId,
-      createdAt: source === 'manual' ? new Date().toISOString() : (get().draftCapturedAt ?? new Date().toISOString()), items: newItems,
-      photos: source === 'manual' ? [] : get().currentScanPhotos,
-      ...(scanId ? { scan: { id: scanId, outcomes: scanOutcomes } } : {}),
-    };
-    // Persist before attempting the network, including stable ids for safe retry.
-    await intakeOutbox.add(job);
-    try {
-      await sendIntake(job);
-    } catch (error) {
-      if (!isNetworkError(error)) {
-        await intakeOutbox.remove(job.id);
-        throw error;
-      }
-      set({ pendingIntakes: (await intakeOutbox.list()).filter(j => j.userId === userId).length, syncError: 'Saved on this device. Sync will retry when a connection is available.' });
-      return 'queued';
+    log.debug('store', `inserting ${newItems.length} item(s) into pantry ${settings.pantryId}`, newItems);
+    const { error } = await supabase.from('inventory').insert(newItems);
+    if (error) {
+      log.error('store', 'inventory insert rejected', error);
+      throw error;
     }
-    // Replay is safe if local cleanup fails after an acknowledged server save.
-    await intakeOutbox.remove(job.id).catch(error => log.error('store', 'could not remove acknowledged intake from queue', error));
+    log.debug('store', `inserted ${newItems.length} item(s)`);
+
+    const flagged = newItems.filter(i => i.condition !== 'ok').length;
+    await get().addActivity(
+      flagged > 0
+        ? `Added ${newItems.length} item(s) via ${source} — ${flagged} held back for inspection`
+        : `Added ${newItems.length} verified item(s) via ${source}`,
+      'plus-circle-outline'
+    );
     await get().fetchData();
-    return 'synced';
   },
 
   /**
@@ -1432,7 +1335,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const previous = get().inventory;
     set({ inventory: previous.map(i => (i.id === id ? { ...i, ...updates } : i)) });
 
-    const { error } = await supabase.from('inventory').update(updates).eq('id', id).select('id').single();
+    const { error } = await supabase.from('inventory').update(updates).eq('id', id);
     if (error) {
       log.error('store', `could not update item ${id}`, error);
       set({ inventory: previous });
@@ -1447,7 +1350,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
     set({ inventory: previous.filter(i => i.id !== id) });
 
-    const { error } = await supabase.from('inventory').delete().eq('id', id).select('id').single();
+    const { error } = await supabase.from('inventory').delete().eq('id', id);
     if (error) {
       log.error('store', `could not delete item ${id}`, error);
       set({ inventory: previous });
@@ -1481,13 +1384,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
     set({ inventory: previous.filter(i => !ids.includes(i.id)) });
 
-    const { data, error } = await supabase.from('inventory').delete().in('id', ids).select('id');
+    const { error } = await supabase.from('inventory').delete().in('id', ids);
     if (error) {
       log.error('store', `could not delete ${ids.length} item(s)`, error);
       set({ inventory: previous });
       throw error;
     }
-    if (data?.length !== doomed.length) { await get().fetchData(); throw new Error('Some items were not removed. Stock or your pantry permissions may have changed.'); }
 
     const paths = doomed
       .map(i => ownedPhotoPath(i.image_url))
@@ -1512,13 +1414,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
       inventory: previous.map(i => (ids.includes(i.id) ? { ...i, ...updates } : i)),
     });
 
-    const { data, error } = await supabase.from('inventory').update(updates).in('id', ids).select('id');
+    const { error } = await supabase.from('inventory').update(updates).in('id', ids);
     if (error) {
       log.error('store', `could not update ${ids.length} item(s)`, error);
       set({ inventory: previous });
       throw error;
     }
-    if (data?.length !== new Set(ids).size) { await get().fetchData(); throw new Error('Some changes were not saved. Stock or your pantry permissions may have changed.'); }
   },
 
   getItem: (id: string) => {
@@ -1541,14 +1442,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
    * Throws on failure. Returns shortfalls rather than throwing when stock ran
    * out, because by then the boxes are already packed.
    */
-  deductItems: async (itemsToDeduct, packingId) => {
-    const { settings } = get();
-    if (!settings.pantryId) throw new Error('Choose a pantry first.');
-    const { error } = await supabase.rpc('pack_stock', { target_pantry: settings.pantryId, deductions: itemsToDeduct, packing_id: packingId });
-    if (error) throw error;
-    await get().fetchData();
-  },
-
   packBoxes: async ({ runId, boxCount, lines, boxName, perBox }) => {
     const { settings } = get();
     if (!settings.pantryId) {
@@ -1734,7 +1627,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
    */
   updateSettings: async (updates: Partial<Settings>) => {
     const previous = get().settings;
-    requireAdmin(previous);
     const next = { ...previous, ...updates };
     set({ settings: next });
 
@@ -1753,13 +1645,11 @@ export const usePantryStore = create<AppState>((set, get) => ({
       'boxTarget',
       'dropoffLocation',
       'dropoffHours',
-      'dropOffDetails',
     ];
     if (settingsKeys.some(key => updates[key] !== undefined)) {
       patch.settings = {
         expiration_warning_days: next.expirationWarningDays,
         default_family_size: next.defaultFamilySize,
-        drop_off_details: next.dropOffDetails,
         box_target: next.boxTarget,
         dropoff_location: next.dropoffLocation.trim(),
         dropoff_hours: next.dropoffHours.trim(),
@@ -1782,15 +1672,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
    * next refresh. Templates have member policies, and every write here checks
    * its error.
    */
-  updateBoxRules: async (updates: Partial<BoxRules>) => {
-    const { settings, boxRules } = get();
-    requireAdmin(settings);
-    const newRules = { ...boxRules, ...updates };
-    set({ boxRules: newRules });
-    const { error } = await supabase.from('pantries').update({ box_rules: newRules }).eq('id', settings.pantryId).select('id').single();
-    if (error) { set({ boxRules }); throw error; }
-  },
-
   saveBoxTemplate: async ({ id, name, rules, scalesWithFamily, folderId, excludesTags, requiresTags }) => {
     const { settings, boxTemplates } = get();
     if (!settings.pantryId) throw new Error('No pantry is loaded yet. Reopen the app and try again.');
@@ -1905,7 +1786,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
   updateThresholds: async (updates: Partial<CategoryThresholds>) => {
     const { settings, thresholds } = get();
-    requireAdmin(settings);
+    if (!settings.pantryId) return;
     const newThresholds = { ...thresholds, ...updates };
     set({ thresholds: newThresholds });
     await writePantryRow({ thresholds: newThresholds }, settings.pantryId, settings.userRole, () =>
@@ -1913,8 +1794,8 @@ export const usePantryStore = create<AppState>((set, get) => ({
     );
   },
 
-  setDraft: (items: InventoryItem[], photos: ScanPhoto[] = [], capturedAt = new Date().toISOString()) => {
-    set({ currentDraft: items, currentScanPhotos: photos, draftCapturedAt: items.length ? capturedAt : null });
+  setDraft: (items: InventoryItem[], photos: ScanPhoto[] = []) => {
+    set({ currentDraft: items, currentScanPhotos: photos });
   },
 
   setPendingBarcode: (value: PendingBarcode | null) => {
@@ -1937,13 +1818,11 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const { settings } = get();
     if (!settings.pantryId) return;
     
-    const { error } = await supabase.from('activities').insert({
+    await supabase.from('activities').insert({
       pantry_id: settings.pantryId,
       text,
       time: new Date().toISOString(),
       icon
     });
-    // A secondary log failure must not make a completed inventory write look failed.
-    if (error) { log.error('store', 'activity was not recorded', error); set({ syncError: 'Stock was saved, but its activity log could not be recorded.' }); }
   }
 }));

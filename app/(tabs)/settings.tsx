@@ -1,12 +1,11 @@
-import { useAppRouter } from '../../components/app-navigation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { KeyboardScreen } from '../../components/keyboard-screen';
 import { FadeInUp } from '../../components/motion';
 import {
-  PageHeading,
   Button,
   Card,
   CardHeader,
@@ -41,7 +40,7 @@ import { BoxRules, usePantryStore } from '../../lib/store';
  * erroring, so the number moved on screen and was gone at the next refresh.
  */
 export default function SettingsScreen() {
-  const router = useAppRouter();
+  const router = useRouter();
   const initialPrefs = getFeedbackPrefs();
   const [haptics, setHaptics] = useState(initialPrefs.hapticsEnabled);
   const [sound, setSound] = useState(initialPrefs.soundEnabled);
@@ -195,7 +194,6 @@ export default function SettingsScreen() {
 
   return (
     <KeyboardScreen>
-      <PageHeading title="Settings" description="Your pantry, packing rules, and personal preferences." />
       {/* Says why the rest of the screen is read-only, once, instead of a
           padlock on every line. Managers and the owner never see it. */}
       {!canEdit && (

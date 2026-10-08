@@ -91,8 +91,7 @@ export function Sheet({
   className?: string;
 }) {
   const insets = useSafeAreaInsets();
-  const { height: screenHeight, width } = useWindowDimensions();
-  const desktop = width >= 760;
+  const { height: screenHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
 
   /**
@@ -250,7 +249,8 @@ export function Sheet({
             onPress={onClose}
             accessibilityRole="button"
             accessibilityLabel="Close"
-            style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(43,36,32,0.35)' }]}
+            style={StyleSheet.absoluteFill}
+            className="bg-black/40"
           />
         </Animated.View>
 
@@ -259,15 +259,15 @@ export function Sheet({
         <KeyboardAvoidingView
           pointerEvents="box-none"
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={[styles.anchor, desktop && { justifyContent: 'center', alignItems: 'center' }]}
+          style={styles.anchor}
         >
           <GestureDetector gesture={pan}>
             {/* `shrink` lets the sheet give up height when the keyboard takes it,
                 so its header never gets pushed off the top of the screen. */}
             <Animated.View
               onLayout={e => onSheetLayout(e.nativeEvent.layout.height)}
-              style={[sheetStyle, { width: desktop ? 540 : '100%', borderRadius: desktop ? 20 : undefined }]}
-              className={cn('max-h-[85%] shrink rounded-t-lg bg-card', className)}
+              style={sheetStyle}
+              className={cn('max-h-[85%] shrink rounded-t-lg bg-canvas', className)}
             >
               {/* The grabber. It means what it looks like now. Generously
                   padded, because the thing you grab should be bigger than the
@@ -299,7 +299,7 @@ export function Sheet({
                   onPress={onClose}
                   hitSlop={10}
                   accessibilityLabel="Close"
-                  className="h-11 w-11 items-center justify-center rounded-md bg-subtle"
+                  className="h-9 w-9 items-center justify-center rounded-full bg-subtle"
                 >
                   <MaterialCommunityIcons name="close" size={18} color={COLORS.textPrimary} />
                 </Pressable>

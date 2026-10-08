@@ -1,5 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useAppRouter } from '../components/app-navigation';
+import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { COLORS } from '../constants/theme';
@@ -13,7 +13,6 @@ import {
   Chip,
   Input,
   Panel,
-  PageHeading,
   Section,
   Stepper,
   Text,
@@ -61,7 +60,7 @@ function parseLooseDate(input: string): string | null {
  * the order the volunteer finds it out.
  */
 export default function BulkIntakeScreen() {
-  const router = useAppRouter();
+  const router = useRouter();
   const { lbsPerUnit, bulkLots, addBulkLot } = usePantryStore();
 
   const [category, setCategory] = useState<Category>('protein');
@@ -111,8 +110,7 @@ export default function BulkIntakeScreen() {
   };
 
   return (
-    <KeyboardScreen contentContainerClassName="max-w-[800px]">
-      <PageHeading title="Bulk intake" description="Weigh a donation and estimate how many portions it provides." />
+    <KeyboardScreen>
       <FadeInUp index={0}>
         <Card>
           <CardHeader

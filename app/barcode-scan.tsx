@@ -6,7 +6,7 @@ import { ActivityIndicator, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, EmptyState, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
-import { lookupBarcode, type BarcodeLookup } from '../lib/ai_vision';
+import { lookupBarcode } from '../lib/ai_vision';
 import { normaliseDietTags } from '../lib/diet';
 import { cueSuccess, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
@@ -36,7 +36,6 @@ export default function BarcodeScanScreen() {
   const [permission, requestPermission] = useCameraPermissions();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
-  const [candidate, setCandidate] = useState<BarcodeLookup | null>(null);
 
   // The camera fires this continuously while a code is in frame — several times
   // a second. Without a latch, one tin becomes a dozen lookups.
@@ -63,20 +62,14 @@ export default function BarcodeScanScreen() {
       return;
     }
 
-    setCandidate(result);
-    setBusy(false);
-  };
-
-  const confirm = () => {
-    if (!candidate?.name || !uid) return;
     cueSuccess();
     setPendingBarcode({
       uid: String(uid ?? ''),
-      barcode: candidate.barcode ?? '',
-      name: candidate.name,
-      category: (candidate.category as any) ?? null,
-      imageUrl: (candidate as any).imageUrl ?? null,
-      dietTags: normaliseDietTags(candidate.dietTags),
+      barcode: result.barcode ?? data,
+      name: result.name ?? '',
+      category: (result.category as any) ?? null,
+      imageUrl: (result as any).imageUrl ?? null,
+      dietTags: normaliseDietTags((result as any).dietTags),
     });
     router.back();
   };
@@ -147,7 +140,6 @@ export default function BarcodeScanScreen() {
         </View>
 
         <View className="px-gutter" style={{ paddingBottom: insets.bottom + 24 }}>
-          {candidate && <View className="mb-4 gap-3 rounded-lg bg-card p-card"><Text variant="heading">{candidate.name}</Text><Text variant="label" tone="soft">Check the name against the package. Product databases can contain mistakes.</Text><Button label="This matches the package" block onPress={confirm} /><Button label="Try another barcode" variant="secondary" block onPress={() => { setCandidate(null); handled.current = false; }} /></View>}
           {message ? (
             <View className="rounded-md bg-black/70 px-4 py-3">
               <Text variant="label" className="text-center text-white" style={{ lineHeight: 19 }}>

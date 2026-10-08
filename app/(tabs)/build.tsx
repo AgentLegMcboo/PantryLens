@@ -1,5 +1,5 @@
-import { useAppRouter } from '../../components/app-navigation';
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
@@ -10,7 +10,6 @@ import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
 import { BoxPicker, type BoxSelection } from "../../components/box-picker";
 import { AnimatedCounter, FadeInUp } from "../../components/motion";
 import {
-  PageHeading,
   Button,
   Card,
   CategoryIcon,
@@ -37,7 +36,7 @@ import { BoxRules, usePantryStore } from "../../lib/store";
  * because it explains the answer rather than being the answer.
  */
 export default function BuildBoxesScreen() {
-  const router = useAppRouter();
+  const router = useRouter();
   const { inventory, bulkLots, boxRules, boxTemplates, readyBoxes, settings } = usePantryStore();
   const readyCount = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
 
@@ -135,7 +134,6 @@ export default function BuildBoxesScreen() {
   return (
     <>
       <Screen>
-      <PageHeading title="Build boxes" description="A balanced box for every family. Start with what’s on your shelves." />
         {/* The answer. */}
         <FadeInUp index={0}>
           <View

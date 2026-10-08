@@ -1,6 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
-import { useAppRouter } from '../components/app-navigation';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
@@ -59,7 +58,7 @@ const CATEGORIES: Category[] = [
  * silently removes stock from every box the app builds.
  */
 export default function ItemDetailScreen() {
-  const router = useAppRouter();
+  const router = useRouter();
   const { id } = useLocalSearchParams();
   const { getItem, updateItem, deleteItem, locations, settings } = usePantryStore();
 
@@ -77,7 +76,6 @@ export default function ItemDetailScreen() {
   const [locationId, setLocationId] = useState<string | null>(item?.location_id ?? null);
   const [dietTags, setDietTags] = useState<DietTag[]>(normaliseDietTags(item?.diet_tags));
   const [photoBusy, setPhotoBusy] = useState(false);
-  const [saving, setSaving] = useState(false);
 
   if (!item) {
     return (
@@ -98,22 +96,18 @@ export default function ItemDetailScreen() {
     Alert.alert(title, err?.message ?? 'Please try again.');
   };
 
-  const handleSave = async () => {
-    if (saving) return;
-    if (!name.trim()) { Alert.alert('Name required', 'Enter an item name before saving.'); return; }
-    setSaving(true);
-    try {
+  const handleSave = () => {
     // The stepper goes to zero and the hint says so, so zero has to actually
     // mean gone — the same thing it means on the shelf list. Saving a 0-count
     // item would otherwise leave a row nothing can ever be packed from.
     if (count === 0) {
-      await deleteItem(item.id);
+      deleteItem(item.id).catch(report('Could not remove that item'));
       cueSuccess();
       router.back();
       return;
     }
 
-    await updateItem(item.id, {
+    updateItem(item.id, {
       name: name.trim(),
       category,
       count,
@@ -121,11 +115,9 @@ export default function ItemDetailScreen() {
       condition,
       location_id: locationId,
       diet_tags: dietTags,
-    });
+    }).catch(report('Could not save your changes'));
     cueSuccess();
     router.back();
-    } catch (e) { report('Could not save your changes')(e); }
-    finally { setSaving(false); }
   };
 
   const handleDelete = () => {
@@ -134,9 +126,9 @@ export default function ItemDetailScreen() {
       {
         text: 'Remove',
         style: 'destructive',
-        onPress: async () => {
-          try { await deleteItem(item.id); router.back(); }
-          catch (e) { report('Could not remove that item')(e); }
+        onPress: () => {
+          deleteItem(item.id).catch(report('Could not remove that item'));
+          router.back();
         },
       },
     ]);
@@ -232,7 +224,7 @@ export default function ItemDetailScreen() {
   const usable = isUsableCondition(condition);
 
   return (
-    <KeyboardScreen contentContainerClassName="max-w-[800px]">
+    <KeyboardScreen>
       <FadeInUp index={0}>
         <Card className="gap-5">
           <View className="flex-row items-center gap-4">
@@ -463,7 +455,7 @@ export default function ItemDetailScreen() {
 
       <FadeInUp index={4}>
         <View className="gap-3">
-          <Button label="Save changes" block loading={saving} onPress={handleSave} />
+          <Button label="Save changes" block onPress={handleSave} />
           <Button
             label="Remove from the shelf"
             variant="criticalGhost"

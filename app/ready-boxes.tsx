@@ -1,5 +1,5 @@
-import { useAppRouter } from '../components/app-navigation';
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Pressable, View } from "react-native";
 import { COLORS } from "../constants/theme";
@@ -41,7 +41,7 @@ const HOW_IT_WORKS = [
  * for hiding what's in it.
  */
 export default function ReadyBoxesScreen() {
-  const router = useAppRouter();
+  const router = useRouter();
   const { readyBoxes, boxFolders, collectBoxes, updatePackRun } =
     usePantryStore();
 

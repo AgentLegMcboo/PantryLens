@@ -1,5 +1,5 @@
-import { useAppRouter } from '../components/app-navigation';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
@@ -13,8 +13,6 @@ import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { usePantryStore } from '../lib/store';
-
-import { SaveCaptureButton } from '../components/save-capture-button';
 
 const MAX_SHOTS = 6;
 
@@ -34,7 +32,7 @@ const MAX_SHOTS = 6;
  * The count itself goes to audit-review, which reconciles rather than inserts.
  */
 export default function ShelfAuditScreen() {
-  const router = useAppRouter();
+  const router = useRouter();
   const { locations, inventory, settings, setAuditDraft, setCurrentScan } = usePantryStore();
 
   const [locationId, setLocationId] = useState<string | null>(locations[0]?.id ?? null);
@@ -141,10 +139,10 @@ export default function ShelfAuditScreen() {
         Alert.alert(
           `Only read ${photosRead} of ${photosSent} photos`,
           'Part of the shelf is missing from this count, so anything in that part will look ' +
-            'like it has disappeared. Retake the unread photos before reviewing the count.',
+            'like it has disappeared. Re-shoot it, or check each line carefully.',
           [
             { text: 'Take more photos', style: 'cancel' },
-
+            { text: 'Review anyway', onPress: () => toReview(candidates, shots.length) },
           ],
         );
         return;
@@ -302,7 +300,6 @@ export default function ShelfAuditScreen() {
             }
             onPress={handleRunAudit}
           />
-          <SaveCaptureButton shots={shots} mode="shelf_audit" locationId={locationId} disabled={isAuditing} />
           <Button
             label="Count by hand instead"
             variant="secondary"
