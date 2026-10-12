@@ -7,6 +7,7 @@ import { COLORS } from '../constants/theme';
 import { cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
 import { offlineQueue } from '../lib/offline-queue';
+import { useAccessibilityStore } from '../lib/accessibility';
 import { Text } from './ui/text';
 
 /**
@@ -17,6 +18,8 @@ export function AppHeader({ title }: { title: string }) {
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
+  const seniorMode = useAccessibilityStore((state) => state.seniorMode);
+  const toggleSeniorMode = useAccessibilityStore((state) => state.toggleSeniorMode);
 
   const { settings, inventory, signOut } = usePantryStore();
 
@@ -95,6 +98,14 @@ export function AppHeader({ title }: { title: string }) {
         </Pressable>
 
         <HeaderButton
+          icon={seniorMode ? 'format-font-size-decrease' : 'format-font-size-increase'}
+          label={seniorMode ? 'Switch to standard font' : 'Switch to large text for seniors'}
+          onPress={() => {
+            cueTap();
+            toggleSeniorMode();
+          }}
+        />
+        <HeaderButton
           icon="bell-outline"
           label="Expiring soon"
           badge={expiringCount}
@@ -111,6 +122,15 @@ export function AppHeader({ title }: { title: string }) {
           <Pressable className="rounded-t-xl bg-canvas px-gutter pb-10 pt-4" onPress={() => {}}>
             <View className="mb-4 h-1.5 w-12 self-center rounded-md bg-hairline" />
 
+            <MenuRow
+              icon="format-size"
+              label={seniorMode ? 'Senior Mode: Active' : 'Senior Mode: Off'}
+              hint="Tap to toggle large text & high contrast"
+              onPress={() => {
+                cueTap();
+                toggleSeniorMode();
+              }}
+            />
             <MenuRow
               icon="swap-horizontal"
               label="Switch food bank"

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { COLORS, FONTS } from '../../constants/theme';
 import { AnimatedCounter, FadeInUp } from '../../components/motion';
@@ -9,6 +9,7 @@ import { buildStockUnits } from '../../lib/allocation';
 import { isExpiringSoon } from '../../lib/expiry';
 import { InventoryItem, usePantryStore } from '../../lib/store';
 import { cuePress, cueTap } from '../../lib/feedback';
+import { QuickAddStaplesModal } from '../../components/quick-add-staples';
 
 /**
  * Clean, Accessible Pantry Dashboard.
@@ -44,6 +45,7 @@ function formatActivityTime(iso: string): string {
 export default function DashboardScreen() {
   const router = useRouter();
   const { inventory, bulkLots, settings, activities, thresholds, readyBoxes } = usePantryStore();
+  const [staplesModalVisible, setStaplesModalVisible] = useState(false);
 
   const readyCount = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
   const targetBoxes = settings.boxTarget || 42;
@@ -116,36 +118,70 @@ export default function DashboardScreen() {
         </Text>
       </View>
 
-      {/* 2. Primary Action: Big "Scan Donations" Button */}
+      {/* 2. Primary Actions: Scan Donations & Quick Add Staples */}
       <FadeInUp index={0}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel="Scan donations. Take a photo or scan barcode to add food."
-          onPress={() => {
-            cuePress();
-            router.push('/log-donation');
-          }}
-          style={({ pressed }) => ({
-            opacity: pressed ? 0.9 : 1,
-            transform: [{ scale: pressed ? 0.99 : 1 }],
-          })}
-          className="min-h-[72px] flex-row items-center justify-between rounded-xl bg-brand p-5 shadow-sm"
-        >
-          <View className="flex-1 flex-row items-center gap-4">
-            <View className="h-12 w-12 items-center justify-center rounded-lg bg-white/20">
-              <MaterialCommunityIcons name="camera-outline" size={28} color="#FFFFFF" />
+        <View className="gap-2.5">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Scan donations. Take a photo or scan barcode to add food."
+            onPress={() => {
+              cuePress();
+              router.push('/log-donation');
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.9 : 1,
+              transform: [{ scale: pressed ? 0.99 : 1 }],
+            })}
+            className="min-h-[72px] flex-row items-center justify-between rounded-xl bg-brand p-5 shadow-sm"
+          >
+            <View className="flex-1 flex-row items-center gap-4">
+              <View className="h-12 w-12 items-center justify-center rounded-lg bg-white/20">
+                <MaterialCommunityIcons name="camera-outline" size={28} color="#FFFFFF" />
+              </View>
+              <View className="flex-1 gap-0.5">
+                <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF' }}>
+                  Scan Donations
+                </Text>
+                <Text style={{ fontSize: 14, color: 'rgba(255, 255, 255, 0.9)' }}>
+                  Take photos or scan barcodes to add food
+                </Text>
+              </View>
             </View>
-            <View className="flex-1 gap-0.5">
-              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF' }}>
-                Scan Donations
-              </Text>
-              <Text style={{ fontSize: 14, color: 'rgba(255, 255, 255, 0.9)' }}>
-                Take photos or scan barcodes to add food
+            <MaterialCommunityIcons name="chevron-right" size={28} color="#FFFFFF" />
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="One-tap quick add common pantry staples without typing"
+            onPress={() => {
+              cueTap();
+              setStaplesModalVisible(true);
+            }}
+            style={({ pressed }) => ({
+              opacity: pressed ? 0.9 : 1,
+            })}
+            className="flex-row items-center justify-between rounded-xl border border-hairline bg-card p-4 shadow-sm"
+          >
+            <View className="flex-1 flex-row items-center gap-3">
+              <View className="h-11 w-11 items-center justify-center rounded-lg bg-brand/10">
+                <MaterialCommunityIcons name="lightning-bolt" size={24} color={COLORS.primary} />
+              </View>
+              <View className="flex-1">
+                <Text variant="body" className="font-bold text-base">
+                  One-Tap Quick Add Staples
+                </Text>
+                <Text variant="label" tone="soft" className="text-xs">
+                  Add beans, rice, pasta & soup cases without typing
+                </Text>
+              </View>
+            </View>
+            <View className="rounded-md border border-hairline bg-subtle px-3 py-1.5">
+              <Text variant="label" tone="brand" className="font-bold text-xs">
+                Quick Add →
               </Text>
             </View>
-          </View>
-          <MaterialCommunityIcons name="chevron-right" size={28} color="#FFFFFF" />
-        </Pressable>
+          </Pressable>
+        </View>
       </FadeInUp>
 
       {/* 3. Core Working Status: Boxes Ready & Total Stock */}
@@ -408,6 +444,11 @@ export default function DashboardScreen() {
           </Card>
         </View>
       </FadeInUp>
+
+      <QuickAddStaplesModal
+        visible={staplesModalVisible}
+        onClose={() => setStaplesModalVisible(false)}
+      />
     </Screen>
   );
 }
