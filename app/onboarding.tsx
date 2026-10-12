@@ -158,7 +158,7 @@ export default function OnboardingScreen() {
             return (
               <View key={phase.key} style={{ width: SCREEN_W }} className="flex-1 px-gutter">
                 <View className="min-h-[280px] flex-1 items-center justify-center">
-                  <View className="absolute h-[300px] w-[300px] rounded-full bg-card opacity-60" />
+                  <View className="absolute h-[280px] w-[280px] rounded-2xl border border-hairline/40 bg-card opacity-70" />
                   <Mock />
                 </View>
 
