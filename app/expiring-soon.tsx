@@ -50,7 +50,7 @@ export default function ExpiringSoonScreen() {
         <Card className="mb-3 flex-row items-center gap-4">
           {/* Urgency is carried by the bar, not by a second badge. The rows are
               already in order, so the colour only has to confirm it. */}
-          <View className="h-11 w-1.5 rounded-full" style={{ backgroundColor: state.colour }} />
+          <View className="h-11 w-1.5 rounded-sm" style={{ backgroundColor: state.colour }} />
 
           <View className="flex-1">
             <Text variant="body" className="font-semibold">

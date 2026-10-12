@@ -17,9 +17,10 @@ import {
   Text,
   Toggle,
 } from '../../components/ui';
-import { cueSuccess, cueWarn, getFeedbackPrefs, setHapticsEnabled, setSoundEnabled } from '../../lib/feedback';
+import { cueSuccess, cueTap, cueWarn, getFeedbackPrefs, setHapticsEnabled, setSoundEnabled } from '../../lib/feedback';
 import { canEditPantry, canManageTeam, ROLE_BLURBS, ROLE_LABELS } from '../../lib/permissions';
 import { BoxRules, usePantryStore } from '../../lib/store';
+import { useAccessibilityStore } from '../../lib/accessibility';
 
 /**
  * Pantry settings.
@@ -44,6 +45,8 @@ export default function SettingsScreen() {
   const initialPrefs = getFeedbackPrefs();
   const [haptics, setHaptics] = useState(initialPrefs.hapticsEnabled);
   const [sound, setSound] = useState(initialPrefs.soundEnabled);
+  const seniorMode = useAccessibilityStore(state => state.seniorMode);
+  const setSeniorMode = useAccessibilityStore(state => state.setSeniorMode);
 
   const {
     settings,
@@ -332,6 +335,36 @@ export default function SettingsScreen() {
                 onValueChange={v => {
                   setSound(v);
                   setSoundEnabled(v);
+                }}
+              />
+            }
+          />
+        </Card>
+      </FadeInUp>
+
+      {/* Senior & Accessibility Display */}
+      <FadeInUp index={4}>
+        <Card>
+          <CardHeader
+            title="Senior & Large-Text Mode"
+            subtitle="Enlarges text size, bolds labels, and sharpens contrast for easier reading in warehouse lighting."
+          />
+          <Row
+            icon="format-size"
+            label="Senior Large-Text"
+            hint={
+              seniorMode
+                ? 'Active — large fonts and high contrast enabled'
+                : 'Standard text size'
+            }
+            divider={false}
+            right={
+              <Toggle
+                value={seniorMode}
+                accessibilityLabel="Senior large text mode"
+                onValueChange={v => {
+                  cueTap();
+                  setSeniorMode(v);
                 }}
               />
             }

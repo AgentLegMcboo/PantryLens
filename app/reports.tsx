@@ -176,7 +176,7 @@ export default function ReportsScreen() {
       {rescuedPct !== null && (
         <FadeInUp index={2}>
           <View className="gap-2 px-1">
-            <View className="h-2.5 flex-row overflow-hidden rounded-full bg-muted">
+            <View className="h-2 flex-row overflow-hidden rounded-sm bg-muted">
               <View className="bg-good" style={{ flex: givenUnits }} />
               <View className="bg-critical" style={{ flex: wastedUnits }} />
             </View>

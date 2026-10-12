@@ -8,6 +8,7 @@ import { log } from './log';
 import { ADMIN_ONLY_MESSAGE, asRole, canEditPantry, type PantryRole } from './permissions';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
+import { offlineQueue } from './offline-queue';
 
 export type Category = 'grain' | 'vegetable' | 'protein' | 'breakfast' | 'snack' | 'hygiene' | 'baby' | 'unknown';
 
@@ -808,6 +809,13 @@ export const usePantryStore = create<AppState>((set, get) => ({
   fetchData: async () => {
     const { session } = get();
     if (!session?.user) return;
+    if (session.user.id === 'demo-user-123') {
+      set({ isLoaded: true });
+      return;
+    }
+
+    // Flush any pending offline mutations when connected
+    offlineQueue.processQueue().catch(() => {});
 
     try {
       // 1. Get user's pantry
@@ -1457,15 +1465,40 @@ export const usePantryStore = create<AppState>((set, get) => ({
       scan_id: scanId,
     }));
 
-    log.debug('store', `inserting ${newItems.length} item(s) into pantry ${settings.pantryId}`, newItems);
-    const { error } = await supabase.from('inventory').insert(newItems);
-    if (error) {
-      log.error('store', 'inventory insert rejected', error);
-      throw error;
-    }
-    log.debug('store', `inserted ${newItems.length} item(s)`);
+    const itemsWithIds = newItems.map((item, idx) => ({
+      id: item.id ?? `item_${Date.now()}_${idx}`,
+      ...item,
+    }));
 
-    const flagged = newItems.filter(i => i.condition !== 'ok').length;
+    // Demo mode: local state update without hitting Supabase
+    if (get().session?.user?.id === 'demo-user-123') {
+      set((state) => ({ inventory: [...state.inventory, ...(itemsWithIds as InventoryItem[])] }));
+      const flagged = newItems.filter((i) => i.condition !== 'ok').length;
+      await get().addActivity(
+        flagged > 0
+          ? `Added ${newItems.length} item(s) via ${source} — ${flagged} held back for inspection`
+          : `Added ${newItems.length} verified item(s) via ${source}`,
+        'plus-circle-outline'
+      );
+      return;
+    }
+
+    log.debug('store', `inserting ${newItems.length} item(s) into pantry ${settings.pantryId}`, newItems);
+    try {
+      const { error } = await supabase.from('inventory').insert(newItems);
+      if (error) {
+        log.warn('store', 'inventory insert rejected by remote, enqueuing offline', error);
+        await offlineQueue.enqueue('ADD_ITEMS', settings.pantryId, { items: newItems });
+      }
+    } catch (netErr) {
+      log.warn('store', 'network failed during insert, enqueuing offline', netErr);
+      await offlineQueue.enqueue('ADD_ITEMS', settings.pantryId, { items: newItems });
+    }
+
+    // Always keep local state updated optimistically
+    set((state) => ({ inventory: [...state.inventory, ...(itemsWithIds as InventoryItem[])] }));
+
+    const flagged = newItems.filter((i) => i.condition !== 'ok').length;
     await get().addActivity(
       flagged > 0
         ? `Added ${newItems.length} item(s) via ${source} — ${flagged} held back for inspection`
@@ -1493,11 +1526,21 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const previous = get().inventory;
     set({ inventory: previous.map(i => (i.id === id ? { ...i, ...updates } : i)) });
 
-    const { error } = await supabase.from('inventory').update(updates).eq('id', id);
-    if (error) {
-      log.error('store', `could not update item ${id}`, error);
-      set({ inventory: previous });
-      throw error;
+    if (get().session?.user?.id === 'demo-user-123') return;
+
+    try {
+      const { data, error } = await supabase
+        .from('inventory')
+        .update(updates)
+        .eq('id', id)
+        .select('id');
+      if (error || !data || data.length === 0) {
+        log.warn('store', `could not update item ${id} on remote, queuing offline`, error);
+        await offlineQueue.enqueue('UPDATE_ITEM', get().settings.pantryId ?? '', { id, updates });
+      }
+    } catch (netErr) {
+      log.warn('store', `network error updating item ${id}, queuing offline`, netErr);
+      await offlineQueue.enqueue('UPDATE_ITEM', get().settings.pantryId ?? '', { id, updates });
     }
   },
 
@@ -1508,11 +1551,20 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
     set({ inventory: previous.filter(i => i.id !== id) });
 
-    const { error } = await supabase.from('inventory').delete().eq('id', id);
-    if (error) {
-      log.error('store', `could not delete item ${id}`, error);
-      set({ inventory: previous });
-      throw error;
+    if (get().session?.user?.id === 'demo-user-123') {
+      await get().addActivity(`Removed "${item.name}" from inventory`, 'trash-can-outline');
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.from('inventory').delete().eq('id', id).select('id');
+      if (error || !data || data.length === 0) {
+        log.warn('store', `could not delete item ${id} on remote, queuing offline`, error);
+        await offlineQueue.enqueue('DELETE_ITEMS', get().settings.pantryId ?? '', { ids: [id] });
+      }
+    } catch (netErr) {
+      log.warn('store', `network error deleting item ${id}, queuing offline`, netErr);
+      await offlineQueue.enqueue('DELETE_ITEMS', get().settings.pantryId ?? '', { ids: [id] });
     }
 
     // Take the photograph with it. Only ours — a pack shot lives on Open Food
@@ -1542,11 +1594,25 @@ export const usePantryStore = create<AppState>((set, get) => ({
 
     set({ inventory: previous.filter(i => !ids.includes(i.id)) });
 
-    const { error } = await supabase.from('inventory').delete().in('id', ids);
-    if (error) {
-      log.error('store', `could not delete ${ids.length} item(s)`, error);
-      set({ inventory: previous });
-      throw error;
+    if (get().session?.user?.id === 'demo-user-123') {
+      await get().addActivity(
+        doomed.length === 1
+          ? `Removed "${doomed[0].name}" from inventory`
+          : `Removed ${doomed.length} items from inventory`,
+        'trash-can-outline',
+      );
+      return;
+    }
+
+    try {
+      const { data, error } = await supabase.from('inventory').delete().in('id', ids).select('id');
+      if (error || !data || data.length === 0) {
+        log.warn('store', `could not delete ${ids.length} items on remote, queuing offline`, error);
+        await offlineQueue.enqueue('DELETE_ITEMS', get().settings.pantryId ?? '', { ids });
+      }
+    } catch (netErr) {
+      log.warn('store', `network error deleting ${ids.length} items, queuing offline`, netErr);
+      await offlineQueue.enqueue('DELETE_ITEMS', get().settings.pantryId ?? '', { ids });
     }
 
     const paths = doomed
@@ -1973,14 +2039,29 @@ export const usePantryStore = create<AppState>((set, get) => ({
   },
 
   addActivity: async (text: string, icon = 'information-outline') => {
-    const { settings } = get();
-    if (!settings.pantryId) return;
-    
-    await supabase.from('activities').insert({
-      pantry_id: settings.pantryId,
+    const { settings, session } = get();
+    const newActivity = {
+      id: `act_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
       text,
       time: new Date().toISOString(),
-      icon
-    });
+      icon,
+    };
+    set((state) => ({ activities: [newActivity, ...state.activities].slice(0, 50) }));
+
+    if (!settings.pantryId || session?.user?.id === 'demo-user-123') return;
+
+    try {
+      const { error } = await supabase.from('activities').insert({
+        pantry_id: settings.pantryId,
+        text,
+        time: newActivity.time,
+        icon,
+      });
+      if (error) {
+        log.warn('store', 'could not persist activity row', error);
+      }
+    } catch (err) {
+      log.warn('store', 'addActivity threw', err);
+    }
   }
 }));

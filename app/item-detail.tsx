@@ -241,7 +241,7 @@ export default function ItemDetailScreen() {
               />
               {/* A small camera badge, because a thumbnail does not otherwise
                   look like something you can press. */}
-              <View className="absolute -bottom-1 -right-1 h-6 w-6 items-center justify-center rounded-full border-2 border-card bg-brand">
+              <View className="absolute -bottom-1 -right-1 h-6 w-6 items-center justify-center rounded-md border-2 border-card bg-brand">
                 {photoBusy ? (
                   <ActivityIndicator size="small" color={COLORS.textOnPrimary} />
                 ) : (

@@ -39,6 +39,7 @@ import {
   isUsableCondition,
   usePantryStore,
 } from '../../lib/store';
+import { QuickAddStaplesModal } from '../../components/quick-add-staples';
 
 /**
  * The shelf, as a list.
@@ -177,6 +178,7 @@ export default function InventoryScreen() {
   const [onlyFlagged, setOnlyFlagged] = useState(false);
 
   const [modalVisible, setModalVisible] = useState(false);
+  const [staplesModalVisible, setStaplesModalVisible] = useState(false);
   const [newName, setNewName] = useState('');
   const [newCat, setNewCat] = useState<InventoryItem['category']>('grain');
   const [newCount, setNewCount] = useState(1);
@@ -609,6 +611,38 @@ export default function InventoryScreen() {
           </View>
         )}
 
+        {!picking && (
+          <Pressable
+            onPress={() => {
+              cueTap();
+              setStaplesModalVisible(true);
+            }}
+            accessibilityRole="button"
+            accessibilityLabel="Open one-tap quick add staples"
+            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+            className="flex-row items-center justify-between rounded-lg border border-hairline bg-card p-3 shadow-sm"
+          >
+            <View className="flex-1 flex-row items-center gap-3">
+              <View className="h-10 w-10 items-center justify-center rounded-lg bg-brand/10">
+                <MaterialCommunityIcons name="lightning-bolt" size={22} color={COLORS.primary} />
+              </View>
+              <View className="flex-1">
+                <Text variant="body" className="font-bold text-sm">
+                  One-Tap Quick Add Staples
+                </Text>
+                <Text variant="micro" tone="soft">
+                  Add cases of beans, pasta, rice & soup without typing
+                </Text>
+              </View>
+            </View>
+            <View className="rounded-md bg-brand px-3 py-1.5">
+              <Text variant="label" tone="on" className="font-bold text-xs">
+                Quick Add →
+              </Text>
+            </View>
+          </Pressable>
+        )}
+
         {!picking && flaggedCount > 0 && (
           <Pressable
             onPress={() => {
@@ -907,6 +941,24 @@ export default function InventoryScreen() {
                 </Pressable>
               </View>
 
+              <Pressable
+                onPress={() => {
+                  setModalVisible(false);
+                  setStaplesModalVisible(true);
+                }}
+                className="flex-row items-center justify-between rounded-lg border border-brand/30 bg-brand/5 p-3"
+              >
+                <View className="flex-row items-center gap-2">
+                  <MaterialCommunityIcons name="lightning-bolt" size={20} color={COLORS.primary} />
+                  <Text variant="label" tone="brand" className="font-bold">
+                    Or tap common staples directly (No typing)
+                  </Text>
+                </View>
+                <Text variant="label" tone="brand" className="font-bold">
+                  Open →
+                </Text>
+              </Pressable>
+
               <Input
                 label="Name"
                 placeholder="Canned black beans 15 oz"
@@ -952,6 +1004,11 @@ export default function InventoryScreen() {
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <QuickAddStaplesModal
+        visible={staplesModalVisible}
+        onClose={() => setStaplesModalVisible(false)}
+      />
     </View>
   );
 }

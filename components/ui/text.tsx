@@ -2,6 +2,7 @@ import * as React from 'react';
 import { Text as RNText, type TextProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/cn';
+import { getSeniorTextStyle, useAccessibilityStore } from '../../lib/accessibility';
 
 /**
  * Every piece of text in the app, at one of six sizes.
@@ -42,7 +43,17 @@ export function Text({
   className,
   variant,
   tone,
+  style,
   ...props
 }: TextProps & TextVariant) {
-  return <RNText className={cn(textVariants({ variant, tone }), className)} {...props} />;
+  const seniorMode = useAccessibilityStore((state) => state.seniorMode);
+  const seniorStyle = seniorMode ? getSeniorTextStyle(variant, tone) : null;
+
+  return (
+    <RNText
+      className={cn(textVariants({ variant, tone }), className)}
+      style={seniorStyle ? [seniorStyle, style] : style}
+      {...props}
+    />
+  );
 }

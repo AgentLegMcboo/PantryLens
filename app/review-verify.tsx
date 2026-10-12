@@ -691,10 +691,10 @@ export default function ReviewVerifyScreen() {
               color={allVerified ? COLORS.statusGood : COLORS.primaryLight}
             />
           </View>
-          <View className="h-1.5 overflow-hidden rounded-full bg-muted">
+          <View className="h-1.5 overflow-hidden rounded-sm bg-muted">
             <View
               className={
-                allVerified ? 'h-full rounded-full bg-good' : 'h-full rounded-full bg-brand-light'
+                allVerified ? 'h-full rounded-sm bg-good' : 'h-full rounded-sm bg-brand-light'
               }
               style={{ width: `${(verifiedCount / draftItems.length) * 100}%` }}
             />

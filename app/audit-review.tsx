@@ -286,7 +286,7 @@ export default function AuditReviewScreen() {
         <Card className="gap-3">
           <View className="flex-row items-center gap-3">
             <View
-              className="h-12 w-1.5 rounded-full"
+              className="h-12 w-1.5 rounded-sm"
               style={{
                 backgroundColor:
                   net === 0 ? COLORS.statusGood : net < 0 ? COLORS.statusCritical : COLORS.statusWarning,

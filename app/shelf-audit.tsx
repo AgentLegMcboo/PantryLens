@@ -259,7 +259,7 @@ export default function ShelfAuditScreen() {
                   onPress={() => removeShot(i)}
                   hitSlop={8}
                   accessibilityLabel={`Remove photo ${i + 1}`}
-                  className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-full bg-ink"
+                  className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-md bg-ink"
                 >
                   <MaterialCommunityIcons name="close" size={14} color={COLORS.textOnPrimary} />
                 </Pressable>

@@ -10,6 +10,7 @@ import {
 } from './scan-normalize';
 import { describeImage, log } from './log';
 import { normaliseBarcode, sameBarcode } from './barcode-scanner';
+import { getCachedBarcode, saveCachedBarcode, directOpenFoodFactsLookup } from './barcode-cache';
 
 /**
  * The bridge between a photo and a draft inventory row.
@@ -205,8 +206,20 @@ export interface BarcodeLookup {
 export async function lookupBarcode(barcode: string): Promise<BarcodeLookup> {
   const code = normaliseBarcode(barcode);
   if (!code) return { found: false, reason: 'INVALID', error: 'Check the digits under the barcode and try again.' };
+
+  // 1. Instant local offline cache lookup (< 5ms)
+  try {
+    const cached = await getCachedBarcode(code);
+    if (cached && cached.found) {
+      log.debug('scan', `barcode ${code}: instant local cache hit "${cached.name}"`);
+      return cached;
+    }
+  } catch (err) {
+    log.warn('scan', 'failed reading local barcode cache', err);
+  }
+
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 25_000);
+  const timer = setTimeout(() => controller.abort(), 10_000);
   try {
     const { data, error } = await supabase.functions.invoke('lookup-barcode', {
       body: { barcode: code },
@@ -229,15 +242,19 @@ export async function lookupBarcode(barcode: string): Promise<BarcodeLookup> {
     }
     log.debug('scan', `barcode ${code}: ${data.found ? data.name : 'no match'}`);
     const categories: Category[] = ['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygiene', 'baby', 'unknown'];
-    return {
+    const result: BarcodeLookup = {
       ...data,
       barcode: code,
       category: categories.includes(data.category) ? data.category : null,
       imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
       error: typeof data.error === 'string' ? data.error : undefined,
-    } as BarcodeLookup;
+    };
+    if (result.found) saveCachedBarcode(result).catch(() => {});
+    return result;
   } catch (err) {
-    log.error('scan', 'barcode lookup threw', err);
+    log.warn('scan', 'edge function threw, trying direct fallback', err);
+    const fallback = await directOpenFoodFactsLookup(code);
+    if (fallback && fallback.found) return fallback;
     return { found: false, reason: 'ERROR', error: 'Could not reach the product database.' };
   } finally {
     clearTimeout(timer);

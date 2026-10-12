@@ -251,7 +251,7 @@ export default function BarcodeScanScreen() {
               accessibilityRole="button"
               accessibilityLabel="Close the scanner"
               hitSlop={10}
-              className="h-12 w-12 items-center justify-center rounded-full bg-black/50"
+              className="h-12 w-12 items-center justify-center rounded-lg bg-black/60"
             >
               <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
             </Pressable>
@@ -261,7 +261,7 @@ export default function BarcodeScanScreen() {
               accessibilityRole="button"
               accessibilityLabel={torch ? 'Turn flashlight off' : 'Turn flashlight on'}
               accessibilityState={{ selected: torch }}
-              className="h-12 w-12 items-center justify-center rounded-full bg-black/50"
+              className="h-12 w-12 items-center justify-center rounded-lg bg-black/60"
             >
               <MaterialCommunityIcons
                 name={torch ? 'flashlight' : 'flashlight-off'}

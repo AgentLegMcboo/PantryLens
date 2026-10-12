@@ -1,35 +1,31 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Alert, Modal, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
+import { offlineQueue } from '../lib/offline-queue';
+import { useAccessibilityStore } from '../lib/accessibility';
 import { Text } from './ui/text';
 
 /**
  * The app's top bar.
- *
- * Replaces the stock navigation header, which was a bold centred title on a
- * hairline and nothing else. Three things live here now:
- *
- *  - WHERE YOU ARE. The pantry name, with the screen name above it — a
- *    volunteer may belong to more than one pantry and needs to know which
- *    they are writing to.
- *  - WHAT NEEDS YOU. The bell counts stock about to expire; that is the only
- *    genuinely time-sensitive thing this app knows, so it is the only thing
- *    allowed to wear a badge.
- *  - EVERYTHING ELSE. Settings and sign-out behind an overflow, which is what
- *    freed a fifth of the tab bar for the four things a volunteer actually
- *    does.
  */
 export function AppHeader({ title }: { title: string }) {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [pendingCount, setPendingCount] = useState(0);
+  const seniorMode = useAccessibilityStore((state) => state.seniorMode);
+  const toggleSeniorMode = useAccessibilityStore((state) => state.toggleSeniorMode);
 
   const { settings, inventory, signOut } = usePantryStore();
+
+  useEffect(() => {
+    return offlineQueue.subscribe((count) => setPendingCount(count));
+  }, []);
 
   // Same window the dashboard and the allocator use, so the badge can never
   // disagree with the screen it takes you to.
@@ -51,6 +47,27 @@ export function AppHeader({ title }: { title: string }) {
 
   return (
     <View style={{ paddingTop: insets.top }} className="bg-canvas">
+      {pendingCount > 0 && (
+        <Pressable
+          onPress={() => {
+            offlineQueue.processQueue().then((res) => {
+              if (res.processed > 0) {
+                Alert.alert('Sync Complete', `Uploaded ${res.processed} offline change(s).`);
+              }
+            });
+          }}
+          className="mx-gutter mt-2 flex-row items-center justify-between rounded-lg border border-amber-300 bg-amber-50 px-3 py-2"
+        >
+          <View className="flex-row items-center gap-2">
+            <MaterialCommunityIcons name="cloud-sync-outline" size={18} color="#904C00" />
+            <Text className="text-xs font-semibold text-amber-900">
+              Offline: {pendingCount} change{pendingCount === 1 ? '' : 's'} waiting to sync
+            </Text>
+          </View>
+          <Text className="text-xs font-bold text-amber-800">Sync now →</Text>
+        </Pressable>
+      )}
+
       <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
         {/* The pantry as a pill rather than a bare title: the initial gives it
             an identity you recognise at a glance, and the whole thing is the
@@ -81,6 +98,14 @@ export function AppHeader({ title }: { title: string }) {
         </Pressable>
 
         <HeaderButton
+          icon={seniorMode ? 'format-font-size-decrease' : 'format-font-size-increase'}
+          label={seniorMode ? 'Switch to standard font' : 'Switch to large text for seniors'}
+          onPress={() => {
+            cueTap();
+            toggleSeniorMode();
+          }}
+        />
+        <HeaderButton
           icon="bell-outline"
           label="Expiring soon"
           badge={expiringCount}
@@ -97,6 +122,15 @@ export function AppHeader({ title }: { title: string }) {
           <Pressable className="rounded-t-xl bg-canvas px-gutter pb-10 pt-4" onPress={() => {}}>
             <View className="mb-4 h-1.5 w-12 self-center rounded-md bg-hairline" />
 
+            <MenuRow
+              icon="format-size"
+              label={seniorMode ? 'Senior Mode: Active' : 'Senior Mode: Off'}
+              hint="Tap to toggle large text & high contrast"
+              onPress={() => {
+                cueTap();
+                toggleSeniorMode();
+              }}
+            />
             <MenuRow
               icon="swap-horizontal"
               label="Switch food bank"
