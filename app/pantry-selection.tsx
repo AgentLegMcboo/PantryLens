@@ -1,42 +1,40 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BrandMark } from '../components/brand-mark';
 import { Button, Card, Input, Segmented, Text } from '../components/ui';
-import { COLORS, RULE_BELOW_FAINT, RULE_ABOVE_FAINT } from '../constants/theme';
-import { cueSuccess, cueTap } from '../lib/feedback';
-import { DEMO_PANTRIES, usePantryStore } from '../lib/store';
+import { COLORS, RULE_BELOW_FAINT } from '../constants/theme';
+import { cueSuccess } from '../lib/feedback';
+import { ACTIVE_PANTRY_KEY, usePantryStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
-
-type Mode = 'select' | 'custom';
 
 export default function PantrySelectionScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const session = usePantryStore((state) => state.session);
   const signOut = usePantryStore((state) => state.signOut);
-  const currentPantryId = usePantryStore((state) => state.settings.pantryId);
-  const switchDemoPantry = usePantryStore((state) => state.switchDemoPantry);
-  const loginAsDemo = usePantryStore((state) => state.loginAsDemo);
 
-  const [mode, setMode] = useState<Mode>('select');
   const [subMode, setSubMode] = useState<'create' | 'join'>('create');
   const [inviteCode, setInviteCode] = useState('');
   const [pantryName, setPantryName] = useState('');
+  // Here to add a second pantry, rather than because they have none yet.
+  const adding = usePantryStore((state) => state.addingPantry && !!state.settings.pantryId);
+  const setAddingPantry = usePantryStore((state) => state.setAddingPantry);
+  // Leaving by any route — Back, the system back gesture, finishing — ends add
+  // mode, so the root gate goes back to keeping people with a pantry out of here.
+  useEffect(() => () => setAddingPantry(false), [setAddingPantry]);
+
+  /** Opens the pantry just created or joined, and remembers it on this device. */
+  const openPantry = async (pantryId: string | null | undefined) => {
+    if (pantryId) await AsyncStorage.setItem(ACTIVE_PANTRY_KEY, pantryId).catch(() => {});
+    setAddingPantry(false);
+    await usePantryStore.getState().fetchData();
+  };
+
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const handleSelectPantry = (pantryId: string) => {
-    cueTap();
-    if (!session?.user || session.user.id === 'demo-user-123') {
-      loginAsDemo(pantryId);
-    } else {
-      switchDemoPantry(pantryId);
-    }
-    cueSuccess();
-    router.replace('/(tabs)');
-  };
 
   const handleCreateCustom = async () => {
     const trimmed = pantryName.trim();
@@ -48,49 +46,23 @@ export default function PantrySelectionScreen() {
     setBusy(true);
 
     try {
-      if (session?.user && session.user.id !== 'demo-user-123') {
-        const { data, error: createError } = await supabase
-          .rpc('create_pantry', { pantry_name: trimmed })
-          .single<{ pantry_id: string; pantry_code: string }>();
+      const { data, error: createError } = await supabase
+        .rpc('create_pantry', { pantry_name: trimmed })
+        .single<{ pantry_id: string; pantry_code: string }>();
+      if (createError) throw createError;
 
-        if (createError) throw createError;
-
-        cueSuccess();
-        Alert.alert(
-          `${trimmed} is ready`,
-          `Your volunteer code is:\n\n${data.pantry_code}`,
-          [{ text: 'Open Food Bank', onPress: () => router.replace('/(tabs)') }]
-        );
-        usePantryStore.getState().fetchData();
-        return;
-      }
-    } catch {
-      // Graceful local fallback if offline or RPC unavailable
+      cueSuccess();
+      await openPantry(data.pantry_id);
+      Alert.alert(`${trimmed} is ready`, `Your volunteer code is:\n\n${data.pantry_code}`, [
+        { text: 'Open Food Bank', onPress: () => router.replace('/(tabs)') },
+      ]);
+    } catch (err: any) {
+      // Said where it can be read, not swallowed: a pantry that was never
+      // created must not look as if it was.
+      setError(err?.message ?? 'Could not create the food bank. Check your connection and try again.');
+    } finally {
+      setBusy(false);
     }
-
-    // Set custom pantry locally
-    usePantryStore.setState((state) => ({
-      settings: {
-        ...state.settings,
-        pantryId: `custom-${Date.now()}`,
-        pantryName: trimmed,
-        userRole: 'admin',
-        boxTarget: 30,
-        expirationWarningDays: 30,
-        inviteCode: `FOOD-${Math.random().toString(36).substring(2, 7).toUpperCase()}`,
-      },
-      inventory: [
-        { id: 'c-1', name: 'White Rice (2 lb)', category: 'grain', count: 40, expiration: '2027-06-01', date_added: new Date().toISOString(), source: 'donation' },
-        { id: 'c-2', name: 'Peanut Butter (16oz)', category: 'protein', count: 24, expiration: '2026-12-15', date_added: new Date().toISOString(), source: 'donation' },
-        { id: 'c-3', name: 'Canned Sweet Corn', category: 'vegetable', count: 35, expiration: '2027-01-20', date_added: new Date().toISOString(), source: 'donation' },
-      ],
-      isLoaded: true,
-      onboarded: true,
-    }));
-
-    cueSuccess();
-    setBusy(false);
-    router.replace('/(tabs)');
   };
 
   const handleJoinWithCode = async () => {
@@ -103,49 +75,45 @@ export default function PantrySelectionScreen() {
     setBusy(true);
 
     try {
-      if (session?.user && session.user.id !== 'demo-user-123') {
-        const { error: joinError } = await supabase.rpc('join_pantry_by_code', { code: trimmed });
-        if (joinError) throw joinError;
+      const { data: joinedId, error: joinError } = await supabase.rpc('join_pantry_by_code', {
+        code: trimmed,
+      });
+      if (joinError) throw joinError;
 
-        cueSuccess();
-        usePantryStore.getState().fetchData();
-        router.replace('/(tabs)');
-        return;
-      }
-    } catch {
-      // Local fallback
+      cueSuccess();
+      await openPantry(joinedId as string);
+      router.replace('/(tabs)');
+    } catch (err: any) {
+      setError(err?.message ?? 'That code did not match a food bank. Check it and try again.');
+    } finally {
+      setBusy(false);
     }
-
-    // Check if matches demo pantries or default
-    const matched = DEMO_PANTRIES.find((p) => p.name.toUpperCase().includes(trimmed)) || DEMO_PANTRIES[0];
-    handleSelectPantry(matched.id);
   };
 
   return (
     <View style={{ paddingTop: insets.top }} className="flex-1 bg-canvas">
       {/* Top Bar */}
       <View className="flex-row items-center justify-between bg-canvas px-gutter py-3.5" style={RULE_BELOW_FAINT}>
-        {currentPantryId ? (
+        {/* Back only when adding another pantry. Someone with no pantry yet
+            has nowhere to go back to — the root gate keeps them here. */}
+        {adding ? (
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="Back to food bank"
-            onPress={() => router.replace('/(tabs)')}
-            className="flex-row items-center gap-1.5 rounded-lg border border-hairline bg-card px-3 py-2"
+            accessibilityLabel="Back to your pantry"
+            onPress={() => {
+              setAddingPantry(false);
+              router.back();
+            }}
+            hitSlop={8}
+            className="flex-row items-center gap-1.5"
           >
-            <MaterialCommunityIcons name="arrow-left" size={20} color={COLORS.textPrimary} />
-            <Text variant="label" className="font-semibold text-base">
-              Back to pantry
+            <MaterialCommunityIcons name="arrow-left" size={22} color={COLORS.textPrimary} />
+            <Text variant="body" className="font-semibold">
+              Back
             </Text>
           </Pressable>
         ) : (
-          <View className="flex-row items-center gap-2">
-            <View className="h-9 w-9 items-center justify-center rounded-lg bg-brand">
-              <MaterialCommunityIcons name="home-heart" size={22} color={COLORS.textOnPrimary} />
-            </View>
-            <Text variant="headline" className="font-bold text-lg">
-              PantryLens
-            </Text>
-          </View>
+          <BrandMark />
         )}
 
         <Pressable
@@ -166,7 +134,7 @@ export default function PantrySelectionScreen() {
       </View>
 
       <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 60 }}
+        contentContainerStyle={{ padding: 20, paddingBottom: 20 + insets.bottom }}
         showsVerticalScrollIndicator={false}
       >
         {/* Big accessible title */}
@@ -176,103 +144,13 @@ export default function PantrySelectionScreen() {
             className="font-bold text-2xl text-ink"
             style={{ fontSize: 26, lineHeight: 32 }}
           >
-            Choose a Food Bank
+            {adding ? 'Add a food bank' : 'Set up your food bank'}
           </Text>
           <Text variant="body" tone="soft" className="mt-1.5 text-base">
-            Select the pantry you are working with today, or set up a new one for your location.
+            Start a new food bank, or join one with the code from your coordinator.
           </Text>
         </View>
 
-        {/* Tab switch between available pantries & custom */}
-        <Segmented
-          value={mode}
-          onChange={(m) => setMode(m)}
-          options={[
-            { value: 'select', label: 'Food Banks (3 Available)', icon: 'storefront-outline' },
-            { value: 'custom', label: 'Create / Join New', icon: 'plus-box-outline' },
-          ]}
-          className="mb-5"
-        />
-
-        {mode === 'select' ? (
-          <View className="gap-4">
-            {DEMO_PANTRIES.map((pantry) => {
-              const isActive = currentPantryId === pantry.id;
-              return (
-                <Card
-                  key={pantry.id}
-                  className={`gap-3 border p-5 ${
-                    isActive ? 'border-good bg-good/5' : 'border-hairline bg-card'
-                  }`}
-                >
-                  <View className="flex-row items-start justify-between gap-2">
-                    <View className="flex-1">
-                      <View className="flex-row items-center gap-2">
-                        <Text className="font-bold text-xl text-ink">
-                          {pantry.name}
-                        </Text>
-                        {isActive && (
-                          <View className="rounded-md bg-good/15 px-2 py-0.5">
-                            <Text variant="micro" className="font-bold text-good text-xs">
-                              Active Now
-                            </Text>
-                          </View>
-                        )}
-                      </View>
-                      <Text variant="label" tone="soft" className="mt-1 text-sm font-medium">
-                        {pantry.location}
-                      </Text>
-                    </View>
-                    <View className="h-10 w-10 items-center justify-center rounded-lg bg-surfaceContainer">
-                      <MaterialCommunityIcons
-                        name="warehouse"
-                        size={22}
-                        color={COLORS.textPrimary}
-                      />
-                    </View>
-                  </View>
-
-                  <Text variant="body" tone="soft" className="text-sm">
-                    {pantry.description}
-                  </Text>
-
-                  {/* Key Stats */}
-                  <View className="flex-row items-center gap-4 pt-3" style={RULE_ABOVE_FAINT}>
-                    <View className="flex-row items-center gap-1.5">
-                      <MaterialCommunityIcons name="package-variant-closed" size={18} color={COLORS.textSecondary} />
-                      <Text variant="label" tone="soft" className="text-sm">
-                        Target: <Text className="font-bold text-ink">{pantry.boxTarget} boxes</Text>
-                      </Text>
-                    </View>
-                    <View className="flex-row items-center gap-1.5">
-                      <MaterialCommunityIcons name="format-list-bulleted" size={18} color={COLORS.textSecondary} />
-                      <Text variant="label" tone="soft" className="text-sm">
-                        Items: <Text className="font-bold text-ink">{pantry.inventory.length} varieties</Text>
-                      </Text>
-                    </View>
-                  </View>
-
-                  {/* Big action button */}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={`Open ${pantry.name}`}
-                    onPress={() => handleSelectPantry(pantry.id)}
-                    className={`mt-1 min-h-[52px] items-center justify-center rounded-lg ${
-                      isActive ? 'bg-subtle border border-hairline' : 'bg-brand'
-                    }`}
-                  >
-                    <Text
-                      variant="label"
-                      className={`text-base font-bold ${isActive ? 'text-ink' : 'text-white'}`}
-                    >
-                      {isActive ? 'Continue with This Pantry →' : `Open ${pantry.name} →`}
-                    </Text>
-                  </Pressable>
-                </Card>
-              );
-            })}
-          </View>
-        ) : (
           <Card className="gap-5 p-5">
             <Segmented
               value={subMode}
@@ -281,8 +159,8 @@ export default function PantrySelectionScreen() {
                 setSubMode(s);
               }}
               options={[
-                { value: 'create', label: 'Start New Food Bank', icon: 'plus-box-outline' },
-                { value: 'join', label: 'Enter Invite Code', icon: 'key-outline' },
+                { value: 'create', label: 'New food bank', icon: 'plus-box-outline' },
+                { value: 'join', label: 'Invite code', icon: 'key-outline' },
               ]}
             />
 
@@ -341,7 +219,7 @@ export default function PantrySelectionScreen() {
               </View>
             )}
           </Card>
-        )}
+
       </ScrollView>
     </View>
   );

@@ -175,37 +175,40 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
           </View>
         </FadeInUp>
 
-        {deficits.map((item, i) => (
-          <FadeInUp key={item.category} index={i + 1}>
-            <Card className="flex-row items-center gap-4">
-              <CategoryIcon
-                category={item.category}
-                size="md"
-                tone={
-                  item.reason === "Stopping boxes going out" ? "critical" : "brand"
-                }
-              />
-              <View className="flex-1">
-                <View className="flex-row items-baseline gap-2">
-                  <Text variant="heading" className="capitalize">
-                    {item.category}
+        {/* Tighter than the page rhythm: these are one list, not separate blocks. */}
+        <View className="gap-2.5">
+          {deficits.map((item, i) => (
+            <FadeInUp key={item.category} index={i + 1}>
+              <Card className="flex-row items-center gap-3.5 p-4">
+                <CategoryIcon
+                  category={item.category}
+                  size="md"
+                  tone={
+                    item.reason === "Stopping boxes going out" ? "critical" : "brand"
+                  }
+                />
+                <View className="flex-1">
+                  <View className="flex-row items-baseline gap-2">
+                    <Text variant="heading" className="font-bold capitalize">
+                      {item.category}
+                    </Text>
+                    <Text variant="label" className="font-semibold">
+                      about {item.deficit} more
+                    </Text>
+                  </View>
+                  <Text variant="label" tone="soft" className="mt-0.5">
+                    {EXAMPLES[item.category] ?? "Any shelf-stable items"}
                   </Text>
-                  <Text variant="label" tone="soft">
-                    about {item.deficit} more
-                  </Text>
+                  {item.reason === "Stopping boxes going out" && (
+                    <Text variant="micro" tone="critical" className="mt-2 font-bold">
+                      This is what's stopping boxes going out
+                    </Text>
+                  )}
                 </View>
-                <Text variant="label" tone="soft" className="mt-1">
-                  {EXAMPLES[item.category] ?? "Any shelf-stable items"}
-                </Text>
-                {item.reason === "Stopping boxes going out" && (
-                  <Text variant="micro" tone="critical" className="mt-2 font-bold">
-                    This is what's stopping boxes going out
-                  </Text>
-                )}
-              </View>
-            </Card>
-          </FadeInUp>
-        ))}
+              </Card>
+            </FadeInUp>
+          ))}
+        </View>
 
         <FadeInUp index={deficits.length + 1}>
           <View className="gap-3">

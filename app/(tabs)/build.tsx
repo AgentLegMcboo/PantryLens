@@ -8,7 +8,7 @@ import { computeAllocation } from "../../lib/allocation";
 import { DIET_TAG_LABELS, EXCLUSION_CAVEAT, type DietTag } from "../../lib/diet";
 import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
 import { BoxPicker, type BoxSelection } from "../../components/box-picker";
-import { AnimatedCounter, FadeInUp } from "../../components/motion";
+import { AnimatedCounter, FadeInUp, ProgressBar } from "../../components/motion";
 import {
   Button,
   Card,
@@ -312,7 +312,7 @@ export default function BuildBoxesScreen() {
                 />
               </View>
               <View className="flex-1">
-                <Text variant="body" className="font-semibold">
+                <Text variant="body" className="font-bold">
                   {box.name}
                 </Text>
                 <Text variant="micro" tone="soft" numberOfLines={2} className="mt-0.5">
@@ -324,10 +324,8 @@ export default function BuildBoxesScreen() {
               </Text>
             </Pressable>
 
-            <View className="h-px bg-hairline" />
-
             <View className="flex-row items-center justify-between gap-3">
-              <Text variant="body" className="flex-1">
+              <Text variant="body" className="flex-1 font-semibold">
                 How many boxes do you need?
               </Text>
               <Stepper
@@ -343,7 +341,7 @@ export default function BuildBoxesScreen() {
 
             {box.scales ? (
               <View className="gap-2">
-                <Text variant="body">How big are the families?</Text>
+                <Text variant="body" className="font-semibold">How big are the families?</Text>
                 <View className="flex-row gap-2">
                   {[2, 4, 6].map((size) => (
                     <Chip
@@ -411,26 +409,103 @@ export default function BuildBoxesScreen() {
               />
             )}
 
-            {readyCount > 0 && (
-              <Button
-                label={`${readyCount} packed and waiting for pickup`}
-                variant="ghost"
-                size="compact"
-                icon={
-                  <MaterialCommunityIcons
-                    name="package-variant-closed"
-                    size={17}
-                    color={COLORS.primaryDark}
-                  />
-                }
-                onPress={() => router.push("/ready-boxes")}
-              />
-            )}
           </View>
         </FadeInUp>
 
+        {/* Boxes already packed: how many are waiting, and where each batch is
+            in being picked up. Building a plan without seeing what's already
+            on the table invites packing twice. */}
+        <FadeInUp index={3}>
+          <Card className="gap-4">
+            <View className="flex-row items-center justify-between">
+              <Text variant="heading" className="font-bold">
+                Packed boxes
+              </Text>
+              {readyBoxes.length > 0 && (
+                <Pressable
+                  onPress={() => router.push("/ready-boxes")}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                >
+                  <Text variant="label" tone="brand" className="font-bold">
+                    Hand out →
+                  </Text>
+                </Pressable>
+              )}
+            </View>
+
+            {readyBoxes.length === 0 ? (
+              <Text variant="label" tone="soft">
+                Nothing packed right now. Boxes you pack show up here until
+                families pick them up.
+              </Text>
+            ) : (
+              <>
+                <View className="flex-row gap-3">
+                  <View className="flex-1 rounded-md bg-subtle px-3.5 py-3">
+                    <Text variant="title" className="font-bold">
+                      {readyCount}
+                    </Text>
+                    <Text variant="micro" tone="soft" className="font-semibold">
+                      waiting for pickup
+                    </Text>
+                  </View>
+                  <View className="flex-1 rounded-md bg-subtle px-3.5 py-3">
+                    <Text variant="title" className="font-bold">
+                      {readyBoxes.reduce((n, r) => n + r.boxes_collected, 0)}
+                    </Text>
+                    <Text variant="micro" tone="soft" className="font-semibold">
+                      picked up so far
+                    </Text>
+                  </View>
+                </View>
+
+                {readyBoxes.slice(0, 4).map((run) => {
+                  const left = run.boxes - run.boxes_collected;
+                  const started = run.boxes_collected > 0;
+                  return (
+                    <View key={run.id} className="gap-1.5">
+                      <View className="flex-row items-center justify-between gap-3">
+                        <Text variant="body" numberOfLines={1} className="flex-1 font-semibold">
+                          {run.label || run.box_name || "Packed boxes"}
+                        </Text>
+                        <View
+                          className="rounded-sm px-2 py-0.5"
+                          style={{
+                            backgroundColor: started ? "#FFF2DB" : "#EEF4E9",
+                          }}
+                        >
+                          <Text
+                            variant="micro"
+                            className="font-bold"
+                            style={{ color: started ? "#80500E" : "#3C6534" }}
+                          >
+                            {started ? "Picking up" : "Ready"}
+                          </Text>
+                        </View>
+                      </View>
+                      <ProgressBar
+                        progress={run.boxes > 0 ? run.boxes_collected / run.boxes : 0}
+                        color={COLORS.statusGood}
+                      />
+                      <Text variant="micro" tone="soft">
+                        {left} of {run.boxes} left · packed {packedAgo(run.created_at)}
+                      </Text>
+                    </View>
+                  );
+                })}
+                {readyBoxes.length > 4 && (
+                  <Text variant="micro" tone="soft">
+                    +{readyBoxes.length - 4} more batches
+                  </Text>
+                )}
+              </>
+            )}
+          </Card>
+        </FadeInUp>
+
         {!canPack && (
-          <FadeInUp index={3}>
+          <FadeInUp index={4}>
             <Text variant="label" tone="soft" className="px-1">
               A box needs every category it calls for. Add stock, or choose a
               smaller box.
@@ -504,3 +579,14 @@ export default function BuildBoxesScreen() {
     </>
   );
 }
+
+/** "today", "yesterday", "3 days ago" — how long a batch has been waiting. */
+function packedAgo(iso: string): string {
+  const then = new Date(iso);
+  if (Number.isNaN(then.getTime())) return "";
+  const days = Math.floor((Date.now() - then.getTime()) / 86400000);
+  if (days <= 0) return "today";
+  if (days === 1) return "yesterday";
+  return `${days} days ago`;
+}
+

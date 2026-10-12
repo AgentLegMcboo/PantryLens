@@ -30,11 +30,18 @@ export const cardShadow = {
   elevation: 2,
 };
 
+/**
+ * The card's edge, set as a style so it always renders: a 1px warm outline,
+ * just enough to separate a white card from the cream page in a list without
+ * framing it.
+ */
+const cardEdge = { borderWidth: 1, borderColor: COLORS.borderSoft } as const;
+
 export function Card({ className, style, ...props }: ViewProps) {
   return (
     <View
-      className={cn('rounded-lg border border-hairline bg-card p-card', className)}
-      style={[cardShadow, style]}
+      className={cn('rounded-lg bg-card p-card', className)}
+      style={[cardEdge, cardShadow, style]}
       {...props}
     />
   );

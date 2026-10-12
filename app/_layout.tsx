@@ -33,6 +33,7 @@ export default function RootLayout() {
   const pantryId = usePantryStore(state => state.settings.pantryId);
   // Lives in the store so completing the intro updates routing immediately.
   const onboarded = usePantryStore(state => state.onboarded);
+  const addingPantry = usePantryStore(state => state.addingPantry);
   
   const segments = useSegments();
   const router = useRouter();
@@ -108,11 +109,16 @@ export default function RootLayout() {
     } else if (session && !pantryId && segments[0] !== 'pantry-selection') {
       // User is logged in but doesn't have a pantry assigned yet
       router.replace('/pantry-selection');
-    } else if (session && pantryId && inAuthGroup) {
-      // User is logged in and has a pantry, keep them out of auth screens
+    } else if (
+      session &&
+      pantryId &&
+      (inAuthGroup || (segments[0] === 'pantry-selection' && !addingPantry))
+    ) {
+      // Has a pantry: keep them out of the auth screens and out of setup, which
+      // is only for someone who doesn't belong to a pantry yet.
       router.replace('/(tabs)');
     }
-  }, [isLoaded, session, pantryId, segments, onboarded]);
+  }, [isLoaded, session, pantryId, segments, onboarded, addingPantry]);
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
@@ -140,7 +146,7 @@ export default function RootLayout() {
             above the stack it was pushed from, so the review screen mounted and
             rendered underneath the camera sheet — the scan appeared to do
             nothing at all. Anything that pushes onward must stay in the stack. */}
-        <Stack.Screen name="log-donation" options={{ title: 'Log Donation' }} />
+        <Stack.Screen name="log-donation" options={{ title: 'Log Donation', headerShown: false }} />
         <Stack.Screen name="review-verify" options={{ title: 'Review & Verify' }} />
         <Stack.Screen name="shelf-audit" options={{ title: 'Count a Shelf' }} />
         <Stack.Screen name="audit-review" options={{ title: 'Check the Count' }} />

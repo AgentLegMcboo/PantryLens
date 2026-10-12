@@ -19,6 +19,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackdrop } from '../components/auth-layout';
+import { BrandMark } from '../components/brand-mark';
 import { BoxesMock, ScanMock, VerifyMock, WeighMock } from '../components/onboarding-mocks';
 import { Button, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
@@ -118,27 +119,7 @@ export default function OnboardingScreen() {
 
       <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
         <View className="flex-row items-center justify-between px-gutter pt-2">
-          <View className="flex-row items-center gap-2.5">
-            <View className="h-8 w-8 items-center justify-center rounded-md bg-brand">
-              <MaterialCommunityIcons
-                name="camera-iris"
-                size={17}
-                color={COLORS.textOnPrimary}
-              />
-            </View>
-            <Text
-              // The splash's wordmark (components/brand-splash.tsx), scaled down.
-              style={{
-                fontSize: 19,
-                lineHeight: 24,
-                fontWeight: '800',
-                letterSpacing: -0.4,
-                color: COLORS.textPrimary,
-              }}
-            >
-              PantryLens
-            </Text>
-          </View>
+          <BrandMark />
 
           {!isLast && (
             <Pressable onPress={skip} hitSlop={10} className="px-2 py-2">

@@ -1,18 +1,19 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS, FONTS, RULE_ABOVE } from '../constants/theme';
-import { KeyboardScreen } from '../components/keyboard-screen';
+import { COLORS, RULE_ABOVE } from '../constants/theme';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
-import { Badge, Button, Card, Chip, Input, ItemThumb, Stepper, Text } from '../components/ui';
+import { Badge, Button, Card, Chip, Input, ItemThumb, Sheet, Stepper, Text } from '../components/ui';
 import * as Crypto from 'expo-crypto';
 import { identifyRegion, ScanError } from '../lib/ai_vision';
 import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
 import { nextRowToCheck } from '../lib/review-order';
 import { attachItemPhotos, type PhotoJob } from '../lib/item-photos';
 import type { DetectionBox, ScanCandidate } from '../lib/scan-normalize';
+import { fromRegion, itemsRegion, toRegion } from '../lib/box-geometry';
+import { cropForDisplay } from '../lib/photo';
 import { describeTags, normaliseDietTags } from '../lib/diet';
 import { finishScan, verdictFor, type DetectedSnapshot } from '../lib/scan-history';
 import {
@@ -143,8 +144,36 @@ export default function ReviewVerifyScreen() {
 
   // Draw mode swaps tapping-to-select for dragging-out a new box.
   const [drawMode, setDrawMode] = useState(false);
-  // A drag inside the photo must not also scroll the page under it.
-  const [scrollEnabled, setScrollEnabled] = useState(true);
+  // Details and batch-filing open as sheets over the review.
+  const [moreOpen, setMoreOpen] = useState(false);
+  const [filingOpen, setFilingOpen] = useState(false);
+  // Space left for the photo, so it can be sized to fit without scrolling.
+  const [photoArea, setPhotoArea] = useState({ w: 0, h: 0 });
+  /**
+   * Each photo cropped to the part that holds the donation, for display.
+   * Worked out once from where the scan found things, so the picture doesn't
+   * jump about while boxes are being nudged. Boxes are shown and edited in the
+   * crop's coordinates and stored back in the full photo's.
+   */
+  const [crops, setCrops] = useState<
+    Record<number, { region: DetectionBox; uri: string; width: number; height: number }>
+  >({});
+  useEffect(() => {
+    let cancelled = false;
+    currentScanPhotos.forEach(async (p, index) => {
+      if (!p?.uri || !p.width || !p.height) return;
+      const boxes = currentDraft
+        .filter((item: any) => (item.imageIndex ?? 0) === index && item.box)
+        .map((item: any) => item.box as DetectionBox);
+      const region = itemsRegion(boxes);
+      if (!region) return;
+      const cropped = await cropForDisplay({ uri: p.uri, width: p.width, height: p.height }, region);
+      if (cropped && !cancelled) setCrops((prev) => ({ ...prev, [index]: { region, ...cropped } }));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     log.debug(
@@ -223,6 +252,19 @@ export default function ReviewVerifyScreen() {
    */
   const verifiedRef = useRef(verifiedIds);
   verifiedRef.current = verifiedIds;
+
+  /**
+   * There is always a current item in the footer: when nothing is selected
+   * (on arrival, after switching photos, after removing one), take the first
+   * unchecked item in the photo on screen, else its first item.
+   */
+  useEffect(() => {
+    if (drawMode) return;
+    if (selectedId && draftItems.some((i) => i.uid === selectedId)) return;
+    const here = draftItems.filter((i) => (i.imageIndex ?? 0) === photoIndex);
+    const pick = here.find((i) => !verifiedRef.current[i.uid]) ?? here[0];
+    if (pick) setSelectedId(pick.uid);
+  }, [draftItems, selectedId, drawMode, photoIndex]);
 
   /** Puts a row on screen, switching to its photo if it lives on another. */
   const focusRow = (row: DraftRow | null) => {
@@ -570,7 +612,7 @@ export default function ReviewVerifyScreen() {
       id: item.uid,
       label: item.name ?? 'Item',
       count: item.count ?? 1,
-      box: item.box ?? null,
+      box: item.box ? (crops[photoIndex] ? toRegion(item.box, crops[photoIndex].region) : item.box) : null,
       verified: !!verifiedIds[item.uid],
       needsAttention: (item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition),
     }));
@@ -653,270 +695,309 @@ export default function ReviewVerifyScreen() {
     };
   })();
 
-  return (
-    <View className="flex-1 bg-canvas">
-      {/* Extra foot so the Save button can scroll clear of the pinned bar. */}
-      <KeyboardScreen scrollEnabled={scrollEnabled} contentContainerClassName="pb-40">
-        <View className="gap-2">
-          <Text variant="micro" tone="brand" className="font-semibold tracking-wide">
-            DONATION INTAKE · REVIEW
-          </Text>
-          <Text
-            style={{
-              fontWeight: '800',
-            letterSpacing: -0.6,
-              fontSize: 30,
-              lineHeight: 36,
-              color: COLORS.textPrimary,
-            }}
-          >
-            Check your donation
-          </Text>
-          <Text variant="body" tone="soft">
-            Check names, quantities and condition before adding anything to your shelf.
-          </Text>
-        </View>
-        {/* Progress, stated once as a sentence rather than as a card full of
-          chrome. The bar is the only ornament it needs. */}
-        <View className="gap-2">
-          <View className="flex-row items-center justify-between">
-            <Text variant="heading">
-              {allVerified
-                ? 'Everything checked'
-                : `${verifiedCount} of ${draftItems.length} confirmed`}
-            </Text>
-            <MaterialCommunityIcons
-              name={allVerified ? 'shield-check' : 'shield-search'}
-              size={20}
-              color={allVerified ? COLORS.statusGood : COLORS.primaryLight}
-            />
-          </View>
-          <View className="h-1.5 overflow-hidden rounded-sm bg-muted">
-            <View
-              className={
-                allVerified ? 'h-full rounded-sm bg-good' : 'h-full rounded-sm bg-brand-light'
-              }
-              style={{ width: `${(verifiedCount / draftItems.length) * 100}%` }}
-            />
-          </View>
-        </View>
+  const currentIndex = selectedItem ? selectedIndex : -1;
+  const photoItems = draftItems.filter((item) => (item.imageIndex ?? 0) === photoIndex);
+  const isLowConf = (selectedItem?.confidence ?? 1) < 0.7;
+  const damaged = selectedItem ? !isUsableCondition(selectedItem.condition) : false;
 
-        {photo ? (
-          <View className="gap-3">
+  // The photo is sized to whatever height is left, never wider than the screen,
+  // so the whole review fits without scrolling.
+  const crop = crops[photoIndex];
+  const shownUri = crop?.uri ?? photo?.uri;
+  const aspect = crop
+    ? crop.width / crop.height
+    : photo?.width && photo?.height
+      ? photo.width / photo.height
+      : 4 / 3;
+  const photoWidth = photoArea.w > 0 ? Math.min(photoArea.w, photoArea.h * aspect) : 0;
+
+  return (
+    <KeyboardAvoidingView
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      className="flex-1 bg-canvas"
+    >
+      {/* Progress, and where the batch is going. One slim row instead of a
+          title block, a paragraph and a progress card. */}
+      <View className="gap-2 px-gutter pb-2 pt-2">
+        <View className="flex-row items-center justify-between gap-3">
+          <Text variant="body" className="font-bold">
+            {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
+          </Text>
+          {locations.length > 0 && (
+            <Pressable
+              onPress={() => {
+                cueTap();
+                setFilingOpen(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Choose where this batch is filed"
+              className="flex-row items-center gap-1.5 rounded-full border border-hairline bg-card px-3 py-1.5"
+            >
+              <MaterialCommunityIcons name="map-marker-outline" size={15} color={COLORS.textSecondary} />
+              <Text variant="micro" className="font-semibold" numberOfLines={1}>
+                {batchLocation
+                  ? locations.find((l) => l.id === batchLocation)?.name ?? 'Filed'
+                  : autoFiles
+                    ? 'Auto-filed'
+                    : 'Unfiled'}
+              </Text>
+              <MaterialCommunityIcons name="chevron-down" size={15} color={COLORS.textSecondary} />
+            </Pressable>
+          )}
+        </View>
+        <View className="h-1.5 overflow-hidden rounded-sm bg-muted">
+          <View
+            className={allVerified ? 'h-full rounded-sm bg-good' : 'h-full rounded-sm bg-brand-light'}
+            style={{ width: `${draftItems.length ? (verifiedCount / draftItems.length) * 100 : 0}%` }}
+          />
+        </View>
+      </View>
+
+      {/* The photo, with this item's box selected on it. */}
+      <View
+        className="flex-1 items-center justify-center px-gutter"
+        onLayout={(e) => setPhotoArea({ w: e.nativeEvent.layout.width - 40, h: e.nativeEvent.layout.height })}
+      >
+        {photo && photoWidth > 0 ? (
+          <View style={{ width: photoWidth }}>
             <DetectionOverlay
-              uri={photo.uri}
-              aspectRatio={photo.width && photo.height ? photo.width / photo.height : 4 / 3}
+              key={shownUri}
+              uri={shownUri!}
+              aspectRatio={aspect}
               items={overlayItems}
               selectedId={selectedId}
               drawMode={drawMode}
               onSelect={(id) => {
                 cueTap();
-                setSelectedId((prev) => (prev === id ? null : id));
+                setSelectedId(id);
               }}
-              onBoxChange={handleBoxChange}
-              onDraw={handleDrawBox}
-              onDragStateChange={(dragging) => setScrollEnabled(!dragging)}
+              onBoxChange={(id, box) => handleBoxChange(id, crop ? fromRegion(box, crop.region) : box)}
+              onDraw={(box) => handleDrawBox(crop ? fromRegion(box, crop.region) : box)}
+              onDragStateChange={() => {}}
             />
-
-            <View className="flex-row items-center justify-between gap-3">
-              <Text variant="micro" tone="soft" className="flex-1">
-                {drawMode
-                  ? 'Drag a rectangle around the item that was missed.'
-                  : selectedId
-                    ? 'Drag to move it, or pull a corner to resize.'
-                    : 'Tap a box. Nudge it if it sits off the item.'}
-              </Text>
-              <Button
-                label={drawMode ? 'Cancel' : 'Add missed item'}
-                variant={drawMode ? 'primary' : 'secondary'}
-                size="compact"
+            {/* Controls sit on the picture itself, so nothing appears or
+                disappears around it and the photo never resizes mid-draw. */}
+            <View className="absolute left-2 right-2 top-2 flex-row items-start justify-between" pointerEvents="box-none">
+              {drawMode ? (
+                <View className="rounded-full bg-black/60 px-3 py-1.5" pointerEvents="none">
+                  <Text variant="micro" className="font-bold text-white">
+                    Drag around the missed item
+                  </Text>
+                </View>
+              ) : (
+                <View />
+              )}
+              <Pressable
                 onPress={() => {
+                  cueTap();
                   setDrawMode((m) => !m);
-                  setSelectedId(null);
                 }}
-              />
+                hitSlop={6}
+                accessibilityRole="button"
+                accessibilityLabel={drawMode ? 'Cancel drawing' : 'Add an item the scan missed'}
+                className="flex-row items-center gap-1.5 rounded-full px-3 py-2"
+                style={{ backgroundColor: drawMode ? COLORS.primary : 'rgba(0,0,0,0.6)' }}
+              >
+                <MaterialCommunityIcons name={drawMode ? 'close' : 'plus-box-outline'} size={16} color="#FFFFFF" />
+                <Text variant="micro" className="font-bold text-white">
+                  {drawMode ? 'Cancel' : 'Add missed'}
+                </Text>
+              </Pressable>
             </View>
-          </View>
-        ) : (
-          <Card>
-            <Text variant="label" tone="soft">
-              The photo isn&apos;t available, so everything is listed below instead.
-            </Text>
-          </Card>
-        )}
-
-        {currentScanPhotos.length > 1 && (
-          <View className="flex-row flex-wrap gap-2">
-            {currentScanPhotos.map((_, i) => {
-              const pending = draftItems.filter(
-                (item) => (item.imageIndex ?? 0) === i && !verifiedIds[item.uid],
-              ).length;
-              return (
-                <Chip
-                  key={i}
-                  label={pending > 0 ? `Photo ${i + 1} · ${pending}` : `Photo ${i + 1}`}
-                  selected={i === photoIndex}
+            {currentScanPhotos.length > 1 && !drawMode && (
+              <View className="absolute bottom-2 left-2 flex-row items-center rounded-full bg-black/55">
+                <PhotoArrow
+                  icon="chevron-left"
+                  disabled={photoIndex === 0}
                   onPress={() => {
-                    setPhotoIndex(i);
+                    setPhotoIndex(photoIndex - 1);
                     setSelectedId(null);
                   }}
                 />
-              );
-            })}
-          </View>
-        )}
-
-        {locations.length > 0 && (
-          <View className="gap-2">
-            <Text variant="label" tone="soft" className="font-semibold">
-              {autoFiles ? 'Send the whole batch to one place?' : 'Where is this going?'}
-            </Text>
-            <View className="flex-row flex-wrap gap-2">
-              {locations.map((loc) => (
-                <Chip
-                  key={loc.id}
-                  label={loc.name}
-                  selected={batchLocation === loc.id}
-                  onPress={() => setBatchLocation(batchLocation === loc.id ? null : loc.id)}
-                />
-              ))}
-            </View>
-            <Text variant="micro" tone="soft">
-              {batchLocation
-                ? 'Every item in this scan is filed there, whatever its category.'
-                : autoFiles
-                  ? 'Leave this off and each item goes to the bin that holds its category.'
-                  : 'Optional — leave it off and these land unfiled. Set up which bin holds what in Settings and they will file themselves.'}
-            </Text>
-          </View>
-        )}
-
-        {selectedItem && selectedIndex >= 0 ? (
-          <ItemEditor
-            item={selectedItem}
-            verified={!!verifiedIds[selectedId!]}
-            onChange={(updates) => updateItemAtIndex(selectedIndex, updates)}
-            onRemove={() => removeItemAtIndex(selectedIndex)}
-            onBarcode={() => handleBarcodeScan(selectedItem.uid)}
-            onUndoConfirm={() => unconfirm(selectedItem.uid)}
-            onIdentify={() => handleIdentify(selectedItem.uid)}
-            identifying={identifyingId === selectedItem.uid}
-            onClose={() => setSelectedId(null)}
-          />
-        ) : null}
-
-        <View className="gap-3">
-          <View className="flex-row flex-wrap items-center justify-between gap-2">
-            <Text variant="heading">Donation items</Text>
-            <Text variant="label" tone="soft">
-              {draftItems.length} products ·{' '}
-              {draftItems.reduce((sum, item) => sum + (item.count ?? 1), 0)} units
-            </Text>
-          </View>
-          <Text variant="label" tone="soft">
-            Tap an item to edit it or find it in the photo.
-          </Text>
-          {draftItems.map((item, index) => {
-            const checked = !!verifiedIds[item.uid];
-            const needsReview =
-              !checked && ((item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition));
-            return (
-              <Card
-                key={item.uid}
-                className="gap-3 p-4"
-                style={
-                  selectedId === item.uid
-                    ? { borderColor: COLORS.primary }
-                    : needsReview
-                      ? { borderLeftWidth: 3, borderLeftColor: COLORS.statusWarning }
-                      : undefined
-                }
-              >
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Edit ${item.name || 'Unnamed item'}`}
-                  className="flex-row items-start gap-3"
+                <Text variant="micro" className="font-bold text-white">
+                  Photo {photoIndex + 1}/{currentScanPhotos.length}
+                </Text>
+                <PhotoArrow
+                  icon="chevron-right"
+                  disabled={photoIndex === currentScanPhotos.length - 1}
                   onPress={() => {
-                    cueTap();
-                    focusRow(item);
+                    setPhotoIndex(photoIndex + 1);
+                    setSelectedId(null);
                   }}
-                >
-                  <ItemThumb
-                    imageUrl={item.image_url}
-                    category={item.category ?? 'unknown'}
-                    size="md"
-                  />
-                  <View className="flex-1 gap-1">
-                    <Text variant="body" className="font-semibold">
-                      {item.name || 'Name this item'}
-                    </Text>
-                    <Text variant="label" tone="soft" className="capitalize">
-                      {item.category ?? 'Unknown category'}
-                    </Text>
-                    <View className="flex-row items-center gap-1.5">
-                      <MaterialCommunityIcons
-                        name={checked ? 'check-circle-outline' : 'alert-circle-outline'}
-                        size={16}
-                        color={checked ? COLORS.statusGood : COLORS.primaryDark}
-                      />
-                      <Text variant="micro" tone={checked ? 'good' : 'soft'}>
-                        {checked ? 'Confirmed' : needsReview ? 'Needs review' : 'Ready to check'}
-                      </Text>
-                    </View>
-                  </View>
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={20}
-                    color={COLORS.textSecondary}
-                  />
-                </Pressable>
-                <View className="flex-row flex-wrap items-center justify-between gap-3 pt-3" style={RULE_ABOVE}>
-                  <Stepper
-                    value={item.count ?? 1}
-                    min={1}
-                    onChange={(count) => updateItemAtIndex(index, { count })}
-                  />
-                  <Button
-                    label={checked ? 'Edit' : 'Check item'}
-                    variant="secondary"
-                    size="compact"
-                    onPress={() => {
-                      cueTap();
-                      focusRow(item);
-                    }}
-                  />
-                </View>
-              </Card>
+                />
+              </View>
+            )}
+          </View>
+        ) : !photo ? (
+          <Text variant="label" tone="soft" className="text-center">
+            The photo isn&apos;t available, so step through the items below.
+          </Text>
+        ) : null}
+      </View>
+
+
+      {/* Everything found in THIS photo, as a strip right under it. Tap one to
+          bring it into the footer. Replaces the long list of item cards. */}
+      {/* Fixed height, empty or not, so the photo above never resizes. */}
+      <View style={{ height: 52 }}>
+        {photoItems.length === 0 ? (
+          <Text variant="micro" tone="soft" className="px-gutter pt-4">
+            Nothing found in this photo yet.
+          </Text>
+        ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerClassName="items-center gap-2 px-gutter py-2.5"
+          style={{ flexGrow: 0 }}
+        >
+          {photoItems.map((item) => {
+            const checked = !!verifiedIds[item.uid];
+            const flagged = !checked && ((item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition));
+            const current = item.uid === selectedId;
+            return (
+              <Pressable
+                key={item.uid}
+                onPress={() => {
+                  cueTap();
+                  focusRow(item);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: current }}
+                className="max-w-[170px] flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
+                style={{
+                  borderColor: current ? COLORS.primary : COLORS.borderSoft,
+                  backgroundColor: current ? COLORS.surfaceContainer : COLORS.cardSurface,
+                }}
+              >
+                <MaterialCommunityIcons
+                  name={checked ? 'check-circle' : flagged ? 'alert-circle' : 'circle-outline'}
+                  size={15}
+                  color={checked ? COLORS.statusGood : flagged ? COLORS.statusWarning : COLORS.borderStrong}
+                />
+                <Text variant="label" numberOfLines={1} className={current ? 'font-bold' : 'font-semibold'}>
+                  {item.name?.trim() || 'Unnamed'}
+                </Text>
+              </Pressable>
             );
           })}
-        </View>
-      </KeyboardScreen>
+        </ScrollView>
+        )}
+      </View>
 
-      {/* THE CONFIRM BAR.
-          Pinned to the screen rather than living at the end of the editor card,
-          because that card changes height from item to item (no barcode button
-          for a barcode match, a damage warning for a flagged tin), and a button
-          that moves can't be tapped quickly. Anchored at the bottom, the button
-          stays exactly where the thumb is. */}
+      {/* THE FOOTER: one item at a time, and the buttons that move through them.
+          Pinned at the bottom so the thumb never has to travel, and everything
+          needed for the common case is here; the rest is behind "More". */}
       <View
-        className="absolute bottom-0 left-0 right-0 bg-canvas px-gutter pt-3"
+        className="gap-3 bg-card px-gutter pt-3"
         style={[RULE_ABOVE, { paddingBottom: insets.bottom + 12 }]}
       >
-        {bar.hint ? (
-          <Text variant="micro" tone="soft" numberOfLines={1} className="mb-2">
-            {bar.hint}
+        {selectedItem ? (
+          <>
+            {/* Who: thumbnail, then the name and what we know about it stacked
+                in one column, so every line starts at the same edge. */}
+            <View className="flex-row items-start gap-3">
+              <ItemThumb
+                imageUrl={selectedItem.image_url}
+                category={selectedItem.category ?? 'unknown'}
+                tone={damaged ? 'critical' : 'brand'}
+              />
+              <View className="flex-1 gap-1.5">
+                {/* Edits in place: it looks like the item's name, not a form box. */}
+                <TextInput
+                  value={selectedItem.name ?? ''}
+                  placeholder="Name this item"
+                  placeholderTextColor={COLORS.textSecondary}
+                  onChangeText={(txt) => updateItemAtIndex(selectedIndex, { name: txt })}
+                  multiline
+                  blurOnSubmit
+                  className="p-0 text-[17px] font-bold leading-[22px] text-ink"
+                  style={{ paddingTop: 0, paddingBottom: 0, textAlignVertical: 'top' }}
+                />
+                <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
+                  <Text variant="micro" tone={isLowConf ? 'warn' : 'soft'} className="font-semibold">
+                    {selectedItem.resolvedBy === 'barcode'
+                      ? 'From the barcode'
+                      : selectedItem.resolvedBy === 'catalogue'
+                        ? 'Named by your pantry'
+                        : `${Math.round((selectedItem.confidence ?? 0) * 100)}% sure`}
+                  </Text>
+                  <Text variant="micro" tone="soft">·</Text>
+                  {/* Category cycles on tap; the full list is under details. */}
+                  <Pressable
+                    onPress={() => {
+                      cueTap();
+                      const i = CATEGORIES.indexOf(selectedItem.category as string);
+                      updateItemAtIndex(selectedIndex, {
+                        category: CATEGORIES[(i + 1) % CATEGORIES.length] as any,
+                      });
+                    }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Category ${selectedItem.category}. Tap to change.`}
+                    className="flex-row items-center gap-0.5"
+                  >
+                    <Text variant="micro" className="font-bold capitalize">
+                      {selectedItem.category ?? 'unknown'}
+                    </Text>
+                    <MaterialCommunityIcons name="chevron-down" size={13} color={COLORS.textSecondary} />
+                  </Pressable>
+                  <Text variant="micro" tone="soft">·</Text>
+                  <Text variant="micro" tone={damaged ? 'critical' : 'soft'} className="font-semibold">
+                    {CONDITION_LABELS[selectedItem.condition || 'ok']}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* How many, plus the way into everything else, and paging. */}
+            <View className="flex-row items-center gap-2">
+              <Stepper
+                value={selectedItem.count ?? 1}
+                min={1}
+                onChange={(count) => updateItemAtIndex(selectedIndex, { count })}
+              />
+              <Pressable
+                onPress={() => {
+                  cueTap();
+                  setMoreOpen(true);
+                }}
+                accessibilityRole="button"
+                className="h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-md bg-subtle"
+              >
+                <MaterialCommunityIcons name="tune-variant" size={16} color={COLORS.textPrimary} />
+                <Text variant="label" className="font-bold">
+                  Details
+                </Text>
+              </Pressable>
+              <PhotoArrow
+                icon="chevron-left"
+                dark
+                label="Previous item"
+                disabled={currentIndex <= 0}
+                onPress={() => focusRow(draftItems[currentIndex - 1])}
+              />
+              <PhotoArrow
+                icon="chevron-right"
+                dark
+                label="Next item"
+                disabled={currentIndex >= draftItems.length - 1}
+                onPress={() => focusRow(draftItems[currentIndex + 1])}
+              />
+            </View>
+          </>
+        ) : (
+          <Text variant="label" tone="soft">
+            {photoItems.length === 0
+              ? 'Nothing was found in this photo. Use "Add missed item" to box something.'
+              : 'Tap an item to check it.'}
           </Text>
-        ) : null}
+        )}
 
-        {/* Confirm and Add, side by side. Adding used to be at the very bottom of
-            the page, a scroll away from the button you'd just been confirming
-            with.
-
-            The two keep FIXED positions and widths. Confirm is the wide one on
-            the left, where rapid taps land, and it ends as a non-tappable "All
-            confirmed". Add is a separate target on the right, so a burst of
-            confirms can never spill into saving. Adding with items still
-            unconfirmed asks first (handleSaveToInventory). */}
+        {/* Confirm and Add, side by side, in fixed positions. Confirm is the wide
+            one on the left, where rapid taps land, and it ends as a
+            non-tappable "All confirmed", so a burst of confirms can never spill
+            into saving. Adding with items unconfirmed asks first. */}
         <View className="flex-row gap-2">
           <View className="flex-[3]">
             {bar.action ? (
@@ -936,8 +1017,6 @@ export default function ReviewVerifyScreen() {
                 onPress={bar.action}
               />
             ) : (
-              // Same height as a button with its lip, so nothing shifts when the
-              // last confirm turns the button into this.
               <View className="min-h-[54px] flex-row items-center justify-center gap-2">
                 <MaterialCommunityIcons
                   name={bar.icon}
@@ -950,13 +1029,11 @@ export default function ReviewVerifyScreen() {
               </View>
             )}
           </View>
-
           <View className="flex-[2]">
             <Button
               label={`Add ${draftItems.length}`}
               accessibilityLabel={`Add ${draftItems.length} ${draftItems.length === 1 ? 'item' : 'items'} to inventory`}
               block
-              // The obvious next step only once everything is checked.
               variant={allVerified ? 'primary' : 'secondary'}
               loading={saving}
               className="px-3"
@@ -972,7 +1049,93 @@ export default function ReviewVerifyScreen() {
           </View>
         </View>
       </View>
-    </View>
+
+      {/* Everything else about the current item. */}
+      <Sheet
+        visible={moreOpen && !!selectedItem}
+        onClose={() => setMoreOpen(false)}
+        title={selectedItem?.name?.trim() || 'This item'}
+        subtitle="Details"
+      >
+        {selectedItem ? (
+          <ItemEditor
+            compact
+            item={selectedItem}
+            verified={!!verifiedIds[selectedItem.uid]}
+            onChange={(updates) => updateItemAtIndex(selectedIndex, updates)}
+            onRemove={() => {
+              setMoreOpen(false);
+              removeItemAtIndex(selectedIndex);
+            }}
+            onBarcode={() => {
+              setMoreOpen(false);
+              handleBarcodeScan(selectedItem.uid);
+            }}
+            onUndoConfirm={() => unconfirm(selectedItem.uid)}
+            onIdentify={() => handleIdentify(selectedItem.uid)}
+            identifying={identifyingId === selectedItem.uid}
+            onClose={() => setMoreOpen(false)}
+          />
+        ) : null}
+      </Sheet>
+
+      {/* Where this whole batch is going — decided once, by the person carrying it. */}
+      <Sheet
+        visible={filingOpen}
+        onClose={() => setFilingOpen(false)}
+        title={autoFiles ? 'Send the whole batch to one place?' : 'Where is this going?'}
+      >
+        <View className="flex-row flex-wrap gap-2">
+          {locations.map((loc) => (
+            <Chip
+              key={loc.id}
+              label={loc.name}
+              selected={batchLocation === loc.id}
+              onPress={() => setBatchLocation(batchLocation === loc.id ? null : loc.id)}
+            />
+          ))}
+        </View>
+        <Text variant="micro" tone="soft" className="mt-3">
+          {batchLocation
+            ? 'Every item in this scan is filed there, whatever its category.'
+            : autoFiles
+              ? 'Leave this off and each item goes to the bin that holds its category.'
+              : 'Optional — leave it off and these land unfiled. Set up which bin holds what in Settings and they will file themselves.'}
+        </Text>
+      </Sheet>
+    </KeyboardAvoidingView>
+  );
+}
+
+/** A small round arrow: photo paging (on the picture) or item paging (footer). */
+function PhotoArrow({
+  icon,
+  onPress,
+  disabled,
+  dark,
+  label,
+}: {
+  icon: 'chevron-left' | 'chevron-right';
+  onPress: () => void;
+  disabled?: boolean;
+  dark?: boolean;
+  label?: string;
+}) {
+  return (
+    <Pressable
+      onPress={() => {
+        cueTap();
+        onPress();
+      }}
+      disabled={disabled}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={label ?? (icon === 'chevron-left' ? 'Previous photo' : 'Next photo')}
+      className={dark ? 'h-11 w-10 items-center justify-center rounded-md bg-subtle' : 'h-9 w-9 items-center justify-center'}
+      style={{ opacity: disabled ? 0.35 : 1 }}
+    >
+      <MaterialCommunityIcons name={icon} size={22} color={dark ? COLORS.textPrimary : '#FFFFFF'} />
+    </Pressable>
   );
 }
 
@@ -993,7 +1156,10 @@ function ItemEditor({
   onIdentify,
   identifying,
   onClose,
+  compact,
 }: {
+  /** The short version for the Details sheet: no card, one row per choice. */
+  compact?: boolean;
   item: DraftRow;
   verified: boolean;
   onChange: (updates: Partial<InventoryItem>) => void;
@@ -1006,8 +1172,141 @@ function ItemEditor({
 }) {
   const isLowConf = (item.confidence ?? 1) < 0.7;
 
+  if (compact) {
+    return (
+      <View className="gap-4">
+        <View className="flex-row items-center justify-between">
+          {item.resolvedBy === 'barcode' ? (
+            <Badge label="From the barcode" tone="good" />
+          ) : item.resolvedBy === 'catalogue' ? (
+            <Badge label="Named by your pantry" tone="brand" />
+          ) : (
+            <Badge
+              label={`${Math.round((item.confidence ?? 0) * 100)}% sure`}
+              tone={isLowConf ? 'warn' : 'good'}
+            />
+          )}
+          <View className="flex-row items-center gap-5">
+            {verified && (
+              <Pressable
+                onPress={onUndoConfirm}
+                hitSlop={8}
+                accessibilityLabel="Undo confirm"
+                className="flex-row items-center gap-1"
+              >
+                <MaterialCommunityIcons name="undo-variant" size={16} color={COLORS.primaryDark} />
+                <Text variant="micro" tone="brand" className="font-bold">
+                  Undo confirm
+                </Text>
+              </Pressable>
+            )}
+            <Pressable
+              onPress={onRemove}
+              hitSlop={8}
+              accessibilityLabel="Remove this item"
+              className="flex-row items-center gap-1"
+            >
+              <MaterialCommunityIcons name="trash-can-outline" size={18} color={COLORS.statusCritical} />
+              <Text variant="micro" tone="critical" className="font-bold">
+                Remove
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {describeTags(item.diet_tags ?? []) ? (
+          <View className="flex-row gap-2 rounded-md bg-subtle px-3 py-2">
+            <MaterialCommunityIcons name="information-outline" size={15} color={COLORS.textSecondary} />
+            <Text variant="micro" tone="soft" className="flex-1 capitalize">
+              {describeTags(item.diet_tags ?? [])}
+            </Text>
+          </View>
+        ) : null}
+
+        {/* The footer already edits the name; only a box drawn by hand gets the
+            AI identify option here. */}
+        {item.drawnByHand && (
+          <Button
+            label={item.name?.trim() ? 'Identify again with AI' : 'Identify with AI'}
+            variant="secondary"
+            size="compact"
+            loading={identifying}
+            icon={<MaterialCommunityIcons name="auto-fix" size={17} color={COLORS.textPrimary} />}
+            onPress={onIdentify}
+          />
+        )}
+
+        <View className="gap-1.5">
+          <Text variant="micro" tone="soft" className="font-semibold">
+            Category
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+            {CATEGORIES.map((cat) => (
+              <Chip
+                key={cat}
+                label={cat}
+                selected={item.category === cat}
+                onPress={() => onChange({ category: cat as any })}
+              />
+            ))}
+          </ScrollView>
+        </View>
+
+        <View className="gap-1.5">
+          <Text variant="micro" tone="soft" className="font-semibold">
+            Condition
+          </Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">
+            {(Object.keys(CONDITION_LABELS) as Condition[]).map((cond) => {
+              const active = (item.condition || 'ok') === cond;
+              const good = cond === 'ok';
+              return (
+                <Chip
+                  key={cond}
+                  label={CONDITION_LABELS[cond]}
+                  selected={active}
+                  className={active && !good ? 'border-critical bg-critical' : undefined}
+                  onPress={() => {
+                    if (!good) cueWarn();
+                    onChange({ condition: cond });
+                  }}
+                />
+              );
+            })}
+          </ScrollView>
+          {!isUsableCondition(item.condition) && (
+            <Text variant="micro" tone="critical">
+              Held back from boxes until inspected again.
+            </Text>
+          )}
+        </View>
+
+        <View className="flex-row items-end gap-3">
+          <View className="flex-1">
+            <Input
+              label="Expires"
+              placeholder="YYYY-MM-DD"
+              value={item.expiration || ''}
+              onChangeText={(txt) => onChange({ expiration: txt })}
+            />
+          </View>
+          {item.resolvedBy !== 'barcode' && (
+            <Button
+              label="Barcode"
+              variant="secondary"
+              size="compact"
+              className="mb-1"
+              icon={<MaterialCommunityIcons name="barcode-scan" size={17} color={COLORS.textPrimary} />}
+              onPress={onBarcode}
+            />
+          )}
+        </View>
+      </View>
+    );
+  }
+
   return (
-    <Card className={verified ? 'border-good' : 'border-brand-light'}>
+    <Card style={{ borderColor: verified ? COLORS.statusGood : COLORS.primaryLight }}>
       <View className="flex-row items-center justify-between">
         {/* WHERE this name came from, not just how sure something is about it.
             "The manufacturer says so" and "your pantry has called it this a

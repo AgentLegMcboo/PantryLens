@@ -191,3 +191,62 @@ export function cropRect(
 
   return { originX: x0, originY: y0, width, height };
 }
+
+/**
+ * The part of a photo that holds every box, padded, as fractions of the photo.
+ *
+ * Null when cropping wouldn't help: no boxes, or they already cover most of the
+ * frame. Never shrinks below `minSide` on either axis, so one tiny box doesn't
+ * turn into a postage stamp blown up to fill the screen.
+ */
+export function itemsRegion(
+  boxes: DetectionBox[],
+  padding = 0.06,
+  minSide = 0.35,
+): DetectionBox | null {
+  if (boxes.length === 0) return null;
+  let left = Math.min(...boxes.map((b) => b.left)) - padding;
+  let top = Math.min(...boxes.map((b) => b.top)) - padding;
+  let right = Math.max(...boxes.map((b) => b.left + b.width)) + padding;
+  let bottom = Math.max(...boxes.map((b) => b.top + b.height)) + padding;
+
+  const grow = (lo: number, hi: number) => {
+    const size = hi - lo;
+    if (size >= minSide) return [lo, hi];
+    const extra = (minSide - size) / 2;
+    return [lo - extra, hi + extra];
+  };
+  [left, right] = grow(left, right);
+  [top, bottom] = grow(top, bottom);
+
+  left = Math.max(0, left);
+  top = Math.max(0, top);
+  right = Math.min(1, right);
+  bottom = Math.min(1, bottom);
+
+  const width = right - left;
+  const height = bottom - top;
+  if (width * height > 0.85) return null;
+  return { left, top, width, height };
+}
+
+/** A box on the full photo, expressed inside `region` (both as fractions). */
+export function toRegion(box: DetectionBox, region: DetectionBox): DetectionBox {
+  return {
+    left: (box.left - region.left) / region.width,
+    top: (box.top - region.top) / region.height,
+    width: box.width / region.width,
+    height: box.height / region.height,
+  };
+}
+
+/** The inverse of toRegion: a box drawn on the cropped view, back on the full photo. */
+export function fromRegion(box: DetectionBox, region: DetectionBox): DetectionBox {
+  return {
+    left: region.left + box.left * region.width,
+    top: region.top + box.top * region.height,
+    width: box.width * region.width,
+    height: box.height * region.height,
+  };
+}
+

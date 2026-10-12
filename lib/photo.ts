@@ -117,3 +117,36 @@ export async function cropRegion(
   });
   return result.base64 ?? null;
 }
+
+/**
+ * A copy of a photo cut down to `region` (fractions of the photo), for showing
+ * on screen. Review uses it to zoom onto the part of the picture that actually
+ * has the donation in it. The manipulator writes pixels in display orientation,
+ * so a photo stored sideways comes out upright.
+ *
+ * Display only: the scan pipeline and the item crops keep using the full photo
+ * and its own box coordinates.
+ */
+export async function cropForDisplay(
+  source: { uri: string; width: number; height: number },
+  region: DetectionBox,
+): Promise<{ uri: string; width: number; height: number } | null> {
+  try {
+    const rect = {
+      originX: Math.round(region.left * source.width),
+      originY: Math.round(region.top * source.height),
+      width: Math.round(region.width * source.width),
+      height: Math.round(region.height * source.height),
+    };
+    if (rect.width < 32 || rect.height < 32) return null;
+    const context = ImageManipulator.manipulate(source.uri);
+    context.crop(rect);
+    const rendered = await context.renderAsync();
+    const result = await rendered.saveAsync({ compress: 0.85, format: SaveFormat.JPEG });
+    return { uri: result.uri, width: result.width, height: result.height };
+  } catch (err) {
+    log.warn('scan', 'display crop failed, showing the whole photo', err);
+    return null;
+  }
+}
+

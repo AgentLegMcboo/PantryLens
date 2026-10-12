@@ -1,164 +1,142 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
-import React, { useState } from 'react';
-import { Alert, Image, Pressable, View } from 'react-native';
+import React, { useRef, useState } from 'react';
+import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Button, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
-import { Button, Chip, Screen, Text } from '../components/ui';
-import { cueTap, cueWarn } from '../lib/feedback';
+import { processImageScan, ScanError } from '../lib/ai_vision';
+import { cuePress, cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
-import { processImageScan, ScanError } from '../lib/ai_vision';
 import { startScan, uploadScanPhotos } from '../lib/scan-history';
 import { SOURCE_ORG_LABELS, type SourceOrg, usePantryStore } from '../lib/store';
 
 /**
- * Photographing a donation.
+ * Photographing a donation — the camera IS the screen.
  *
- * Built on expo-image-picker rather than a camera view so it runs in Expo Go,
- * where custom native modules are not available.
+ * It used to open on a form: a dashed "photograph the donation" box, source
+ * chips and two buttons, and only then the system camera, which closed again
+ * after every single shot. Now the live viewfinder is the first thing you see:
+ * shoot as many photos as the pile needs without leaving it, add one from the
+ * library if it's already on the phone, then Detect.
  *
- * Every photo goes through preparePhoto before it reaches state — straight off
- * the picker a single shot is close to a megabyte of base64, which measured at
- * 24 seconds for one image and would pass the function's timeout at six.
+ * Every photo still goes through preparePhoto before it reaches state — a raw
+ * shot is close to a megabyte of base64, which measured at 24 seconds for one
+ * image and would pass the function's timeout at six.
  */
 
 const MAX_PHOTOS = 6;
-const PICKER_QUALITY = 0.6;
-
-/** Exactly what preparePhoto returns — dimensions included, because the review
- *  overlay needs them to place detection boxes. */
-type Shot = PreparedPhoto;
+const QUALITY = 0.6;
 
 /** The same list bulk intake offers, so a donation reads the same either way in. */
 const SOURCES: SourceOrg[] = ['grocery', 'food_bank', 'drive', 'individual', 'other'];
 
+/** Translucent dark surface for controls floating over the live picture. */
+const GLASS = 'rgba(20,16,14,0.55)';
+
 export default function LogDonationScreen() {
   const router = useRouter();
-  const setDraft = usePantryStore(state => state.setDraft);
-  const setDraftSource = usePantryStore(state => state.setDraftSource);
-  const setCurrentScan = usePantryStore(state => state.setCurrentScan);
-  const settings = usePantryStore(state => state.settings);
+  const insets = useSafeAreaInsets();
+  const setDraft = usePantryStore((state) => state.setDraft);
+  const setDraftSource = usePantryStore((state) => state.setDraftSource);
+  const setCurrentScan = usePantryStore((state) => state.setCurrentScan);
+  const settings = usePantryStore((state) => state.settings);
 
-  const [shots, setShots] = useState<Shot[]>([]);
+  const [permission, requestPermission] = useCameraPermissions();
+  const camera = useRef<CameraView>(null);
+  const [torch, setTorch] = useState(false);
+  const [capturing, setCapturing] = useState(false);
+  const [shots, setShots] = useState<PreparedPhoto[]>([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   /**
-   * Who it came from.
-   *
-   * The pantry's process starts with "we receive donations from local groceries
-   * or food banks", and bulk intake has always asked — but photographing a
-   * donation, the path actually used most, threw that away. Grocery rescue and a
-   * school food drive are different things to report on and different things to
-   * thank.
+   * Who it came from. Grocery rescue and a school food drive are different
+   * things to report on and different things to thank, so it's asked here as
+   * well as in bulk intake — optional, one tap.
    */
   const [sourceOrg, setSourceOrg] = useState<SourceOrg | null>(null);
 
-  const addShots = async (assets: ImagePicker.ImagePickerAsset[]) => {
-    // Shrunk before it ever reaches state, so what is held in memory and what is
-    // uploaded are the same modest thing.
-    const prepared = (await Promise.all(assets.map(preparePhoto))).filter(
-      (p): p is NonNullable<typeof p> => p !== null,
-    );
+  // A brief white flash on capture: the shutter sound is often off, and without
+  // it nothing on screen says the photo was taken.
+  const flash = useSharedValue(0);
+  const flashStyle = useAnimatedStyle(() => ({ opacity: flash.value }));
 
+  const atLimit = shots.length >= MAX_PHOTOS;
+  const busy = capturing || isAnalyzing;
+
+  const addPrepared = async (assets: ImagePicker.ImagePickerAsset[]) => {
+    const prepared = (await Promise.all(assets.map(preparePhoto))).filter(
+      (p): p is PreparedPhoto => p !== null,
+    );
     if (prepared.length === 0) {
-      log.warn('scan', 'no usable photos came back from the picker');
+      log.warn('scan', 'no usable photos came back');
       return;
     }
-
-    cueTap();
-    setShots(prev => [...prev, ...prepared].slice(0, MAX_PHOTOS));
+    setShots((prev) => [...prev, ...prepared].slice(0, MAX_PHOTOS));
   };
 
-  const handleTakePhoto = async () => {
-    if (shots.length >= MAX_PHOTOS) return;
-
-    const permission = await ImagePicker.requestCameraPermissionsAsync();
-    log.debug('scan', `camera permission: ${permission.status}`);
-    if (!permission.granted) {
-      // Denying twice makes this permanent on iOS, so say where to undo it.
-      Alert.alert(
-        'Camera access needed',
-        'PantryLens uses the camera to read donation labels. Turn it on in Settings › PantryLens.',
-      );
-      return;
+  const handleShutter = async () => {
+    if (atLimit || busy || !camera.current) return;
+    cuePress();
+    setCapturing(true);
+    flash.value = withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 220 }));
+    try {
+      const photo = await camera.current.takePictureAsync({ quality: QUALITY, base64: true, exif: false });
+      if (photo) {
+        // preparePhoto reads the picker's asset shape; a camera capture carries
+        // the same fields it uses (uri, width, height, base64).
+        await addPrepared([photo as unknown as ImagePicker.ImagePickerAsset]);
+      }
+    } catch (err) {
+      log.error('scan', 'capture failed', err);
+      cueWarn();
+    } finally {
+      setCapturing(false);
     }
-
-    const result = await ImagePicker.launchCameraAsync({
-      mediaTypes: ['images'],
-      quality: PICKER_QUALITY,
-      base64: true,
-      exif: false,
-    });
-
-    if (result.canceled) {
-      log.debug('scan', 'camera cancelled');
-      return;
-    }
-    await addShots(result.assets);
   };
 
   const handlePickFromLibrary = async () => {
-    if (shots.length >= MAX_PHOTOS) return;
-
-    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (!permission.granted) {
+    if (atLimit || busy) return;
+    cueTap();
+    const libraryPermission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!libraryPermission.granted) {
       Alert.alert(
         'Photo access needed',
         'Allow photo access in Settings › PantryLens to pick donation photos you already took.',
       );
       return;
     }
-
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
-      quality: PICKER_QUALITY,
+      quality: QUALITY,
       base64: true,
       exif: false,
       allowsMultipleSelection: true,
       selectionLimit: MAX_PHOTOS - shots.length,
     });
-
-    if (result.canceled) {
-      log.debug('scan', 'library picker cancelled');
-      return;
-    }
-    await addShots(result.assets);
+    if (result.canceled) return;
+    await addPrepared(result.assets);
   };
 
   const removeShot = (index: number) => {
     cueTap();
-    setShots(prev => prev.filter((_, i) => i !== index));
+    setShots((prev) => prev.filter((_, i) => i !== index));
   };
 
   const handleDetectItems = async () => {
-    // This used to return silently, which is exactly what a disabled-looking
-    // button pressed with no photos attached feels like: nothing happens and
-    // nothing explains why.
-    if (shots.length === 0) {
-      log.warn('scan', 'detect pressed with no photos attached');
-      cueWarn();
-      Alert.alert('No photos yet', 'Take a photo of the donation first, then detect items.');
-      return;
-    }
-    if (isAnalyzing) {
-      log.debug('scan', 'detect pressed while a scan was already running — ignored');
-      return;
-    }
-
+    if (shots.length === 0 || isAnalyzing) return;
     log.debug('scan', `detect pressed with ${shots.length} photo(s)`);
     setIsAnalyzing(true);
 
     try {
       const startedAt = Date.now();
-      const { candidates, photosRead, photosSent } = await processImageScan(
-        shots.map(s => s.base64),
-      );
-      log.debug('scan', `navigating to review with ${candidates.length} draft row(s)`);
+      const { candidates, photosRead, photosSent } = await processImageScan(shots.map((s) => s.base64));
 
       // Opened BEFORE the review, so a scan the volunteer walks away from is
-      // still recorded — an abandoned scan says as much about the model as a
-      // saved one. Best-effort throughout: a null record changes nothing about
-      // the intake that follows.
+      // still recorded. Best-effort: a null record changes nothing that follows.
       const record = await startScan({
         pantryId: settings.pantryId,
         mode: 'donation',
@@ -173,13 +151,11 @@ export default function LogDonationScreen() {
       // onto them, so the item and the thing on the shelf stay connected.
       setDraft(
         candidates as any,
-        shots.map(s => ({ uri: s.uri, width: s.width, height: s.height })),
+        shots.map((s) => ({ uri: s.uri, width: s.width, height: s.height })),
       );
       setDraftSource(sourceOrg);
 
-      // A photo that failed on its own must be said out loud. The rows from the
-      // others are still worth having, but a volunteer who is not told will
-      // assume everything in the pile made it onto the list.
+      // A photo that failed on its own must be said out loud.
       if (photosRead < photosSent) {
         cueWarn();
         Alert.alert(
@@ -189,13 +165,10 @@ export default function LogDonationScreen() {
         );
         return;
       }
-
       router.push('/review-verify');
     } catch (err) {
       log.error('scan', 'scan failed', err);
       cueWarn();
-      // ScanError messages are written for the volunteer holding the phone.
-      // Anything else is a bug, and saying so is more useful than a stack trace.
       const message =
         err instanceof ScanError
           ? err.message
@@ -209,104 +182,236 @@ export default function LogDonationScreen() {
     }
   };
 
-  const atLimit = shots.length >= MAX_PHOTOS;
+  // Still finding out whether we may use the camera.
+  if (!permission) return <View className="flex-1 bg-black" />;
+
+  if (!permission.granted) {
+    return (
+      <View className="flex-1 items-center justify-center gap-4 bg-black px-8">
+        <MaterialCommunityIcons name="camera-off-outline" size={44} color="#FFFFFF" />
+        <Text variant="title" className="text-center text-white">
+          Camera access needed
+        </Text>
+        <Text variant="body" className="text-center text-white/75">
+          PantryLens reads donation labels from photos. Nothing is saved until you check every line.
+        </Text>
+        <Button label="Allow the camera" onPress={requestPermission} />
+        <Button label="Choose from library instead" variant="ghost" onPress={handlePickFromLibrary} />
+        <Pressable onPress={() => router.back()} hitSlop={10} className="mt-2">
+          <Text variant="label" className="font-semibold text-white/70">
+            Go back
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
+
+  const hint = isAnalyzing
+    ? 'Reading labels…'
+    : atLimit
+      ? `${MAX_PHOTOS} photos — that's the most for one scan`
+      : shots.length === 0
+        ? 'Lay items out so the labels face the camera'
+        : `${shots.length} of ${MAX_PHOTOS} · a big pile reads better in sections`;
 
   return (
-    <Screen>
-      {shots.length === 0 ? (
-        <Pressable onPress={handleTakePhoto}>
-          <View className="h-56 items-center justify-center rounded-lg border-2 border-dashed border-brand-light bg-subtle px-8">
-            <MaterialCommunityIcons name="camera-outline" size={40} color={COLORS.primaryLight} />
-            <Text variant="heading" className="mt-3">
-              Photograph the donation
-            </Text>
-            <Text variant="label" tone="soft" className="mt-2 text-center">
-              Lay items out so the labels face the camera.
+    <View className="flex-1 bg-black">
+      <CameraView ref={camera} style={{ flex: 1 }} facing="back" enableTorch={torch} />
+
+      {/* Capture flash */}
+      <Animated.View pointerEvents="none" className="absolute inset-0 bg-white" style={flashStyle} />
+
+      <View className="absolute inset-0" pointerEvents="box-none">
+        {/* Top: close and torch */}
+        <View
+          className="flex-row items-center justify-between px-gutter"
+          style={{ paddingTop: insets.top + 8 }}
+        >
+          <RoundButton icon="close" label="Close" onPress={() => router.back()} />
+          <RoundButton
+            icon={torch ? 'flashlight' : 'flashlight-off'}
+            label={torch ? 'Turn the light off' : 'Turn the light on'}
+            active={torch}
+            onPress={() => {
+              cueTap();
+              setTorch((t) => !t);
+            }}
+          />
+        </View>
+
+        {/* Viewfinder corners */}
+        <View className="flex-1 items-center justify-center" pointerEvents="none">
+          <View style={{ width: '78%', aspectRatio: 0.85 }}>
+            <Corner style={{ top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 18 }} />
+            <Corner style={{ top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 18 }} />
+            <Corner style={{ bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 18 }} />
+            <Corner style={{ bottom: 0, right: 0, borderBottomWidth: 4, borderRightWidth: 4, borderBottomRightRadius: 18 }} />
+          </View>
+        </View>
+
+        {/* Hint */}
+        <View className="items-center pb-3" pointerEvents="none">
+          <View className="flex-row items-center gap-2 rounded-full px-4 py-2" style={{ backgroundColor: GLASS }}>
+            {isAnalyzing && <ActivityIndicator size="small" color="#FFFFFF" />}
+            <Text variant="label" className="font-semibold text-white">
+              {hint}
             </Text>
           </View>
-        </Pressable>
-      ) : (
-        <View className="flex-row flex-wrap gap-3">
-          {shots.map((shot, i) => (
-            <View key={`${shot.uri}-${i}`} className="aspect-square w-[30%]">
-              <Image source={{ uri: shot.uri }} className="h-full w-full rounded-md bg-muted" />
+        </View>
+
+        {/* Shots taken so far */}
+        {shots.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerClassName="gap-3 px-gutter pb-3 pt-2"
+            style={{ flexGrow: 0 }}
+          >
+            {shots.map((shot, i) => (
+              <View key={`${shot.uri}-${i}`}>
+                <Image source={{ uri: shot.uri }} className="h-16 w-16 rounded-lg border-2 border-white" />
+                <Pressable
+                  onPress={() => removeShot(i)}
+                  hitSlop={8}
+                  accessibilityLabel={`Remove photo ${i + 1}`}
+                  className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full bg-black"
+                >
+                  <MaterialCommunityIcons name="close" size={14} color="#FFFFFF" />
+                </Pressable>
+              </View>
+            ))}
+          </ScrollView>
+        )}
+
+        {/* Where it came from — optional, one tap */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerClassName="gap-2 px-gutter pb-3"
+          style={{ flexGrow: 0 }}
+        >
+          {SOURCES.map((src) => {
+            const on = sourceOrg === src;
+            return (
               <Pressable
-                onPress={() => removeShot(i)}
-                hitSlop={8}
-                accessibilityLabel={`Remove photo ${i + 1}`}
-                className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-md bg-ink"
+                key={src}
+                onPress={() => {
+                  cueTap();
+                  setSourceOrg(on ? null : src);
+                }}
+                accessibilityRole="button"
+                accessibilityState={{ selected: on }}
+                className="rounded-full px-3.5 py-2"
+                style={{ backgroundColor: on ? COLORS.textOnPrimary : GLASS }}
               >
-                <MaterialCommunityIcons name="close" size={14} color={COLORS.textOnPrimary} />
+                <Text variant="label" className={on ? 'font-bold text-ink' : 'font-semibold text-white'}>
+                  {SOURCE_ORG_LABELS[src]}
+                </Text>
               </Pressable>
-            </View>
-          ))}
+            );
+          })}
+        </ScrollView>
 
-          {!atLimit && (
-            <Pressable
-              onPress={handleTakePhoto}
-              className="aspect-square w-[30%] items-center justify-center rounded-md border-2 border-dashed border-brand-light bg-subtle"
-            >
-              <MaterialCommunityIcons name="camera-plus-outline" size={24} color={COLORS.primaryLight} />
-            </Pressable>
-          )}
-        </View>
-      )}
-
-      <View className="gap-2">
-        <Text variant="label" tone="soft" className="font-semibold">
-          Where did this come from?
-        </Text>
-        <View className="flex-row flex-wrap gap-2">
-          {SOURCES.map(src => (
-            <Chip
-              key={src}
-              label={SOURCE_ORG_LABELS[src]}
-              selected={sourceOrg === src}
-              onPress={() => setSourceOrg(sourceOrg === src ? null : src)}
+        {/* Bottom bar: library · shutter · detect */}
+        <View className="px-gutter" style={{ paddingBottom: insets.bottom + 14 }}>
+          <View
+            className="flex-row items-center justify-between rounded-full px-3 py-2.5"
+            style={{ backgroundColor: GLASS }}
+          >
+            <RoundButton
+              icon="image-multiple-outline"
+              label="Add from library"
+              onPress={handlePickFromLibrary}
+              disabled={atLimit || busy}
             />
-          ))}
+
+            <Pressable
+              onPress={handleShutter}
+              disabled={atLimit || busy}
+              accessibilityRole="button"
+              accessibilityLabel="Take photo"
+              style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.93 : 1 }] })}
+              className="h-[74px] w-[74px] items-center justify-center rounded-full border-4 border-white"
+            >
+              <View
+                className="h-[58px] w-[58px] items-center justify-center rounded-full"
+                style={{ backgroundColor: atLimit ? 'rgba(255,255,255,0.35)' : COLORS.primaryLight }}
+              >
+                {capturing ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <MaterialCommunityIcons name="camera" size={26} color="#FFFFFF" />
+                )}
+              </View>
+            </Pressable>
+
+            <Pressable
+              onPress={handleDetectItems}
+              disabled={shots.length === 0 || isAnalyzing}
+              accessibilityRole="button"
+              accessibilityLabel={`Detect items in ${shots.length} photos`}
+              className="h-12 min-w-[48px] flex-row items-center justify-center gap-1.5 rounded-full px-3.5"
+              style={{
+                backgroundColor: shots.length > 0 ? COLORS.textOnPrimary : 'rgba(255,255,255,0.18)',
+              }}
+            >
+              {isAnalyzing ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : (
+                <MaterialCommunityIcons
+                  name="auto-fix"
+                  size={20}
+                  color={shots.length > 0 ? COLORS.primary : '#FFFFFF'}
+                />
+              )}
+              {shots.length > 0 && (
+                <Text variant="label" className="font-bold" style={{ color: COLORS.primary }}>
+                  Detect {shots.length}
+                </Text>
+              )}
+            </Pressable>
+          </View>
         </View>
       </View>
+    </View>
+  );
+}
 
-      <View className="flex-row gap-3">
-        <Button
-          label="Camera"
-          variant="secondary"
-          size="compact"
-          className="flex-1 justify-center"
-          disabled={atLimit || isAnalyzing}
-          onPress={handleTakePhoto}
-        />
-        <Button
-          label="Photo library"
-          variant="secondary"
-          size="compact"
-          className="flex-1 justify-center"
-          disabled={atLimit || isAnalyzing}
-          onPress={handlePickFromLibrary}
-        />
-      </View>
+function RoundButton({
+  icon,
+  label,
+  onPress,
+  active,
+  disabled,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  label: string;
+  onPress: () => void;
+  active?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      disabled={disabled}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      className="h-12 w-12 items-center justify-center rounded-full"
+      style={{
+        backgroundColor: active ? COLORS.textOnPrimary : GLASS,
+        opacity: disabled ? 0.45 : 1,
+      }}
+    >
+      <MaterialCommunityIcons name={icon} size={22} color={active ? COLORS.textPrimary : '#FFFFFF'} />
+    </Pressable>
+  );
+}
 
-      <Button
-        label={isAnalyzing ? 'Reading labels…' : 'Detect items'}
-        block
-        loading={isAnalyzing}
-        disabled={shots.length === 0}
-        icon={<MaterialCommunityIcons name="auto-fix" size={20} color={COLORS.textOnPrimary} />}
-        onPress={handleDetectItems}
-      />
-
-      <Text variant="micro" tone="soft" className="text-center">
-        {shots.length === 0
-          ? `Up to ${MAX_PHOTOS} photos. Several close shots beat one wide one.`
-          : atLimit
-            ? `${MAX_PHOTOS} photos — that's the limit for one scan.`
-            : `${shots.length} of ${MAX_PHOTOS} attached. A big pile reads better in sections.`}
-      </Text>
-
-      <Text variant="micro" tone="soft" className="text-center">
-        Nothing is saved yet — you check every line before it reaches inventory.
-      </Text>
-    </Screen>
+function Corner({ style }: { style: object }) {
+  return (
+    <View
+      style={[{ position: 'absolute', width: 44, height: 44, borderColor: '#FFFFFF' }, style]}
+    />
   );
 }

@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { AuthLayout } from '../components/auth-layout';
 import { Button, Input, Text } from '../components/ui';
-import { OAuthCancelled, oauthRedirectUri, signInWithGoogle } from '../lib/auth';
+import { OAuthCancelled, signInWithGoogle } from '../lib/auth';
 import { supabase } from '../lib/supabase';
 
 export default function LoginScreen() {
@@ -88,13 +88,6 @@ export default function LoginScreen() {
 
       <Button label="Sign in" block loading={loading} disabled={googleLoading} onPress={handleLogin} />
 
-      {/* Dev only: the Expo Go redirect host changes with the network, and it
-          must be allow-listed in Supabase or login falls back to Site URL. */}
-      {__DEV__ && (
-        <Text variant="micro" tone="soft" className="text-center" selectable>
-          Redirect URI: {oauthRedirectUri}
-        </Text>
-      )}
     </AuthLayout>
   );
 }

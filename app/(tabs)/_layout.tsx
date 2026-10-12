@@ -55,6 +55,10 @@ export default function TabLayout() {
           // Every tab gets the same custom bar: pantry name, an expiry bell, and
           // an overflow holding settings and sign-out.
           header: ({ options }) => <AppHeader title={String(options.title ?? '')} />,
+          // A tab you aren't looking at doesn't re-render. Without this, the
+          // hidden tabs kept redrawing on every store change — Inventory with
+          // every row it had mounted — and the whole app lagged.
+          freezeOnBlur: true,
         }}
       >
         <Tabs.Screen

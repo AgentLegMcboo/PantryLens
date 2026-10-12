@@ -1,11 +1,11 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import React from 'react';
-import { Image, StyleSheet, View } from 'react-native';
-import { COLORS } from '../constants/theme';
-import { GoogleLogo } from './google-logo';
-import { KeyboardScreen } from './keyboard-screen';
-import { Button, Card, Text } from './ui';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import React from "react";
+import { Image, StyleSheet, View } from "react-native";
+import { COLORS } from "../constants/theme";
+import { GoogleLogo } from "./google-logo";
+import { KeyboardScreen } from "./keyboard-screen";
+import { Button, Card, Text } from "./ui";
 
 /**
  * The pantry behind the glass.
@@ -28,7 +28,7 @@ export function AuthBackdrop({ blurRadius }: { blurRadius?: number } = {}) {
 
 /** The wordmark, at the size the entry screens use it. */
 export function AuthBrand({
-  icon = 'camera-iris',
+  icon = "camera-iris",
   title,
   subtitle,
 }: {
@@ -39,7 +39,11 @@ export function AuthBrand({
   return (
     <View className="mb-8 items-center">
       <View className="mb-3 h-16 w-16 items-center justify-center rounded-2xl bg-brand">
-        <MaterialCommunityIcons name={icon} size={34} color={COLORS.textOnPrimary} />
+        <MaterialCommunityIcons
+          name={icon}
+          size={34}
+          color={COLORS.textOnPrimary}
+        />
       </View>
       {/* The splash's wordmark (components/brand-splash.tsx): system sans at
           800 with tight tracking, so the front door matches the launch screen.
@@ -52,7 +56,7 @@ export function AuthBrand({
         style={{
           fontSize: 32,
           lineHeight: 40,
-          fontWeight: '800',
+          fontWeight: "800",
           letterSpacing: -0.6,
           color: COLORS.textPrimary,
         }}
@@ -111,11 +115,11 @@ export function AuthLayout({
         <Card
           className="gap-5"
           style={{
-            shadowColor: '#2B2420',
-            shadowOpacity: 0.16,
-            shadowRadius: 28,
+            shadowColor: "#2B2420",
+            shadowOpacity: 0.1,
+            shadowRadius: 18,
             shadowOffset: { width: 0, height: 14 },
-            elevation: 8,
+            elevation: 2,
           }}
         >
           <View>
@@ -147,7 +151,9 @@ export function AuthLayout({
 
           {children}
 
-          <View className="flex-row items-center justify-center gap-1">{footer}</View>
+          <View className="flex-row items-center justify-center gap-1">
+            {footer}
+          </View>
         </Card>
       </KeyboardScreen>
     </View>

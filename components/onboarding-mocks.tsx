@@ -35,6 +35,19 @@ import { COLORS } from "../constants/theme";
  */
 
 const EASE = Easing.bezier(0.16, 1, 0.3, 1);
+
+/**
+ * A deeper shadow than a working card's, so the mock pieces lift clearly off
+ * the page and read as a picture of the app rather than part of the screen
+ * you're on.
+ */
+const MOCK_SHADOW = {
+  shadowColor: COLORS.shadow,
+  shadowOpacity: 0.18,
+  shadowRadius: 18,
+  shadowOffset: { width: 0, height: 10 },
+  elevation: 8,
+};
 const noop = () => {};
 
 /** Eases a piece up into place, tilted slightly so it reads as laid on the page. */
@@ -126,7 +139,7 @@ function Tag({
 }) {
   const color = TAG_COLORS[tone];
   return (
-    <Card className="flex-row items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5">
+    <Card style={MOCK_SHADOW} className="flex-row items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5">
       <View
         className="h-7 w-7 items-center justify-center rounded-full"
         style={{ backgroundColor: `${color}22` }}
@@ -149,7 +162,7 @@ export function ScanMock() {
   return (
     <Stage
       main={
-        <Card className="w-[312px] gap-3 p-3">
+        <Card style={MOCK_SHADOW} className="w-[312px] gap-3 p-3">
           <View style={styles.photo}>
             <DetectionOverlay
               uri={SCAN_PHOTO.uri}
@@ -207,7 +220,7 @@ export function VerifyMock() {
   return (
     <Stage
       main={
-        <Card className="w-[312px] gap-3 p-4">
+        <Card style={MOCK_SHADOW} className="w-[312px] gap-3 p-4">
           <View className="flex-row items-center gap-3">
             <ItemThumb category="vegetable" />
             <View className="flex-1">
@@ -231,8 +244,16 @@ export function VerifyMock() {
           </View>
         </Card>
       }
-      topRight={<Tag icon="clock-alert-outline" label="Use first" tone="warn" />}
-      bottomLeft={<Tag icon="alert-circle-outline" label="Dented · held back" tone="critical" />}
+      topRight={
+        <Tag icon="clock-alert-outline" label="Use first" tone="warn" />
+      }
+      bottomLeft={
+        <Tag
+          icon="alert-circle-outline"
+          label="Dented · held back"
+          tone="critical"
+        />
+      }
     />
   );
 }
@@ -242,7 +263,7 @@ export function WeighMock() {
   return (
     <Stage
       main={
-        <Card className="w-[312px] gap-3 p-4">
+        <Card style={MOCK_SHADOW} className="w-[312px] gap-3 p-4">
           <Text variant="label" tone="soft" className="font-semibold">
             Weight at the scale
           </Text>
@@ -283,7 +304,7 @@ export function BoxesMock() {
   return (
     <Stage
       main={
-        <Card className="w-[312px] gap-3 p-4">
+        <Card style={MOCK_SHADOW} className="w-[312px] gap-3 p-4">
           <View className="flex-row items-baseline gap-2">
             <Text variant="display" tone="brand">
               6
@@ -323,8 +344,16 @@ export function BoxesMock() {
           })}
         </Card>
       }
-      topRight={<Tag icon="alert-circle-outline" label="Protein is the limit" tone="critical" />}
-      bottomLeft={<Tag icon="bullhorn-outline" label="Ask donors for protein" />}
+      topRight={
+        <Tag
+          icon="alert-circle-outline"
+          label="Protein is the limit"
+          tone="critical"
+        />
+      }
+      bottomLeft={
+        <Tag icon="bullhorn-outline" label="Ask donors for protein" />
+      }
     />
   );
 }

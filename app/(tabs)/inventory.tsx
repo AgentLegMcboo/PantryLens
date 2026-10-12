@@ -1,6 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   Alert,
   FlatList,
@@ -12,7 +13,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { COLORS, RULE_ABOVE } from '../../constants/theme';
+import { COLORS } from '../../constants/theme';
 import { isPastDate, windowEndISO } from '../../lib/expiry';
 import { cueTap, cueWarn } from '../../lib/feedback';
 import { PlacesManager } from '../../components/places-manager';
@@ -20,7 +21,6 @@ import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeabl
 import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import type { SwipeableMethods } from 'react-native-gesture-handler/lib/typescript/components/ReanimatedSwipeable/ReanimatedSwipeableProps';
 import {
-  Badge,
   Button,
   Card,
   Chip,
@@ -50,13 +50,6 @@ import { QuickAddStaplesModal } from '../../components/quick-add-staples';
  * summary, rows carry at most one status badge, and the count control has room
  * to be tapped.
  */
-
-/** Whole days since the pantry received this item — the FIFO signal. */
-function daysOnShelf(dateAdded: string): number {
-  const then = new Date(`${dateAdded}T00:00:00`).getTime();
-  if (Number.isNaN(then)) return 0;
-  return Math.max(0, Math.round((Date.now() - then) / 86400000));
-}
 
 const CATEGORIES = [
   { id: 'all', label: 'All' },
@@ -132,19 +125,195 @@ const SORTS = [
   { id: 'name', label: 'A–Z' },
 ] as const;
 
+/**
+ * One inventory row, memoised.
+ *
+ * It used to be rendered inline from the screen, so every row was rebuilt on
+ * every store change — a photo attaching in the background, a realtime refresh
+ * — and the more rows a scroll had mounted, the longer each rebuild took
+ * (React Native logged one at 35 seconds). The tab stays mounted while you use
+ * the others, so that cost followed the volunteer around the whole app. Now a
+ * row only re-renders when its own props change.
+ */
+const InventoryRow = React.memo(function InventoryRow({
+  item,
+  picking,
+  isSelected,
+  placeName,
+  showPlace,
+  warningStr,
+  onToggle,
+  onSwipeOut,
+}: {
+  item: InventoryItem;
+  picking: boolean;
+  isSelected: boolean;
+  placeName?: string;
+  showPlace: boolean;
+  warningStr: string;
+  onToggle: (id: string) => void;
+  onSwipeOut: (id: string) => void;
+}) {
+  const router = useRouter();
+  const pastDate = isPastDate(item.expiration);
+  const expiringSoon = !pastDate && !!item.expiration && item.expiration <= warningStr;
+  const damaged = !isUsableCondition(item.condition);
+  // Both keep it out of the boxes, so both get the red treatment.
+  const blocked = damaged || pastDate;
+
+
+  const row = (
+    <Pressable
+      // In picking mode a tap picks; otherwise it opens. A long press starts
+      // picking from anywhere, which is the gesture people already expect from
+      // a photo library.
+      onPress={() =>
+        picking
+          ? onToggle(item.id)
+          : router.push({ pathname: '/item-detail', params: { id: item.id } })
+      }
+      onLongPress={() => onToggle(item.id)}
+      delayLongPress={250}
+    >
+      {/* One line per product: picture, name with what's worth knowing
+          under it, and the count on the right. Expiry only when there is
+          one — "No expiry recorded" on every tin of soap was just noise. */}
+      <Card
+        className={isSelected ? 'mb-2.5 bg-subtle px-4 py-3.5' : 'mb-2.5 px-4 py-3.5'}
+        // A lighter edge than other cards: in a long list a full-strength
+        // outline on every row adds up to a lot of lines.
+        style={{ borderColor: isSelected ? COLORS.primary : 'rgba(224,205,187,0.6)' }}
+      >
+        <View className="flex-row items-center gap-3.5">
+          {picking && (
+            <MaterialCommunityIcons
+              name={isSelected ? 'check-circle' : 'circle-outline'}
+              size={24}
+              color={isSelected ? COLORS.primaryLight : COLORS.borderStrong}
+            />
+          )}
+          {/* The actual product where we have a picture of it, the category
+              glyph where we do not. */}
+          <ItemThumb
+            imageUrl={item.image_url}
+            category={item.category}
+            size="md"
+            tone={blocked ? 'critical' : 'brand'}
+          />
+
+          <View className="flex-1 gap-1">
+            <Text variant="body" numberOfLines={2} className="font-semibold">
+              {item.name}
+            </Text>
+            {/* At most one status, worst first, then the details that exist. */}
+            {(() => {
+              const status = damaged
+                ? { text: CONDITION_LABELS[item.condition || 'ok'], tone: 'critical' as const }
+                : pastDate
+                  ? { text: 'Out of date', tone: 'critical' as const }
+                  : expiringSoon
+                    ? { text: 'Use first', tone: 'warn' as const }
+                    : null;
+              const details = [
+                item.expiration ? `Exp ${shortDate(item.expiration)}` : null,
+                showPlace && placeName ? placeName : null,
+              ].filter(Boolean) as string[];
+              if (!status && details.length === 0) return null;
+              return (
+                <Text variant="micro" tone="soft" numberOfLines={1}>
+                  {status ? (
+                    <Text variant="micro" tone={status.tone} className="font-bold">
+                      {status.text}
+                      {details.length ? ' · ' : ''}
+                    </Text>
+                  ) : null}
+                  {details.join(' · ')}
+                </Text>
+              );
+            })()}
+          </View>
+
+          {/* The stepper is meaningless while picking — the row is a checkbox
+              then, and a control that also changes stock would fight the tap. */}
+          {picking ? (
+            <Text variant="label" tone="soft" className="font-semibold">
+              {item.count} units
+            </Text>
+          ) : (
+            <Stepper
+              value={item.count}
+              min={0}
+              onChange={(next) => {
+                const write =
+                  next === 0
+                    ? usePantryStore.getState().deleteItem(item.id)
+                    : usePantryStore.getState().updateItem(item.id, { count: next });
+                // These used to be fired and forgotten, so a rejected write was
+                // an unhandled promise and a silently unchanged shelf.
+                write.catch((err: any) => {
+                  cueWarn();
+                  Alert.alert('Could not save that change', err?.message ?? 'Please try again.');
+                });
+              }}
+            />
+          )}
+        </View>
+      </Card>
+    </Pressable>
+  );
+
+  // Swiping while picking would fight the selection, so the gesture is only
+  // live when a tap means "open this".
+  if (picking) return row;
+
+  // Captured from renderLeftActions so the row can be sprung shut again once
+  // the sheet takes over — otherwise it sits open behind it and stays open if
+  // the volunteer backs out.
+  let methods: SwipeableMethods | null = null;
+
+  return (
+    <ReanimatedSwipeable
+      friction={2}
+      leftThreshold={SWIPE_WIDTH * 0.6}
+      overshootLeft={false}
+      renderLeftActions={(_progress, translation, swipeableMethods) => {
+        methods = swipeableMethods;
+        return <SwipeAction translation={translation} />;
+      }}
+      onSwipeableOpen={(direction) => {
+        if (direction !== 'left') return;
+        cueWarn();
+        methods?.close();
+        // Straight to the reason sheet rather than a silent delete: "a family
+        // took it home", "it was mouldy" and "I typed this twice" are three
+        // different facts, and two of them are numbers this pantry reports on.
+        onSwipeOut(item.id);
+      }}
+    >
+      {row}
+    </ReanimatedSwipeable>
+  );
+
+});
+
 export default function InventoryScreen() {
   const router = useRouter();
-  const {
-    inventory,
-    locations,
-    updateItem,
-    deleteItem,
-    deleteItems,
-    updateItems,
-    recordExit,
-    addItems,
-    settings,
-  } = usePantryStore();
+  // Only what this screen uses, compared shallowly, so unrelated store changes
+  // (members loading, photos attaching, scan state) don't re-render it.
+  const { inventory, locations, updateItem, deleteItem, deleteItems, updateItems, recordExit, addItems, settings } =
+    usePantryStore(
+      useShallow((s) => ({
+        inventory: s.inventory,
+        locations: s.locations,
+        updateItem: s.updateItem,
+        deleteItem: s.deleteItem,
+        deleteItems: s.deleteItems,
+        updateItems: s.updateItems,
+        recordExit: s.recordExit,
+        addItems: s.addItems,
+        settings: s.settings,
+      })),
+    );
 
   const [search, setSearch] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -344,145 +513,29 @@ export default function InventoryScreen() {
     setModalVisible(false);
   };
 
-  const renderItemRow = ({ item }: { item: InventoryItem }) => {
-    const pastDate = isPastDate(item.expiration);
-    const expiringSoon = !pastDate && !!item.expiration && item.expiration <= warningStr;
-    const damaged = !isUsableCondition(item.condition);
-    // Both keep it out of the boxes, so both get the red treatment.
-    const blocked = damaged || pastDate;
-    const placeName = locations.find((l) => l.id === item.location_id)?.name;
+  // Stable, so memoised rows don't re-render just because the screen did.
+  const toggleSelectStable = useCallback((id: string) => {
+    cueTap();
+    setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
+  }, []);
+  const swipeOut = useCallback((id: string) => setExitIds([id]), []);
+  const placeNames = useMemo(
+    () => Object.fromEntries(locations.map((l) => [l.id, l.name])) as Record<string, string>,
+    [locations],
+  );
 
-    const isSelected = !!selected[item.id];
-
-    const row = (
-      <Pressable
-        // In picking mode a tap picks; otherwise it opens. A long press starts
-        // picking from anywhere, which is the gesture people already expect from
-        // a photo library.
-        onPress={() =>
-          picking
-            ? toggleSelect(item.id)
-            : router.push({ pathname: '/item-detail', params: { id: item.id } })
-        }
-        onLongPress={() => toggleSelect(item.id)}
-        delayLongPress={250}
-      >
-        <Card className={isSelected ? 'mb-3 border-brand bg-subtle' : 'mb-3'}>
-          <View className="flex-row items-start gap-3">
-            {picking && (
-              <MaterialCommunityIcons
-                name={isSelected ? 'check-circle' : 'circle-outline'}
-                size={26}
-                color={isSelected ? COLORS.primaryLight : COLORS.borderStrong}
-                style={{ marginTop: 2 }}
-              />
-            )}
-            {/* The actual product where we have a picture of it, the category
-                glyph where we do not. A volunteer at a shelf is matching what
-                the app says against what is in their hand, and a thumbnail does
-                that instantly in a way a line of text never can. */}
-            <ItemThumb
-              imageUrl={item.image_url}
-              category={item.category}
-              tone={blocked ? 'critical' : 'brand'}
-            />
-
-            <View className="flex-1">
-              <Text variant="body" className="font-semibold">
-                {item.name}
-              </Text>
-              <Text variant="micro" tone="soft" className="mt-1">
-                {item.expiration ? `Expires ${item.expiration}` : 'No expiry recorded'}
-                {item.date_added ? ` · on shelf ${daysOnShelf(item.date_added)}d` : ''}
-              </Text>
-              {placeName ? (
-                <View className="mt-1 flex-row items-center gap-1">
-                  <MaterialCommunityIcons
-                    name="map-marker-outline"
-                    size={12}
-                    color={COLORS.textSecondary}
-                  />
-                  <Text variant="micro" tone="soft">
-                    {placeName}
-                  </Text>
-                </View>
-              ) : null}
-
-              {/* At most one badge, worst first. "Use first" and "Out of date"
-                  had been the same badge, which is the difference between food
-                  to pack this week and food that will never go in a box. */}
-              {damaged ? (
-                <Badge
-                  label={CONDITION_LABELS[item.condition || 'ok']}
-                  tone="critical"
-                  className="mt-2"
-                />
-              ) : pastDate ? (
-                <Badge label="Out of date" tone="critical" className="mt-2" />
-              ) : expiringSoon ? (
-                <Badge label="Use first" tone="warn" className="mt-2" />
-              ) : null}
-            </View>
-          </View>
-          <View className="mt-3 flex-row items-center justify-between gap-3 pt-3" style={RULE_ABOVE}>
-            <Text variant="label" tone="soft" className="flex-1 capitalize">
-              {item.category} · {picking ? `${item.count} units` : 'Units on shelf'}
-            </Text>
-            {/* The stepper is meaningless while picking — the row is a checkbox
-                then, and a control that also changes stock would fight the tap. */}
-            {!picking && (
-              <Stepper
-                value={item.count}
-                min={0}
-                onChange={(next) => {
-                  const write =
-                    next === 0 ? deleteItem(item.id) : updateItem(item.id, { count: next });
-                  // These used to be fired and forgotten, so a rejected write was
-                  // an unhandled promise and a silently unchanged shelf.
-                  write.catch((err: any) => {
-                    cueWarn();
-                    Alert.alert('Could not save that change', err?.message ?? 'Please try again.');
-                  });
-                }}
-              />
-            )}
-          </View>
-        </Card>
-      </Pressable>
-    );
-
-    // Swiping while picking would fight the selection, so the gesture is only
-    // live when a tap means "open this".
-    if (picking) return row;
-
-    // Captured from renderLeftActions so the row can be sprung shut again once
-    // the sheet takes over — otherwise it sits open behind it and stays open if
-    // the volunteer backs out.
-    let methods: SwipeableMethods | null = null;
-
-    return (
-      <ReanimatedSwipeable
-        friction={2}
-        leftThreshold={SWIPE_WIDTH * 0.6}
-        overshootLeft={false}
-        renderLeftActions={(_progress, translation, swipeableMethods) => {
-          methods = swipeableMethods;
-          return <SwipeAction translation={translation} />;
-        }}
-        onSwipeableOpen={(direction) => {
-          if (direction !== 'left') return;
-          cueWarn();
-          methods?.close();
-          // Straight to the reason sheet rather than a silent delete: "a family
-          // took it home", "it was mouldy" and "I typed this twice" are three
-          // different facts, and two of them are numbers this pantry reports on.
-          setExitIds([item.id]);
-        }}
-      >
-        {row}
-      </ReanimatedSwipeable>
-    );
-  };
+  const renderItemRow = ({ item }: { item: InventoryItem }) => (
+    <InventoryRow
+      item={item}
+      picking={picking}
+      isSelected={!!selected[item.id]}
+      placeName={item.location_id ? placeNames[item.location_id] : undefined}
+      showPlace={groupBy !== 'place'}
+      warningStr={warningStr}
+      onToggle={toggleSelectStable}
+      onSwipeOut={swipeOut}
+    />
+  );
 
   return (
     <View className="flex-1 bg-canvas">
@@ -611,37 +664,6 @@ export default function InventoryScreen() {
           </View>
         )}
 
-        {!picking && (
-          <Pressable
-            onPress={() => {
-              cueTap();
-              setStaplesModalVisible(true);
-            }}
-            accessibilityRole="button"
-            accessibilityLabel="Open one-tap quick add staples"
-            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
-            className="flex-row items-center justify-between rounded-lg border border-hairline bg-card p-3 shadow-sm"
-          >
-            <View className="flex-1 flex-row items-center gap-3">
-              <View className="h-10 w-10 items-center justify-center rounded-lg bg-brand/10">
-                <MaterialCommunityIcons name="lightning-bolt" size={22} color={COLORS.primary} />
-              </View>
-              <View className="flex-1">
-                <Text variant="body" className="font-bold text-sm">
-                  One-Tap Quick Add Staples
-                </Text>
-                <Text variant="micro" tone="soft">
-                  Add cases of beans, pasta, rice & soup without typing
-                </Text>
-              </View>
-            </View>
-            <View className="rounded-md bg-brand px-3 py-1.5">
-              <Text variant="label" tone="on" className="font-bold text-xs">
-                Quick Add →
-              </Text>
-            </View>
-          </Pressable>
-        )}
 
         {!picking && flaggedCount > 0 && (
           <Pressable
@@ -693,6 +715,13 @@ export default function InventoryScreen() {
         sections={sections}
         keyExtractor={(item) => item.id}
         renderItem={renderItemRow}
+        // Keep only a few screens' worth of rows mounted. Every mounted row
+        // carries a swipe gesture and a stepper; holding hundreds of them made
+        // each update slow.
+        initialNumToRender={12}
+        maxToRenderPerBatch={10}
+        windowSize={7}
+        removeClippedSubviews={Platform.OS === 'android'}
         stickySectionHeadersEnabled={groupBy !== 'none'}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
@@ -731,75 +760,48 @@ export default function InventoryScreen() {
         ListHeaderComponent={
           picking ? null : (
             <View className="mb-4 gap-2">
+              {/* Group and sort read as the same kind of control: a plain card
+                  with what it is, what it's set to, and a chevron saying "tap
+                  to change". Sort used to be a beige fill with brand text, which
+                  looked like a highlighter mark rather than a button. */}
               <View className="flex-row items-center gap-2">
-                <Pressable
+                <ListControl
+                  icon="view-agenda-outline"
+                  caption="Group"
+                  value={GROUPS.find((g) => g.id === groupBy)?.label ?? ''}
+                  accessibilityLabel={`Grouped ${GROUPS.find((g) => g.id === groupBy)?.label}. Tap to change.`}
                   onPress={() => {
                     cueTap();
                     const i = GROUPS.findIndex((g) => g.id === groupBy);
                     setGroupBy(GROUPS[(i + 1) % GROUPS.length].id);
                   }}
-                  className="min-h-[48px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3.5"
-                  accessibilityLabel={`Grouped ${GROUPS.find((g) => g.id === groupBy)?.label}. Tap to change.`}
-                >
-                  <MaterialCommunityIcons
-                    name="view-agenda-outline"
-                    size={18}
-                    color={COLORS.primaryDark}
-                  />
-                  <Text
-                    variant="label"
-                    tone="brand"
-                    numberOfLines={1}
-                    className="flex-1 font-semibold text-sm"
-                  >
-                    Group: {GROUPS.find((g) => g.id === groupBy)?.label}
-                  </Text>
-                </Pressable>
-
+                />
+                <ListControl
+                  icon="swap-vertical"
+                  caption="Sort"
+                  value={SORTS.find((x) => x.id === sortBy)?.label ?? ''}
+                  accessibilityLabel={`Sorted by ${SORTS.find((x) => x.id === sortBy)?.label}. Tap to change.`}
+                  onPress={() => {
+                    cueTap();
+                    const i = SORTS.findIndex((x) => x.id === sortBy);
+                    setSortBy(SORTS[(i + 1) % SORTS.length].id);
+                  }}
+                />
                 {groupBy === 'place' && (
                   <Pressable
                     onPress={() => {
                       cueTap();
                       setManagingPlaces(true);
                     }}
-                    hitSlop={8}
+                    hitSlop={6}
+                    accessibilityRole="button"
                     accessibilityLabel="Manage places"
-                    className="min-h-[48px] flex-row items-center justify-center gap-1.5 rounded-lg border border-hairline bg-card px-3.5"
+                    className="h-[52px] w-[52px] items-center justify-center rounded-lg border border-hairline bg-card"
                   >
-                    <MaterialCommunityIcons
-                      name="map-marker-outline"
-                      size={18}
-                      color={COLORS.primaryDark}
-                    />
-                    <Text variant="label" tone="brand" className="font-semibold text-sm">
-                      Places
-                    </Text>
+                    <MaterialCommunityIcons name="map-marker-outline" size={22} color={COLORS.textPrimary} />
                   </Pressable>
                 )}
               </View>
-
-              <Pressable
-                onPress={() => {
-                  const i = SORTS.findIndex((s) => s.id === sortBy);
-                  setSortBy(SORTS[(i + 1) % SORTS.length].id);
-                }}
-                className="min-h-[48px] flex-row items-center gap-2 rounded-md border border-hairline bg-subtle px-3"
-                accessibilityLabel={`Sorted by ${SORTS.find((s) => s.id === sortBy)?.label}. Tap to change.`}
-              >
-                <MaterialCommunityIcons
-                  name="swap-vertical"
-                  size={16}
-                  color={COLORS.primaryDark}
-                />
-                <Text variant="label" tone="brand" className="flex-1 font-semibold">
-                  Sort: {SORTS.find((s) => s.id === sortBy)?.label}
-                </Text>
-                <MaterialCommunityIcons
-                  name="chevron-down"
-                  size={18}
-                  color={COLORS.primaryDark}
-                />
-              </Pressable>
             </View>
           )
         }
@@ -1011,4 +1013,49 @@ export default function InventoryScreen() {
       />
     </View>
   );
+}
+
+/**
+ * A list setting you tap to cycle: what it is (caption), what it's set to
+ * (value, bold), and a chevron. Group and Sort share it so they read as a pair.
+ */
+function ListControl({
+  icon,
+  caption,
+  value,
+  onPress,
+  accessibilityLabel,
+}: {
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  caption: string;
+  value: string;
+  onPress: () => void;
+  accessibilityLabel: string;
+}) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel}
+      className="h-[52px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3"
+    >
+      <MaterialCommunityIcons name={icon} size={18} color={COLORS.textSecondary} />
+      <View className="flex-1">
+        <Text variant="micro" tone="soft">
+          {caption}
+        </Text>
+        <Text variant="label" numberOfLines={1} className="font-bold">
+          {value}
+        </Text>
+      </View>
+      <MaterialCommunityIcons name="chevron-down" size={18} color={COLORS.textSecondary} />
+    </Pressable>
+  );
+}
+
+/** "Feb 4, 2027" from an ISO date; the raw string if it isn't one. */
+function shortDate(iso: string): string {
+  const d = new Date(`${iso}T00:00:00`);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }

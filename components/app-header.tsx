@@ -21,7 +21,8 @@ export function AppHeader({ title }: { title: string }) {
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
   const toggleSeniorMode = useAccessibilityStore((state) => state.toggleSeniorMode);
 
-  const { settings, inventory, signOut } = usePantryStore();
+  const { settings, inventory, signOut, pantries, switchPantry, setAddingPantry } = usePantryStore();
+  const [switchOpen, setSwitchOpen] = useState(false);
 
   useEffect(() => {
     return offlineQueue.subscribe((count) => setPendingCount(count));
@@ -35,7 +36,10 @@ export function AppHeader({ title }: { title: string }) {
     (i) => !!i.expiration && new Date(i.expiration) <= warningLimit,
   ).length;
 
-  const close = () => setMenuOpen(false);
+  const close = () => {
+    setMenuOpen(false);
+    setSwitchOpen(false);
+  };
 
   const handleSignOut = () => {
     close();
@@ -132,15 +136,6 @@ export function AppHeader({ title }: { title: string }) {
               }}
             />
             <MenuRow
-              icon="swap-horizontal"
-              label="Switch food bank"
-              hint={`Currently at ${settings.pantryName || 'this pantry'}`}
-              onPress={() => {
-                close();
-                router.push('/pantry-selection');
-              }}
-            />
-            <MenuRow
               icon="chart-box-outline"
               label="Reports"
               hint="Food given out, food wasted, and CSV export"
@@ -156,6 +151,66 @@ export function AppHeader({ title }: { title: string }) {
               onPress={() => {
                 close();
                 router.push('/(tabs)/settings');
+              }}
+            />
+            <MenuRow
+              icon="swap-horizontal"
+              label="Switch pantry"
+              hint={
+                pantries.length > 1
+                  ? `${pantries.length} pantries · now in ${settings.pantryName || 'this one'}`
+                  : 'You belong to one pantry'
+              }
+              onPress={
+                pantries.length > 1
+                  ? () => {
+                      cueTap();
+                      setSwitchOpen((open) => !open);
+                    }
+                  : undefined
+              }
+            />
+            {/* The list opens in place under the row, so switching is two taps
+                and never leaves the menu for a separate screen. */}
+            {switchOpen &&
+              pantries.map((p) => {
+                const current = p.id === settings.pantryId;
+                return (
+                  <Pressable
+                    key={p.id}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: current }}
+                    onPress={() => {
+                      cueTap();
+                      close();
+                      switchPantry(p.id);
+                    }}
+                    className="ml-[52px] flex-row items-center gap-3 py-2.5"
+                  >
+                    <MaterialCommunityIcons
+                      name={current ? 'check-circle' : 'circle-outline'}
+                      size={20}
+                      color={current ? COLORS.primary : COLORS.borderStrong}
+                    />
+                    <View className="flex-1">
+                      <Text variant="body" className={current ? 'font-bold' : 'font-semibold'}>
+                        {p.name}
+                      </Text>
+                      <Text variant="micro" tone="soft" className="capitalize">
+                        {p.role}
+                      </Text>
+                    </View>
+                  </Pressable>
+                );
+              })}
+            <MenuRow
+              icon="plus-circle-outline"
+              label="Add or create pantry"
+              hint="Join one with a code, or start a new one"
+              onPress={() => {
+                close();
+                setAddingPantry(true);
+                router.push('/pantry-selection');
               }}
             />
             <MenuRow
