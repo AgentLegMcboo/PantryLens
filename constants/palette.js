@@ -27,7 +27,7 @@ const COLORS = {
   //
   // `surfaceContainer` deliberately sits BELOW the page rather than above it.
   // Grouped-but-secondary content should recede; only cards float.
-  background: '#FFFFFF', // EXPERIMENT: was '#FBF6EE'
+  background: '#FBF6EE',
   cardSurface: '#FFFFFF',
   surfaceContainer: '#F5EADF',
   surfaceVariant: '#EDE0D9',

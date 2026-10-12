@@ -52,9 +52,9 @@ module.exports = {
       // Six steps. Anything smaller than `micro` is unreadable at arm's length
       // in poor light, which is the actual working condition here.
       fontSize: {
-        micro: ['11px', { lineHeight: '15px' }],
-        label: ['13px', { lineHeight: '18px' }],
-        body: ['15px', { lineHeight: '22px' }],
+        micro: ['12px', { lineHeight: '17px' }],
+        label: ['14px', { lineHeight: '20px' }],
+        body: ['16px', { lineHeight: '24px' }],
         heading: ['17px', { lineHeight: '23px' }],
         title: ['22px', { lineHeight: '28px' }],
         headline: ['26px', { lineHeight: '31px' }],
@@ -70,8 +70,8 @@ module.exports = {
 
       spacing: {
         gutter: '20px', // page edge — was 16, which crowded every screen edge
-        card: '20px',   // inside a card
-        gap: '16px',    // card to card — was 8
+        card: '20px', // inside a card
+        gap: '16px', // card to card — was 8
       },
     },
   },

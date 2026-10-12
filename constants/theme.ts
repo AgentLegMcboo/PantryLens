@@ -6,7 +6,7 @@ export const COLORS = {
   /** The lip under a pressed-in button. Must be clearly darker than primary. */
   primaryDeep: '#5E2411',
   secondary: '#6B8E4E',
-  
+
   // Surfaces
   //
   // The canvas is the original warm cream — a deeper sand was tried and read as
@@ -16,7 +16,7 @@ export const COLORS = {
   //
   // `surfaceContainer` deliberately sits BELOW the page rather than above it.
   // Grouped-but-secondary content should recede; only cards float.
-  background: '#FFFFFF', // EXPERIMENT: was '#FBF6EE'
+  background: '#FBF6EE',
   cardSurface: '#FFFFFF',
   surfaceContainer: '#F5EADF',
   surfaceVariant: '#EDE0D9',
@@ -26,17 +26,17 @@ export const COLORS = {
   borderStrong: '#CDB498',
   /** Warm brown, never grey — a grey shadow on a cream ground looks like dirt. */
   shadow: '#6B4A2F',
-  
+
   // Typography
   textPrimary: '#2B2420',
   textSecondary: '#6B6259',
   textOnPrimary: '#FFFFFF',
-  
+
   // Status Colors (Sacred)
   statusGood: '#5B8C51',
   statusWarning: '#E39A3B',
   statusCritical: '#C0392B',
-  
+
   // Food Category Hues
   categories: {
     grain: '#C9A227',
@@ -46,8 +46,8 @@ export const COLORS = {
     snack: '#8E6FC4',
     hygiene: '#3AA0A0',
     baby: '#D46A9F',
-    unknown: '#8A8880'
-  }
+    unknown: '#8A8880',
+  },
 };
 
 export const SPACING = {
@@ -56,14 +56,14 @@ export const SPACING = {
   md: 16,
   lg: 24,
   xl: 32,
-  touch: 48 // 48px minimum touch target for accessibility
+  touch: 48, // 48px minimum touch target for accessibility
 };
 
 export const RADII = {
   sm: 4,
   md: 8,
   lg: 16,
-  full: 9999
+  full: 9999,
 };
 /**
  * Typography.
@@ -89,9 +89,9 @@ export const FONTS = {
  * can actually delineate one.
  */
 export const CARD_ELEVATION = {
-  borderWidth: 2,
-  // A heavier near edge. Reads as a thin physical card rather than an outline.
-  borderBottomWidth: 3,
+  borderWidth: 1,
+  // Match the shared card's light outline.
+  borderBottomWidth: 1,
   borderColor: COLORS.borderSoft,
   shadowColor: COLORS.shadow,
   shadowOpacity: 0.07,

@@ -46,7 +46,7 @@ export function EmptyState({
       {/* The disc is what keeps a lone glyph from reading as an error icon
           floating in white space. */}
       <View
-        className="h-20 w-20 items-center justify-center rounded-full"
+        className="h-20 w-20 items-center justify-center rounded-2xl"
         style={{ backgroundColor: tone === 'good' ? '#E8F0E6' : COLORS.surfaceContainer }}
       >
         <MaterialCommunityIcons name={icon} size={38} color={colour} />

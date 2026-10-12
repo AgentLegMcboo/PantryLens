@@ -1,3 +1,6 @@
+import { barcodeVariants, normaliseBarcode, sameBarcode } from './gtin.ts'
+export { normaliseBarcode } from './gtin.ts'
+
 /**
  * Turning a UPC into a product.
  *
@@ -11,9 +14,8 @@
  * for a US pantry — but it is free, needs no key, and catches things USDA misses,
  * so it stays as the fallback.
  *
- * Everything is cached in `barcode_cache`, including misses. A barcode nobody
- * can identify is a fact worth remembering; without it, every scan of the same
- * unknown tin re-asks both APIs.
+ * Exact product matches are cached for 30 days. Misses are retried, so an
+ * outage or a newly catalogued product never gets stuck as unknown.
  */
 
 export interface BarcodeProduct {
@@ -36,6 +38,7 @@ export interface BarcodeProduct {
    */
   dietTags: string[]
   source: 'usda' | 'openfoodfacts' | 'miss' | 'cache'
+  unavailable?: boolean
 }
 
 /**
@@ -118,47 +121,6 @@ const CATEGORIES = ['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygi
 const PROVIDER_TIMEOUT_MS = 4_000
 
 /**
- * The GTIN check digit, which is why reading a barcode off a photograph is
- * safe at all.
- *
- * Every UPC-A, EAN-13 and EAN-8 carries a mod-10 checksum over its own digits.
- * That means a misread — the single likeliest failure when a vision model reads
- * 2mm-tall digits off a can in a wide shot — can be caught locally, for free,
- * with no round trip. A wrong barcode becomes an ABSENT barcode, which is the
- * right way to be wrong: the volunteer still gets the model's reading of the
- * label instead of a confidently incorrect product.
- *
- * Weights alternate 3 and 1 from the rightmost payload digit, which is the
- * general GTIN rule and works at every length.
- */
-function gtinCheckDigit(payload: string): number {
-  let sum = 0
-  let weight = 3
-  for (let i = payload.length - 1; i >= 0; i--) {
-    sum += Number(payload[i]) * weight
-    weight = weight === 3 ? 1 : 3
-  }
-  return (10 - (sum % 10)) % 10
-}
-
-/**
- * Digits only, checksum verified. Returns null for anything that fails — a
- * barcode that does not validate is not a barcode.
- *
- * UPC-E is deliberately not accepted: it is a 6-digit compression that has to be
- * expanded to UPC-A before it means anything, and a half-understood code is
- * worse than none. The scanner is configured to the three formats handled here.
- */
-export function normaliseBarcode(raw: unknown): string | null {
-  const digits = String(raw ?? '').replace(/\D/g, '')
-  if (![8, 12, 13, 14].includes(digits.length)) return null
-
-  const payload = digits.slice(0, -1)
-  const check = Number(digits[digits.length - 1])
-  return gtinCheckDigit(payload) === check ? digits : null
-}
-
-/**
  * Best-effort mapping from a provider's taxonomy to the pantry's eight buckets.
  *
  * Deliberately keyword-based over both the provider's category strings and the
@@ -167,22 +129,17 @@ export function normaliseBarcode(raw: unknown): string | null {
  * caller falls back to the vision model's own category when nothing matches.
  * Order matters — the first hit wins, so the narrow rules come first.
  */
-function mapCategory(haystack: string): string | null {
-  const h = haystack.toLowerCase()
-  const has = (...needles: string[]) => needles.some((n) => h.includes(n))
-
-  if (has('infant', 'baby-food', 'baby food', 'formula', 'diaper')) return 'baby'
-  if (has('soap', 'shampoo', 'toothpaste', 'deodorant', 'detergent', 'hygiene', 'toilet-paper',
-          'paper-towel', 'personal-care', 'household')) return 'hygiene'
-  if (has('cereal', 'breakfast', 'oatmeal', 'oats', 'granola', 'pancake', 'syrup')) return 'breakfast'
-  if (has('bean', 'legume', 'peanut-butter', 'peanut butter', 'nut-butter', 'meat', 'poultry',
-          'chicken', 'tuna', 'salmon', 'fish', 'sardine', 'protein', 'lentil', 'chickpea',
-          'egg', 'dairy', 'milk', 'cheese')) return 'protein'
-  if (has('vegetable', 'tomato', 'corn', 'green-bean', 'pea', 'carrot', 'potato', 'fruit',
-          'produce', 'canned-vegetable')) return 'vegetable'
-  if (has('pasta', 'rice', 'grain', 'flour', 'bread', 'noodle', 'macaroni', 'tortilla')) return 'grain'
-  if (has('snack', 'cracker', 'cookie', 'chip', 'candy', 'bar', 'popcorn', 'pretzel')) return 'snack'
-
+export function mapCategory(haystack: string): string | null {
+  const words = (typeof haystack === 'string' ? haystack : '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim()
+  const has = (...terms: string[]) => terms.some(term => (' ' + words + ' ').includes(' ' + term + ' '))
+  if (has('infant', 'baby food', 'baby wipes', 'formula', 'diaper', 'diapers')) return 'baby'
+  if (has('soap', 'shampoo', 'toothpaste', 'deodorant', 'detergent', 'sanitizer', 'hygiene', 'toilet paper', 'paper towel', 'paper towels', 'personal care', 'household')) return 'hygiene'
+  if (has('snack', 'snacks', 'cracker', 'crackers', 'cookie', 'cookies', 'chip', 'chips', 'chocolate', 'chocolates', 'candy', 'bar', 'bars', 'popcorn', 'pretzel', 'pretzels')) return 'snack'
+  if (has('green bean', 'green beans', 'string beans', 'wax beans', 'french beans')) return 'vegetable'
+  if (has('cereal', 'cereals', 'breakfast', 'oatmeal', 'oats', 'granola', 'pancake', 'pancakes', 'syrup')) return 'breakfast'
+  if (has('bean', 'beans', 'legume', 'legumes', 'peanut butter', 'nut butter', 'nuts', 'peanuts', 'tofu', 'meat', 'beef', 'pork', 'turkey', 'poultry', 'chicken', 'tuna', 'salmon', 'fish', 'sardines', 'protein', 'lentil', 'lentils', 'chickpea', 'chickpeas', 'egg', 'eggs', 'dairy', 'milk', 'cheese')) return 'protein'
+  if (has('vegetable', 'vegetables', 'tomato', 'tomatoes', 'corn', 'pea', 'peas', 'carrot', 'carrots', 'potato', 'potatoes', 'fruit', 'fruits', 'peach', 'peaches', 'pear', 'pears', 'produce')) return 'vegetable'
+  if (has('pasta', 'rice', 'grain', 'grains', 'flour', 'bread', 'noodle', 'noodles', 'macaroni', 'tortilla', 'tortillas')) return 'grain'
   return null
 }
 
@@ -213,201 +170,155 @@ function composeName(brand: string | null, name: string, extra?: string | null):
   return tidyName(parts.join(' ')).slice(0, 120)
 }
 
-/** A fetch that cannot hang, and that never throws into the caller. */
-async function getJson(url: string, headers: Record<string, string> = {}): Promise<any | null> {
+type ProviderResult = { product: BarcodeProduct | null; unavailable: boolean }
+const providerText = (value: unknown): string => typeof value === 'string' ? value.trim() : ''
+
+async function getJson(url: string, headers: Record<string, string> = {}, timeoutMs = PROVIDER_TIMEOUT_MS): Promise<{ data: any; unavailable: boolean }> {
   const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS)
+  const timer = setTimeout(() => controller.abort(), timeoutMs)
   try {
-    const res = await fetch(url, { headers, signal: controller.signal })
-    if (!res.ok) return null
-    return await res.json()
+    const response = await fetch(url, { headers, signal: controller.signal })
+    if (response.status === 404) return { data: null, unavailable: false }
+    if (!response.ok) return { data: null, unavailable: true }
+    return { data: await response.json(), unavailable: false }
   } catch {
-    return null
+    return { data: null, unavailable: true }
   } finally {
     clearTimeout(timer)
   }
 }
 
-/**
- * USDA FoodData Central, Branded dataset.
- *
- * The search endpoint is fuzzy, so the returned `gtinUpc` is compared back
- * against what was asked for. Without that check a search for one tin
- * cheerfully returns a different product, which is precisely the failure a
- * barcode exists to rule out.
- */
-async function lookupUsda(barcode: string, apiKey: string): Promise<BarcodeProduct | null> {
-  const url =
-    `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${apiKey}` +
-    `&query=${encodeURIComponent(barcode)}&dataType=Branded&pageSize=5`
-
-  const data = await getJson(url)
+async function lookupUsda(barcode: string, apiKey: string): Promise<ProviderResult> {
+  const url = 'https://api.nal.usda.gov/fdc/v1/foods/search?api_key=' + encodeURIComponent(apiKey) +
+    '&query=' + encodeURIComponent(barcode) + '&dataType=Branded&pageSize=25'
+  const { data, unavailable } = await getJson(url)
   const foods: any[] = Array.isArray(data?.foods) ? data.foods : []
-
-  // Leading zeros differ between datasets, so compare numerically-ish.
-  const wanted = barcode.replace(/^0+/, '')
-  const hit = foods.find((f) => String(f?.gtinUpc ?? '').replace(/^0+/, '') === wanted)
-  if (!hit) return null
-
-  const brand = String(hit.brandName ?? hit.brandOwner ?? '').trim() || null
-  const description = String(hit.description ?? '').trim()
-  if (!description) return null
-
-  return {
-    barcode,
-    // "Skippy" + "PEANUT BUTTER, CREAMY" reads better than either alone, and
-    // matches how the vision model is asked to name things.
-    name: composeName(brand, description),
-    brand,
-    category: mapCategory(`${hit.foodCategory ?? ''} ${description}`),
-    // FoodData Central serves no product imagery.
-    imageUrl: null,
-    // Nor any allergen or diet data in this response, so nothing is claimed.
-    // Silence here is silence, not a clean bill of health.
-    dietTags: [],
-    source: 'usda',
-  }
+  // A fuzzy search match is useful only if it carries this exact, valid GTIN.
+  const hit = foods.find(food => sameBarcode(food?.gtinUpc, barcode) && typeof food?.description === 'string' && food.description.trim())
+  if (!hit) return { product: null, unavailable }
+  const brand = providerText(hit.brandName) || providerText(hit.brandOwner) || null
+  const description = hit.description.trim()
+  return { unavailable: false, product: {
+    barcode, name: composeName(brand, description), brand,
+    category: mapCategory(description) ?? mapCategory(hit.foodCategory ?? ''),
+    imageUrl: null, dietTags: [], source: 'usda',
+  } }
 }
 
-/** Open Food Facts. No key, but it wants to know who is calling. */
-async function lookupOpenFoodFacts(barcode: string): Promise<BarcodeProduct | null> {
-  const url =
-    `https://world.openfoodfacts.org/api/v2/product/${barcode}.json` +
-    `?fields=product_name,brands,quantity,categories_tags,image_front_small_url,image_front_url` +
-    // Already in the same response, previously unasked for and discarded.
-    `,allergens_tags,traces_tags,ingredients_analysis_tags`
-
-  const data = await getJson(url, {
-    'User-Agent': 'PantryLens/1.0 (food pantry inventory; https://github.com/pantrylens)',
-  })
-
-  const product = data?.product
-  const name = String(product?.product_name ?? '').trim()
-  if (!name) return null
-
-  const brand = String(product?.brands ?? '').split(',')[0].trim() || null
-  const quantity = String(product?.quantity ?? '').trim()
-  const tags: string[] = Array.isArray(product?.categories_tags) ? product.categories_tags : []
-
-  // The small variant on purpose: this is rendered at 44px in a list, and the
-  // full-size original is often over a megabyte.
-  const image =
-    String(product?.image_front_small_url ?? product?.image_front_url ?? '').trim() || null
-
-  return {
-    barcode,
-    name: composeName(brand, name, quantity),
-    brand,
-    category: mapCategory(`${tags.join(' ')} ${name}`),
-    imageUrl: image,
-    dietTags: mapDietTags(product ?? {}),
-    source: 'openfoodfacts',
+async function lookupOpenFoodFacts(barcode: string): Promise<ProviderResult> {
+  // UPC-A is often stored with an EAN-13 leading zero. Never alter a check digit
+  // or a nonzero case indicator to invent a match.
+  const deadline = Date.now() + 2 * PROVIDER_TIMEOUT_MS
+  for (const variant of barcodeVariants(barcode)) {
+    const remaining = deadline - Date.now()
+    if (remaining <= 0) return { product: null, unavailable: true }
+    const url = 'https://world.openfoodfacts.org/api/v2/product/' + variant + '.json' +
+      '?fields=code,product_name,product_name_en,brands,quantity,categories_tags,image_front_small_url,image_front_url,allergens_tags,traces_tags,ingredients_analysis_tags'
+    const { data, unavailable } = await getJson(url, {
+      'User-Agent': 'PantryLens/1.0 (food pantry inventory; https://github.com/AgentLegMcboo/PantryLens)',
+    }, Math.min(PROVIDER_TIMEOUT_MS, remaining))
+    if (unavailable) return { product: null, unavailable: true }
+    if (!data || data.status === 0) continue
+    const product = data.product
+    if (!sameBarcode(product?.code ?? data.code, barcode)) continue
+    if (data.code != null && !sameBarcode(data.code, barcode)) continue
+    const name = [product?.product_name, product?.product_name_en]
+      .find(value => typeof value === 'string' && value.trim())?.trim()
+    if (!name) continue
+    const brand = providerText(product.brands).split(',')[0].trim() || null
+    const quantity = providerText(product.quantity)
+    const tags: string[] = Array.isArray(product.categories_tags) ? product.categories_tags : []
+    return { unavailable: false, product: {
+      barcode, name: composeName(brand, name, quantity), brand,
+      category: mapCategory(name) ?? mapCategory(tags.join(' ')),
+      imageUrl: providerText(product.image_front_small_url) || providerText(product.image_front_url) || null,
+      dietTags: mapDietTags(product), source: 'openfoodfacts',
+    } }
   }
+  return { product: null, unavailable: false }
 }
 
-/** Rows already known, keyed by barcode. Never throws — a cold cache is not an error. */
+const CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
+
 async function readCache(barcodes: string[], supabaseUrl: string, serviceKey: string) {
   const found = new Map<string, BarcodeProduct>()
-  if (barcodes.length === 0) return found
-
-  const list = barcodes.map((b) => `"${b}"`).join(',')
-  const data = await getJson(
-    `${supabaseUrl}/rest/v1/barcode_cache?barcode=in.(${list})&select=barcode,name,brand,category,image_url,diet_tags,source`,
-    { apikey: serviceKey, Authorization: `Bearer ${serviceKey}` },
-  )
-
+  if (!barcodes.length) return found
+  const list = barcodes.map(code => '"' + code + '"').join(',')
+  const { data } = await getJson(supabaseUrl + '/rest/v1/barcode_cache?barcode=in.(' + list +
+    ')&select=barcode,name,brand,category,image_url,diet_tags,source,fetched_at', {
+    apikey: serviceKey, Authorization: 'Bearer ' + serviceKey,
+  })
   for (const row of Array.isArray(data) ? data : []) {
+    if (!row || typeof row !== 'object') continue
+    const age = Date.now() - new Date(row.fetched_at).getTime()
+    if (!barcodes.includes(row.barcode) || !normaliseBarcode(row.barcode) ||
+      !Number.isFinite(age) || age < -300000 || age >= CACHE_MAX_AGE_MS ||
+      !['usda', 'openfoodfacts'].includes(row.source) || typeof row.name !== 'string' || !row.name.trim()) continue
     found.set(row.barcode, {
-      barcode: row.barcode,
-      name: row.name ? tidyName(row.name) : row.name,
-      brand: row.brand,
-      category: row.category,
+      barcode: row.barcode, name: tidyName(row.name), brand: row.brand ?? null,
+      category: mapCategory(row.name) ?? (CATEGORIES.includes(row.category) ? row.category : null),
       imageUrl: row.image_url ?? null,
-      dietTags: Array.isArray(row.diet_tags) ? row.diet_tags : [],
-      source: row.source === 'miss' ? 'miss' : 'cache',
+      dietTags: Array.isArray(row.diet_tags) ? row.diet_tags.filter((tag: string) => DIET_TAGS.includes(tag)) : [],
+      source: 'cache',
     })
   }
   return found
 }
 
-/** Writes what was learned, misses included. Fire and forget: a failed cache write must not fail a scan. */
-async function writeCache(
-  rows: BarcodeProduct[],
-  supabaseUrl: string,
-  serviceKey: string,
-): Promise<void> {
-  if (rows.length === 0) return
+async function writeCache(rows: BarcodeProduct[], supabaseUrl: string, serviceKey: string): Promise<void> {
+  // An outage and an unknown product must never become a permanent miss.
+  const hits = rows.filter(row => row.name && row.source !== 'miss')
+  if (!hits.length) return
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), PROVIDER_TIMEOUT_MS)
   try {
-    await fetch(`${supabaseUrl}/rest/v1/barcode_cache?on_conflict=barcode`, {
-      method: 'POST',
-      headers: {
-        apikey: serviceKey,
-        Authorization: `Bearer ${serviceKey}`,
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      },
-      body: JSON.stringify(
-        rows.map((r) => ({
-          barcode: r.barcode,
-          name: r.name,
-          brand: r.brand,
-          category: r.category && CATEGORIES.includes(r.category) ? r.category : null,
-          image_url: r.imageUrl,
-          diet_tags: r.dietTags ?? [],
-          source: r.source === 'cache' ? 'openfoodfacts' : r.source,
-        })),
-      ),
+    await fetch(supabaseUrl + '/rest/v1/barcode_cache?on_conflict=barcode', {
+      method: 'POST', signal: controller.signal,
+      headers: { apikey: serviceKey, Authorization: 'Bearer ' + serviceKey,
+        'Content-Type': 'application/json', Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(hits.map(row => ({
+        barcode: row.barcode, name: row.name, brand: row.brand, category: row.category,
+        image_url: row.imageUrl, diet_tags: row.dietTags, source: row.source,
+        fetched_at: new Date().toISOString(),
+      }))),
     })
-  } catch (err) {
-    console.warn('barcode cache write failed (ignored):', err)
+  } catch (error) {
+    console.warn('barcode cache write failed (ignored):', error)
+  } finally {
+    clearTimeout(timer)
   }
 }
 
-/**
- * Resolves a batch of barcodes. Cache first, then providers, concurrently.
- *
- * Returns a map of every barcode asked for. A value with `source: 'miss'` means
- * "asked and nobody knows", which is different from a barcode that is absent
- * from the map — that would mean it never validated.
- */
 export async function resolveBarcodes(barcodes: string[]): Promise<Map<string, BarcodeProduct>> {
-  const unique = [...new Set(barcodes)]
+  const unique = [...new Set(barcodes.map(normaliseBarcode).filter((code): code is string => !!code))]
   const resolved = new Map<string, BarcodeProduct>()
-  if (unique.length === 0) return resolved
-
+  if (!unique.length) return resolved
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? ''
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
   const usdaKey = Deno.env.get('FDC_API_KEY') ?? ''
-
   if (supabaseUrl && serviceKey) {
-    for (const [code, row] of await readCache(unique, supabaseUrl, serviceKey)) {
-      resolved.set(code, row)
+    const variants = [...new Set(unique.flatMap(barcodeVariants))]
+    const cached = await readCache(variants, supabaseUrl, serviceKey)
+    for (const code of unique) {
+      const hit = barcodeVariants(code).map(variant => cached.get(variant)).find(Boolean)
+      if (hit) resolved.set(code, { ...hit, barcode: code })
     }
   }
-
-  const missing = unique.filter((b) => !resolved.has(b))
-  if (missing.length > 0) {
-    const fetched = await Promise.all(
-      missing.map(async (barcode): Promise<BarcodeProduct> => {
-        const usda = usdaKey ? await lookupUsda(barcode, usdaKey) : null
-        if (usda) return usda
-        return (
-          (await lookupOpenFoodFacts(barcode)) ?? {
-            barcode,
-            name: null,
-            brand: null,
-            category: null,
-            imageUrl: null,
-            dietTags: [],
-            source: 'miss',
-          }
-        )
-      }),
-    )
-
-    for (const row of fetched) resolved.set(row.barcode, row)
-    if (supabaseUrl && serviceKey) await writeCache(fetched, supabaseUrl, serviceKey)
-  }
-
+  const fetched = await Promise.all(unique.filter(code => !resolved.has(code)).map(async barcode => {
+    const [usda, off] = await Promise.all([
+      usdaKey ? lookupUsda(barcode, usdaKey) : Promise.resolve({ product: null, unavailable: false }),
+      lookupOpenFoodFacts(barcode),
+    ])
+    const primary = usda.product ?? off.product
+    const product: BarcodeProduct = primary ? {
+      ...primary, imageUrl: off.product?.imageUrl ?? primary.imageUrl,
+      dietTags: off.product?.dietTags ?? primary.dietTags,
+      category: primary.category ?? off.product?.category ?? null,
+    } : { barcode, name: null, brand: null, category: null, imageUrl: null, dietTags: [],
+      source: 'miss', unavailable: usda.unavailable || off.unavailable }
+    resolved.set(barcode, product)
+    return product
+  }))
+  if (supabaseUrl && serviceKey) await writeCache(fetched, supabaseUrl, serviceKey)
   return resolved
 }

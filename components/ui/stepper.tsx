@@ -11,7 +11,7 @@ import { cueTap } from '../../lib/feedback';
 /**
  * Numeric stepper. Was redefined in five screens at four different button sizes.
  *
- * The buttons are 44px, not the 32px they were: this is the control a volunteer
+ * The buttons are 48px: this is the control a volunteer
  * uses most, often while holding something in the other hand. Each one carries
  * 6px of invisible slack as well, so a thumb that lands just off the glyph still
  * counts — the target should always be bigger than the thing you can see.
@@ -41,13 +41,13 @@ export function Stepper({
   };
 
   return (
-    <View className={cn('flex-row items-center rounded-md bg-subtle', className)}>
-      <StepButton
-        icon="minus"
-        label="Decrease"
-        disabled={value <= min}
-        onPress={() => step(-1)}
-      />
+    <View
+      className={cn(
+        'flex-row items-center rounded-lg border border-hairline bg-canvas',
+        className,
+      )}
+    >
+      <StepButton icon="minus" label="Decrease" disabled={value <= min} onPress={() => step(-1)} />
 
       <Text variant="heading" className="min-w-[36px] text-center font-bold">
         {value}
@@ -82,11 +82,12 @@ function StepButton({
       disabled={disabled}
       hitSlop={6}
       accessibilityLabel={label}
+      accessibilityRole="button"
       accessibilityState={{ disabled }}
     >
       <Animated.View
         style={press.style}
-        className={cn('h-11 w-11 items-center justify-center', disabled && 'opacity-35')}
+        className={cn('h-12 w-12 items-center justify-center', disabled && 'opacity-35')}
       >
         <MaterialCommunityIcons name={icon} size={18} color={COLORS.textPrimary} />
       </Animated.View>

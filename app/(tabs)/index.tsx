@@ -1,40 +1,32 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React from "react";
-import { Image, Pressable, StyleSheet, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../../constants/theme";
-import { AnimatedCounter, FadeInUp } from "../../components/motion";
-import { Badge, Button, Panel, Screen, Text } from "../../components/ui";
-import { buildStockUnits } from "../../lib/allocation";
-import { isExpiringSoon } from "../../lib/expiry";
-import { InventoryItem, usePantryStore } from "../../lib/store";
-import { cuePress } from "../../lib/feedback";
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useMemo } from 'react';
+import { Pressable, View } from 'react-native';
+import { COLORS, FONTS } from '../../constants/theme';
+import { AnimatedCounter, FadeInUp } from '../../components/motion';
+import { Card, Screen, Text, CategoryIcon } from '../../components/ui';
+import { buildStockUnits } from '../../lib/allocation';
+import { isExpiringSoon } from '../../lib/expiry';
+import { InventoryItem, usePantryStore } from '../../lib/store';
+import { cuePress, cueTap } from '../../lib/feedback';
 
 /**
- * The dashboard.
+ * Clean, Accessible Pantry Dashboard.
  *
- * Rebuilt for calm. Previously an alert banner, three metric tiles, three action
- * buttons, a low-stock card and an activity list all fought above the fold, in
- * four competing accent colours and nine font sizes.
- *
- * The rule now: one headline answer, one primary action, everything else
- * subordinate. A volunteer walking in wants to know "how many boxes can we make
- * and what's stopping us" — that is the top card, and nothing else gets to be
- * red.
+ * Designed with senior volunteers in mind:
+ * 1. High contrast, large text sizes (no tiny 11px micro-copy)
+ * 2. Big, easy-to-tap touch targets (52px - 64px)
+ * 3. Plain, simple English: no tech jargon (no "dock sensors", "bay cameras", or "bottlenecks")
+ * 4. Clean, dignified card design: no artificial pill-shaped cutouts or generic stock photos
+ * 5. Clear pantry switching so volunteers can work across different food banks
  */
 
-/**
- * Activity rows store an ISO timestamp, which was being rendered raw —
- * "2026-08-05T14:22:09.481Z" under every line. What a volunteer wants from this
- * column is how long ago, not to the millisecond.
- */
 function formatActivityTime(iso: string): string {
   const then = new Date(iso).getTime();
   if (Number.isNaN(then)) return iso;
 
   const minutes = Math.floor((Date.now() - then) / 60000);
-  if (minutes < 1) return "Just now";
+  if (minutes < 1) return 'Just now';
   if (minutes < 60) return `${minutes}m ago`;
 
   const hours = Math.floor(minutes / 60);
@@ -43,293 +35,378 @@ function formatActivityTime(iso: string): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
 
-  return new Date(then).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
+  return new Date(then).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
   });
 }
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { inventory, bulkLots, settings, activities, thresholds, readyBoxes } =
-    usePantryStore();
+  const { inventory, bulkLots, settings, activities, thresholds, readyBoxes } = usePantryStore();
+
   const readyCount = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
+  const targetBoxes = settings.boxTarget || 42;
+  const totalStockCount = inventory.reduce((sum: number, i: InventoryItem) => sum + i.count, 0);
 
-  // Was comparing a Date parsed from "2026-09-20" — which is UTC midnight —
-  // against a local Date, so the count was wrong by a day for part of every
-  // day. Plain date strings compare exactly. See lib/expiry.ts.
-  const expiringCount = inventory
-    .filter((i: InventoryItem) => isExpiringSoon(i.expiration, settings.expirationWarningDays))
-    .reduce((sum: number, item: InventoryItem) => sum + item.count, 0);
+  const expiringItems = useMemo(() => {
+    return inventory.filter((i: InventoryItem) =>
+      isExpiringSoon(i.expiration, settings.expirationWarningDays)
+    );
+  }, [inventory, settings.expirationWarningDays]);
 
-  const totalStockCount = inventory.reduce(
-    (sum: number, i: InventoryItem) => sum + i.count,
-    0,
-  );
+  const expiringCount = expiringItems.reduce((sum: number, item: InventoryItem) => sum + item.count, 0);
 
-  /**
-   * Low-stock is measured against what can actually be given out.
-   *
-   * It counted everything on the shelf, so twenty out-of-date tins of protein
-   * held the alert off while the pantry had nothing to pack — and weighed bulk
-   * lots counted for nothing, so a 60 lb protein drop left the category
-   * reading as empty. The same pool box building draws from answers both.
-   */
   const givable = buildStockUnits(inventory, bulkLots);
-  const lowCategories = Object.keys(thresholds).filter((cat: string) => {
-    const total = givable
-      .filter((i: InventoryItem) => i.category === cat)
-      .reduce((sum: number, i: InventoryItem) => sum + i.count, 0);
-    return total < (thresholds as any)[cat];
-  });
+  const lowCategories = useMemo(() => {
+    return Object.keys(thresholds)
+      .map((cat: string) => {
+        const total = givable
+          .filter((i: InventoryItem) => i.category === cat)
+          .reduce((sum: number, i: InventoryItem) => sum + i.count, 0);
+        const threshold = (thresholds as any)[cat];
+        return {
+          category: cat,
+          current: total,
+          threshold,
+          deficit: Math.max(0, threshold - total),
+        };
+      })
+      .filter((item) => item.deficit > 0)
+      .sort((a, b) => b.deficit - a.deficit);
+  }, [givable, thresholds]);
 
   return (
-    <Screen>
-      {/* THE HERO IS THE CAMERA.
-          It used to be a repeat of Build's headline figure — the same "balanced
-          boxes ready now" number, on the screen right next to the tab that
-          exists to compute it. Two screens saying the same thing means one of
-          them is wasting the best space it has, and the dashboard was the one
-          with something better to put there.
+    <Screen contentContainerClassName="gap-5 pb-16">
+      {/* 1. Header: Food Bank Identity & Volunteer Greeting */}
+      <View className="gap-1.5 pt-1">
+        <View className="flex-row items-center justify-between">
+          <View className="flex-1 flex-row items-center gap-2">
+            <MaterialCommunityIcons name="home-heart" size={20} color={COLORS.primary} />
+            <Text variant="body" className="font-bold text-ink" numberOfLines={1}>
+              {settings.pantryName || 'PantryLens Food Bank'}
+            </Text>
+          </View>
+          <Pressable
+            onPress={() => {
+              cueTap();
+              router.push('/pantry-selection');
+            }}
+            hitSlop={10}
+            className="rounded-md border border-hairline bg-card px-2.5 py-1"
+          >
+            <Text variant="label" tone="brand" className="font-semibold">
+              Switch
+            </Text>
+          </Pressable>
+        </View>
 
-          Photographing a donation is what this app is FOR, and it was a card
-          you had to scroll past the answer to reach. It is the answer now. */}
+        <Text
+          style={{
+            fontFamily: FONTS.serifSemi,
+            fontSize: 28,
+            lineHeight: 34,
+            color: COLORS.textPrimary,
+          }}
+        >
+          Welcome to your pantry
+        </Text>
+        <Text variant="body" tone="soft" className="leading-6">
+          Here is what is ready today and what needs your help.
+        </Text>
+      </View>
+
+      {/* 2. Primary Action: Big "Scan Donations" Button */}
       <FadeInUp index={0}>
         <Pressable
+          accessibilityRole="button"
+          accessibilityLabel="Scan donations. Take a photo or scan barcode to add food."
           onPress={() => {
             cuePress();
-            router.push("/log-donation");
+            router.push('/log-donation');
           }}
           style={({ pressed }) => ({
-            // The same lip the buttons carry, so the hero reads as part of the
-            // same physical family — and as something you press, which the old
-            // one was not.
-            borderBottomWidth: pressed ? 3 : 7,
-            borderBottomColor: COLORS.primaryDeep,
-            transform: [{ translateY: pressed ? 4 : 0 }],
-            shadowColor: COLORS.shadow,
-            shadowOpacity: 0.2,
-            shadowRadius: 14,
-            shadowOffset: { width: 0, height: 5 },
-            elevation: 5,
+            opacity: pressed ? 0.9 : 1,
+            transform: [{ scale: pressed ? 0.99 : 1 }],
           })}
-          className="overflow-hidden rounded-lg"
+          className="min-h-[72px] flex-row items-center justify-between rounded-xl bg-brand p-5 shadow-sm"
         >
-          {/* A real donation box behind the words. A photograph of the actual
-              thing says what this app is for before a word is read. */}
-          <Image
-            source={require("../../assets/images/donation-scan.jpg")}
-            style={StyleSheet.absoluteFill}
-            resizeMode="cover"
-          />
-          {/* Dense where the type sits, thinning toward the top-right so the box
-              stays visible. White text over a photograph needs this everywhere,
-              not just behind the words. */}
-          <LinearGradient
-            colors={[
-              "rgba(156,66,38,0.97)",
-              "rgba(156,66,38,0.88)",
-              "rgba(156,66,38,0.45)",
-            ]}
-            locations={[0, 0.55, 1]}
-            start={{ x: 0, y: 1 }}
-            end={{ x: 1, y: 0 }}
-            style={StyleSheet.absoluteFill}
-          />
-
-          <View className="p-card pb-5 pt-6">
-            <View className="h-12 w-12 items-center justify-center rounded-full bg-white/20">
-              <MaterialCommunityIcons
-                name="camera-outline"
-                size={26}
-                color={COLORS.textOnPrimary}
-              />
+          <View className="flex-1 flex-row items-center gap-4">
+            <View className="h-12 w-12 items-center justify-center rounded-lg bg-white/20">
+              <MaterialCommunityIcons name="camera-outline" size={28} color="#FFFFFF" />
             </View>
-
-            <Text variant="headline" className="mt-4 text-ink-on">
-              Photograph a donation
-            </Text>
-            <Text variant="body" className="mt-1.5 max-w-[85%] text-ink-on/75">
-              Point, shoot, and every label is read for you.
-            </Text>
-
-            <View className="my-4 h-px bg-white/20" />
-
-            <View className="flex-row items-center justify-between gap-3">
-              <Text variant="label" className="flex-1 text-ink-on/85">
-                Nothing is saved until you check it
+            <View className="flex-1 gap-0.5">
+              <Text style={{ fontSize: 20, fontWeight: '700', color: '#FFFFFF' }}>
+                Scan Donations
               </Text>
-              <View className="flex-row items-center gap-1 rounded-full bg-white/15 px-4 py-2">
-                <Text variant="label" className="font-bold text-ink-on">
-                  Start
-                </Text>
-                <MaterialCommunityIcons
-                  name="arrow-right"
-                  size={15}
-                  color={COLORS.textOnPrimary}
-                />
-              </View>
+              <Text style={{ fontSize: 14, color: 'rgba(255, 255, 255, 0.9)' }}>
+                Take photos or scan barcodes to add food
+              </Text>
             </View>
           </View>
+          <MaterialCommunityIcons name="chevron-right" size={28} color="#FFFFFF" />
         </Pressable>
       </FadeInUp>
 
-      {/* Two figures sitting directly on the canvas. Wrapping every number in
-          its own bordered card is what made the screen feel like a filing
-          cabinet; a divider is enough to separate two of them. */}
+      {/* 3. Core Working Status: Boxes Ready & Total Stock */}
       <FadeInUp index={1}>
-        <View className="flex-row items-center px-1">
-          <View className="flex-1">
-            <AnimatedCounter
-              value={totalStockCount}
-              style={{
-                fontSize: 28,
-                fontWeight: "700",
-                color: COLORS.textPrimary,
-              }}
-            />
-            {/* Says what it counts. Packing takes stock out of inventory, so a
-                pantry that has just boxed half its food sees this number drop,
-                and "items" alone read as though that food had vanished. */}
-            <Text variant="micro" tone="soft" className="mt-0.5">
-              items on the shelf · {inventory.length} products
-            </Text>
-            <Text variant="micro" tone="soft">
-              not counting packed boxes
-            </Text>
-          </View>
-
-          <View className="h-9 w-px bg-hairline" />
-
+        <View className="gap-3.5">
+          {/* Box Readiness Card */}
           <Pressable
-            className="flex-1 pl-5"
-            onPress={() => router.push("/expiring-soon")}
-          >
-            <View className="flex-row items-center gap-1.5">
-              <AnimatedCounter
-                value={expiringCount}
-                style={{
-                  fontSize: 28,
-                  fontWeight: "700",
-                  color: COLORS.statusWarning,
-                }}
-              />
-              <MaterialCommunityIcons
-                name="chevron-right"
-                size={18}
-                color={COLORS.textSecondary}
-              />
-            </View>
-            <Text variant="micro" tone="soft" className="mt-0.5">
-              use within {settings.expirationWarningDays} days
-            </Text>
-          </Pressable>
-        </View>
-
-        {/* The other half of "not counting packed boxes": where they went. */}
-        {readyCount > 0 && (
-          <Pressable
-            onPress={() => router.push("/ready-boxes")}
             accessibilityRole="button"
-            className="mt-4 flex-row items-center gap-3 rounded-md border-[1.5px] border-hairline bg-subtle px-4 py-3"
+            accessibilityLabel={`${readyCount} of ${targetBoxes} food boxes ready for families.`}
+            onPress={() => {
+              cueTap();
+              router.push(readyCount > 0 ? '/ready-boxes' : '/(tabs)/build');
+            }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
           >
-            <MaterialCommunityIcons
-              name="package-variant-closed"
-              size={20}
-              color={COLORS.primaryLight}
-            />
-            <Text variant="label" className="flex-1 font-semibold">
-              {readyCount} {readyCount === 1 ? "box" : "boxes"} packed and ready to go
-            </Text>
-            <MaterialCommunityIcons name="chevron-right" size={18} color={COLORS.textSecondary} />
-          </Pressable>
-        )}
-      </FadeInUp>
+            <Card className="gap-3 p-5">
+              <View className="flex-row items-center justify-between">
+                <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.textPrimary }}>
+                  Food Boxes Ready
+                </Text>
+                <Text variant="label" tone="brand" className="font-bold">
+                  {readyCount > 0 ? 'View Ready Boxes →' : 'Start Packing →'}
+                </Text>
+              </View>
 
-      {/* The other two intakes stay quiet beneath it. */}
-      <FadeInUp index={2}>
-        <View className="flex-row gap-2">
-          <Button
-            label="Weigh bulk"
-            variant="secondary"
-            size="compact"
-            onPress={() => router.push("/bulk-intake")}
-          />
-          <Button
-            label="Audit a shelf"
-            variant="secondary"
-            size="compact"
-            onPress={() => router.push("/shelf-audit")}
-          />
+              <View className="flex-row items-baseline gap-2">
+                <AnimatedCounter
+                  value={readyCount}
+                  style={{
+                    fontSize: 34,
+                    fontWeight: '800',
+                    color: COLORS.textPrimary,
+                  }}
+                />
+                <Text style={{ fontSize: 18, color: COLORS.textSecondary }}>
+                  of {targetBoxes} boxes needed today
+                </Text>
+              </View>
+
+              <View className="h-3 w-full overflow-hidden rounded-md bg-subtle">
+                <View
+                  style={{
+                    width: `${Math.min(100, Math.max(5, Math.round((readyCount / targetBoxes) * 100)))}%`,
+                  }}
+                  className="h-full rounded-md bg-secondary"
+                />
+              </View>
+
+              <Text variant="label" tone="soft">
+                {readyCount > 0
+                  ? `${readyCount} packed boxes are ready for families to collect.`
+                  : 'Assemble boxes from available shelf inventory.'}
+              </Text>
+            </Card>
+          </Pressable>
+
+          {/* Shelves & Expiration Card */}
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${totalStockCount} items on shelves. ${expiringCount} items expiring soon.`}
+            onPress={() => {
+              cueTap();
+              router.push('/(tabs)/inventory');
+            }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
+          >
+            <Card className="gap-3 p-5">
+              <View className="flex-row items-center justify-between">
+                <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.textPrimary }}>
+                  Current Inventory
+                </Text>
+                <Text variant="label" tone="brand" className="font-bold">
+                  View Shelves →
+                </Text>
+              </View>
+
+              <View className="flex-row items-baseline gap-2">
+                <AnimatedCounter
+                  value={totalStockCount}
+                  style={{
+                    fontSize: 34,
+                    fontWeight: '800',
+                    color: COLORS.textPrimary,
+                  }}
+                />
+                <Text style={{ fontSize: 18, color: COLORS.textSecondary }}>
+                  total items in pantry
+                </Text>
+              </View>
+
+              {expiringCount > 0 ? (
+                <View className="flex-row items-center gap-2 rounded-md border border-amber-300 bg-amber-50 p-2.5">
+                  <MaterialCommunityIcons
+                    name="clock-alert-outline"
+                    size={20}
+                    color={COLORS.statusWarning}
+                  />
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#904C00' }}>
+                    {expiringCount} items expiring soon (give these out first)
+                  </Text>
+                </View>
+              ) : (
+                <Text variant="label" tone="soft">
+                  All inventory is well within expiration dates.
+                </Text>
+              )}
+            </Card>
+          </Pressable>
         </View>
       </FadeInUp>
 
+      {/* 4. Shortages Card (Plain English: "Food We Need Most") */}
       {lowCategories.length > 0 && (
-        <FadeInUp index={3}>
-          <Panel>
-            <View className="flex-row items-center gap-2">
-              <MaterialCommunityIcons
-                name="trending-down"
-                size={16}
-                color={COLORS.statusCritical}
-              />
-              <Text variant="label" className="font-semibold">
-                Running low
-              </Text>
+        <FadeInUp index={2}>
+          <Card className="gap-3.5 p-5">
+            <View className="flex-row items-center justify-between">
+              <View className="flex-row items-center gap-2.5">
+                <MaterialCommunityIcons
+                  name="alert-circle-outline"
+                  size={24}
+                  color={COLORS.statusCritical}
+                />
+                <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.textPrimary }}>
+                  Items Running Low
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => {
+                  cueTap();
+                  router.push('/(tabs)/needs');
+                }}
+                className="py-1"
+              >
+                <Text variant="label" tone="brand" className="font-bold">
+                  See All Needs →
+                </Text>
+              </Pressable>
             </View>
-            <View className="mt-3 flex-row flex-wrap gap-2">
-              {lowCategories.map((cat: string) => (
-                <Badge key={cat} label={cat} tone="critical" />
-              ))}
-            </View>
-            <Button
-              label="Write a donation request"
-              variant="ghost"
-              size="compact"
-              className="mt-3"
-              onPress={() => router.push("/(tabs)/needs")}
-            />
-          </Panel>
-        </FadeInUp>
-      )}
 
-      {/* Activity is a log, not a card. Rows on the page, no container.
-
-          With nothing in it, a heading plus a sentence plus the section's own
-          rhythm reserved most of a screen to say "nothing happened yet" — so an
-          empty log collapses to the one line, no heading above it. */}
-      <FadeInUp index={4}>
-        {activities.length === 0 ? (
-          <Text variant="micro" tone="soft" className="px-1">
-            Nothing logged yet. Scanning a donation will show up here.
-          </Text>
-        ) : (
-          <View className="gap-4">
-            <Text variant="label" tone="soft" className="font-semibold">
-              Recent activity
+            <Text variant="body" tone="soft">
+              We are short on these items for box packing:
             </Text>
 
-            <View className="gap-4">
-              {activities.slice(0, 5).map((act: any) => (
-                <View key={act.id} className="flex-row items-start gap-3">
-                  <View className="mt-0.5 h-8 w-8 items-center justify-center rounded-full bg-subtle">
-                    <MaterialCommunityIcons
-                      name={act.icon as any}
-                      size={16}
-                      color={COLORS.primaryLight}
-                    />
+            <View className="gap-2.5">
+              {lowCategories.slice(0, 3).map((item) => (
+                <View
+                  key={item.category}
+                  className="flex-row items-center justify-between rounded-md border border-hairline bg-canvas p-3"
+                >
+                  <View className="flex-row items-center gap-3">
+                    <CategoryIcon category={item.category} size="sm" shape="square" />
+                    <View>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textPrimary }}>
+                        {item.category.charAt(0).toUpperCase() + item.category.slice(1)}
+                      </Text>
+                      <Text variant="label" tone="soft">
+                        Goal: {item.threshold} items
+                      </Text>
+                    </View>
                   </View>
-                  <View className="flex-1">
-                    <Text variant="label">{act.text}</Text>
-                    <Text variant="micro" tone="soft" className="mt-0.5">
-                      {formatActivityTime(act.time)}
+
+                  <View className="rounded-md border border-red-200 bg-red-50 px-3 py-1.5">
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: COLORS.statusCritical }}>
+                      Need {item.deficit} more
                     </Text>
                   </View>
                 </View>
               ))}
             </View>
-          </View>
-        )}
+          </Card>
+        </FadeInUp>
+      )}
+
+      {/* 5. Helpful Simple Actions: Weigh Bulk & Count Shelf */}
+      <FadeInUp index={3}>
+        <View className="flex-row gap-3">
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Weigh Bulk Deliveries"
+            onPress={() => {
+              cueTap();
+              router.push('/bulk-intake');
+            }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            className="flex-1"
+          >
+            <Card className="gap-2 p-4">
+              <MaterialCommunityIcons name="scale" size={26} color={COLORS.primary} />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textPrimary }}>
+                Weigh Deliveries
+              </Text>
+              <Text variant="label" tone="soft">
+                Large grocery & crate drops
+              </Text>
+            </Card>
+          </Pressable>
+
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="Audit Shelf Inventory"
+            onPress={() => {
+              cueTap();
+              router.push('/shelf-audit');
+            }}
+            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
+            className="flex-1"
+          >
+            <Card className="gap-2 p-4">
+              <MaterialCommunityIcons
+                name="clipboard-check-outline"
+                size={26}
+                color={COLORS.primary}
+              />
+              <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textPrimary }}>
+                Count Shelves
+              </Text>
+              <Text variant="label" tone="soft">
+                Verify counts on shelf
+              </Text>
+            </Card>
+          </Pressable>
+        </View>
+      </FadeInUp>
+
+      {/* 6. Recent Activity */}
+      <FadeInUp index={4}>
+        <View className="gap-2.5">
+          <Text style={{ fontSize: 18, fontWeight: '700', color: COLORS.textPrimary }}>
+            Recent Activity
+          </Text>
+
+          <Card className="divide-y divide-hairline/60 p-0">
+            {activities.length === 0 ? (
+              <View className="p-4">
+                <Text variant="body" tone="soft">
+                  Activity will appear here when donations are scanned or boxes are packed.
+                </Text>
+              </View>
+            ) : (
+              activities.slice(0, 4).map((act, index) => (
+                <View key={act.id || index} className="flex-row items-center gap-3 p-3.5">
+                  <View className="h-9 w-9 items-center justify-center rounded-md bg-subtle">
+                    <MaterialCommunityIcons
+                      name={act.icon as any}
+                      size={20}
+                      color={COLORS.primary}
+                    />
+                  </View>
+                  <View className="flex-1">
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: COLORS.textPrimary }}>
+                      {act.text}
+                    </Text>
+                    <Text variant="label" tone="soft">
+                      {formatActivityTime(act.time)}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
+          </Card>
+        </View>
       </FadeInUp>
     </Screen>
   );

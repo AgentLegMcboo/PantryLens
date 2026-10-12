@@ -64,7 +64,7 @@ export function CategoryIcon({
       importantForAccessibility="no"
       className={cn(
         'items-center justify-center bg-subtle',
-        shape === 'square' ? 'rounded-md' : 'rounded-full',
+        shape === 'circle' ? 'rounded-full' : 'rounded-lg',
         box,
         className,
       )}

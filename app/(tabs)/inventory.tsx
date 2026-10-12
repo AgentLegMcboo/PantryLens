@@ -197,7 +197,7 @@ export default function InventoryScreen() {
     !isUsableCondition(item.condition) || isPastDate(item.expiration);
 
   const filteredItems = inventory
-    .filter(item => {
+    .filter((item) => {
       const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
       const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
       const matchFlag = !onlyFlagged || needsAttention(item);
@@ -210,8 +210,7 @@ export default function InventoryScreen() {
       if (sortBy === 'oldest') return (a.date_added || '').localeCompare(b.date_added || '');
       if (!a.expiration) return 1;
       if (!b.expiration) return -1;
-      const byDate =
-        new Date(a.expiration).getTime() - new Date(b.expiration).getTime();
+      const byDate = new Date(a.expiration).getTime() - new Date(b.expiration).getTime();
       // Two tins with the same printed date are separated by which arrived
       // first, which is what FIFO actually means.
       return byDate !== 0 ? byDate : (a.date_added || '').localeCompare(b.date_added || '');
@@ -233,10 +232,10 @@ export default function InventoryScreen() {
     const buckets: { id: string; title: string; data: InventoryItem[] }[] =
       groupBy === 'place'
         ? [
-            ...locations.map(l => ({ id: l.id, title: l.name, data: [] as InventoryItem[] })),
+            ...locations.map((l) => ({ id: l.id, title: l.name, data: [] as InventoryItem[] })),
             { id: 'none', title: 'Not filed anywhere', data: [] as InventoryItem[] },
           ]
-        : CATEGORIES.filter(c => c.id !== 'all').map(c => ({
+        : CATEGORIES.filter((c) => c.id !== 'all').map((c) => ({
             id: c.id,
             title: c.label,
             data: [] as InventoryItem[],
@@ -245,36 +244,33 @@ export default function InventoryScreen() {
     const fallback = buckets[buckets.length - 1];
     for (const item of filteredItems) {
       const key = groupBy === 'place' ? (item.location_id ?? 'none') : item.category;
-      (buckets.find(b => b.id === key) ?? fallback).data.push(item);
+      (buckets.find((b) => b.id === key) ?? fallback).data.push(item);
     }
 
     // An empty shelf is worth seeing when you are looking at the room; an empty
     // one while you are searching is just noise.
     const searching = !!search || onlyFlagged || selectedCategory !== 'all';
     return buckets
-      .filter(b => b.data.length > 0 || (!searching && groupBy === 'place'))
-      .map(b => ({
+      .filter((b) => b.data.length > 0 || (!searching && groupBy === 'place'))
+      .map((b) => ({
         ...b,
         units: b.data.reduce((sum, i) => sum + i.count, 0),
         data: collapsed[b.id] ? [] : b.data,
       }));
   })();
 
-  const selectedIds = Object.keys(selected).filter(id => selected[id]);
+  const selectedIds = Object.keys(selected).filter((id) => selected[id]);
   const picking = selectedIds.length > 0;
 
   const toggleSelect = (id: string) => {
     cueTap();
-    setSelected(prev => ({ ...prev, [id]: !prev[id] }));
+    setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
   const clearSelection = () => setSelected({});
 
   /** Applies an action to the picked rows, then leaves picking mode. */
-  const runOnSelection = async (
-    action: () => Promise<void>,
-    failureTitle: string,
-  ) => {
+  const runOnSelection = async (action: () => Promise<void>, failureTitle: string) => {
     try {
       await action();
       clearSelection();
@@ -295,9 +291,7 @@ export default function InventoryScreen() {
   const handleExit = (reason: ExitReason) => {
     const ids = exitIds ?? [];
     const count = ids.length;
-    const units = inventory
-      .filter(i => ids.includes(i.id))
-      .reduce((sum, i) => sum + i.count, 0);
+    const units = inventory.filter((i) => ids.includes(i.id)).reduce((sum, i) => sum + i.count, 0);
 
     const prompts: Record<ExitReason, { title: string; body: string; verb: string }> = {
       given_out: {
@@ -324,8 +318,7 @@ export default function InventoryScreen() {
       {
         text: prompt.verb,
         style: reason === 'given_out' ? 'default' : 'destructive',
-        onPress: () =>
-          runOnSelection(() => recordExit(ids, reason), 'Could not record that'),
+        onPress: () => runOnSelection(() => recordExit(ids, reason), 'Could not record that'),
       },
     ]);
   };
@@ -355,7 +348,7 @@ export default function InventoryScreen() {
     const damaged = !isUsableCondition(item.condition);
     // Both keep it out of the boxes, so both get the red treatment.
     const blocked = damaged || pastDate;
-    const placeName = locations.find(l => l.id === item.location_id)?.name;
+    const placeName = locations.find((l) => l.id === item.location_id)?.name;
 
     const isSelected = !!selected[item.id];
 
@@ -428,18 +421,20 @@ export default function InventoryScreen() {
                 <Badge label="Use first" tone="warn" className="mt-2" />
               ) : null}
             </View>
-
+          </View>
+          <View className="mt-3 flex-row items-center justify-between gap-3 border-t border-hairline pt-3">
+            <Text variant="label" tone="soft" className="flex-1 capitalize">
+              {item.category} · {picking ? `${item.count} units` : 'Units on shelf'}
+            </Text>
             {/* The stepper is meaningless while picking — the row is a checkbox
                 then, and a control that also changes stock would fight the tap. */}
             {!picking && (
               <Stepper
                 value={item.count}
                 min={0}
-                onChange={next => {
+                onChange={(next) => {
                   const write =
-                    next === 0
-                      ? deleteItem(item.id)
-                      : updateItem(item.id, { count: next });
+                    next === 0 ? deleteItem(item.id) : updateItem(item.id, { count: next });
                   // These used to be fired and forgotten, so a rejected write was
                   // an unhandled promise and a silently unchanged shelf.
                   write.catch((err: any) => {
@@ -472,7 +467,7 @@ export default function InventoryScreen() {
           methods = swipeableMethods;
           return <SwipeAction translation={translation} />;
         }}
-        onSwipeableOpen={direction => {
+        onSwipeableOpen={(direction) => {
           if (direction !== 'left') return;
           cueWarn();
           methods?.close();
@@ -490,6 +485,15 @@ export default function InventoryScreen() {
   return (
     <View className="flex-1 bg-canvas">
       <View className="px-gutter pt-4 gap-4">
+        {!picking && (
+          <View className="gap-1">
+            <Text variant="headline">Your shelves</Text>
+            <Text variant="label" tone="soft">
+              {inventory.length} products · {inventory.reduce((sum, item) => sum + item.count, 0)}{' '}
+              units
+            </Text>
+          </View>
+        )}
         {picking ? (
           /* One bar, one job. Search and category filters are not what anyone
              wants once they have already chosen what they are acting on. */
@@ -511,16 +515,16 @@ export default function InventoryScreen() {
               <Pressable
                 onPress={() => {
                   cueTap();
-                  const all = filteredItems.every(i => selected[i.id]);
+                  const all = filteredItems.every((i) => selected[i.id]);
                   setSelected(
-                    all ? {} : Object.fromEntries(filteredItems.map(i => [i.id, true])),
+                    all ? {} : Object.fromEntries(filteredItems.map((i) => [i.id, true])),
                   );
                 }}
                 hitSlop={8}
                 className="px-2 py-2"
               >
                 <Text variant="label" tone="brand" className="font-bold">
-                  {filteredItems.every(i => selected[i.id]) ? 'None' : 'All'}
+                  {filteredItems.every((i) => selected[i.id]) ? 'None' : 'All'}
                 </Text>
               </Pressable>
             </View>
@@ -569,43 +573,47 @@ export default function InventoryScreen() {
             </View>
           </View>
         ) : (
-        <View className="flex-row items-center gap-3">
-          <View className="h-12 flex-1 flex-row items-center gap-2 rounded-md border-[1.5px] border-outline bg-card px-3">
-            <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
-            <TextInput
-              className="flex-1 text-body text-ink"
-              placeholder="Search items"
-              value={search}
-              onChangeText={setSearch}
-              placeholderTextColor={COLORS.textSecondary}
-            />
-            {search ? (
-              <Pressable onPress={() => setSearch('')} hitSlop={8}>
-                <MaterialCommunityIcons name="close-circle" size={18} color={COLORS.textSecondary} />
-              </Pressable>
-            ) : null}
-          </View>
+          <View className="flex-row items-center gap-3">
+            <View className="h-12 flex-1 flex-row items-center gap-2 rounded-md border-[1.5px] border-outline bg-card px-3">
+              <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
+              <TextInput
+                className="flex-1 text-body text-ink"
+                placeholder="Search items"
+                value={search}
+                onChangeText={setSearch}
+                placeholderTextColor={COLORS.textSecondary}
+              />
+              {search ? (
+                <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                  <MaterialCommunityIcons
+                    name="close-circle"
+                    size={18}
+                    color={COLORS.textSecondary}
+                  />
+                </Pressable>
+              ) : null}
+            </View>
 
-          <Pressable
-            onPress={() => setModalVisible(true)}
-            accessibilityLabel="Add an item by hand"
-            style={({ pressed }) => ({
-              borderBottomWidth: pressed ? 2 : 4,
-              borderBottomColor: COLORS.primaryDeep,
-              transform: [{ translateY: pressed ? 2 : 0 }],
-            })}
-            className="h-12 w-12 items-center justify-center rounded-md bg-brand"
-          >
-            <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
-          </Pressable>
-        </View>
+            <Pressable
+              onPress={() => setModalVisible(true)}
+              accessibilityLabel="Add an item by hand"
+              style={({ pressed }) => ({
+                borderBottomWidth: pressed ? 2 : 4,
+                borderBottomColor: COLORS.primaryDeep,
+                transform: [{ translateY: pressed ? 2 : 0 }],
+              })}
+              className="h-12 w-12 items-center justify-center rounded-md bg-brand"
+            >
+              <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
+            </Pressable>
+          </View>
         )}
 
         {!picking && flaggedCount > 0 && (
           <Pressable
             onPress={() => {
               cueTap();
-              setOnlyFlagged(v => !v);
+              setOnlyFlagged((v) => !v);
             }}
             className={`flex-row items-center gap-3 rounded-md border-[1.5px] px-4 py-3 ${
               onlyFlagged ? 'border-critical bg-critical' : 'border-hairline bg-subtle'
@@ -621,8 +629,7 @@ export default function InventoryScreen() {
               tone={onlyFlagged ? 'on' : 'default'}
               className="flex-1 font-semibold"
             >
-              {flaggedCount} {flaggedCount === 1 ? 'item is' : 'items are'} out of date or
-              damaged
+              {flaggedCount} {flaggedCount === 1 ? 'item is' : 'items are'} out of date or damaged
             </Text>
             <Text variant="micro" tone={onlyFlagged ? 'on' : 'soft'} className="font-bold">
               {onlyFlagged ? 'Show all' : 'Show them'}
@@ -631,26 +638,26 @@ export default function InventoryScreen() {
         )}
 
         {!picking && (
-        <FlatList
-          horizontal
-          data={CATEGORIES}
-          keyExtractor={c => c.id}
-          showsHorizontalScrollIndicator={false}
-          contentContainerClassName="gap-2 pr-gutter"
-          renderItem={({ item }) => (
-            <Chip
-              label={item.label}
-              selected={selectedCategory === item.id}
-              onPress={() => setSelectedCategory(item.id)}
-            />
-          )}
-        />
+          <FlatList
+            horizontal
+            data={CATEGORIES}
+            keyExtractor={(c) => c.id}
+            showsHorizontalScrollIndicator={false}
+            contentContainerClassName="gap-2 pr-gutter"
+            renderItem={({ item }) => (
+              <Chip
+                label={item.label}
+                selected={selectedCategory === item.id}
+                onPress={() => setSelectedCategory(item.id)}
+              />
+            )}
+          />
         )}
       </View>
 
       <SectionList
         sections={sections}
-        keyExtractor={item => item.id}
+        keyExtractor={(item) => item.id}
         renderItem={renderItemRow}
         stickySectionHeadersEnabled={groupBy !== 'none'}
         keyboardShouldPersistTaps="handled"
@@ -663,7 +670,7 @@ export default function InventoryScreen() {
             <Pressable
               onPress={() => {
                 cueTap();
-                setCollapsed(prev => ({ ...prev, [section.id]: !prev[section.id] }));
+                setCollapsed((prev) => ({ ...prev, [section.id]: !prev[section.id] }));
               }}
               // Opaque, because it sticks: a translucent header would let rows
               // scroll through the text behind it.
@@ -689,59 +696,75 @@ export default function InventoryScreen() {
         }}
         ListHeaderComponent={
           picking ? null : (
-            <View className="mb-4 flex-row items-center justify-between gap-3">
-              <Pressable
-                onPress={() => {
-                  cueTap();
-                  const i = GROUPS.findIndex(g => g.id === groupBy);
-                  setGroupBy(GROUPS[(i + 1) % GROUPS.length].id);
-                }}
-                className="flex-row items-center gap-1"
-                accessibilityLabel={`Grouped ${GROUPS.find(g => g.id === groupBy)?.label}. Tap to change.`}
-              >
-                <MaterialCommunityIcons
-                  name="view-agenda-outline"
-                  size={16}
-                  color={COLORS.primaryDark}
-                />
-                <Text variant="micro" tone="brand" className="font-semibold">
-                  {GROUPS.find(g => g.id === groupBy)?.label}
-                </Text>
-              </Pressable>
-
-              {groupBy === 'place' && (
+            <View className="mb-4 gap-2">
+              <View className="flex-row items-center gap-2">
                 <Pressable
                   onPress={() => {
                     cueTap();
-                    setManagingPlaces(true);
+                    const i = GROUPS.findIndex((g) => g.id === groupBy);
+                    setGroupBy(GROUPS[(i + 1) % GROUPS.length].id);
                   }}
-                  hitSlop={8}
-                  accessibilityLabel="Manage places"
-                  className="flex-row items-center gap-1"
+                  className="min-h-[48px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3.5"
+                  accessibilityLabel={`Grouped ${GROUPS.find((g) => g.id === groupBy)?.label}. Tap to change.`}
                 >
                   <MaterialCommunityIcons
-                    name="map-marker-outline"
-                    size={16}
+                    name="view-agenda-outline"
+                    size={18}
                     color={COLORS.primaryDark}
                   />
-                  <Text variant="micro" tone="brand" className="font-semibold">
-                    Places
+                  <Text
+                    variant="label"
+                    tone="brand"
+                    numberOfLines={1}
+                    className="flex-1 font-semibold text-sm"
+                  >
+                    Group: {GROUPS.find((g) => g.id === groupBy)?.label}
                   </Text>
                 </Pressable>
-              )}
+
+                {groupBy === 'place' && (
+                  <Pressable
+                    onPress={() => {
+                      cueTap();
+                      setManagingPlaces(true);
+                    }}
+                    hitSlop={8}
+                    accessibilityLabel="Manage places"
+                    className="min-h-[48px] flex-row items-center justify-center gap-1.5 rounded-lg border border-hairline bg-card px-3.5"
+                  >
+                    <MaterialCommunityIcons
+                      name="map-marker-outline"
+                      size={18}
+                      color={COLORS.primaryDark}
+                    />
+                    <Text variant="label" tone="brand" className="font-semibold text-sm">
+                      Places
+                    </Text>
+                  </Pressable>
+                )}
+              </View>
 
               <Pressable
                 onPress={() => {
-                  const i = SORTS.findIndex(s => s.id === sortBy);
+                  const i = SORTS.findIndex((s) => s.id === sortBy);
                   setSortBy(SORTS[(i + 1) % SORTS.length].id);
                 }}
-                className="flex-row items-center gap-1"
-                accessibilityLabel={`Sorted by ${SORTS.find(s => s.id === sortBy)?.label}. Tap to change.`}
+                className="min-h-[48px] flex-row items-center gap-2 rounded-md border border-hairline bg-subtle px-3"
+                accessibilityLabel={`Sorted by ${SORTS.find((s) => s.id === sortBy)?.label}. Tap to change.`}
               >
-                <MaterialCommunityIcons name="swap-vertical" size={16} color={COLORS.primaryDark} />
-                <Text variant="micro" tone="brand" className="font-semibold">
-                  {SORTS.find(s => s.id === sortBy)?.label}
+                <MaterialCommunityIcons
+                  name="swap-vertical"
+                  size={16}
+                  color={COLORS.primaryDark}
+                />
+                <Text variant="label" tone="brand" className="flex-1 font-semibold">
+                  Sort: {SORTS.find((s) => s.id === sortBy)?.label}
                 </Text>
+                <MaterialCommunityIcons
+                  name="chevron-down"
+                  size={18}
+                  color={COLORS.primaryDark}
+                />
               </Pressable>
             </View>
           )
@@ -816,7 +839,7 @@ export default function InventoryScreen() {
         subtitle={`Where these ${selectedIds.length} ${selectedIds.length === 1 ? 'item goes' : 'items go'}`}
       >
         <View className="flex-row flex-wrap gap-2">
-          {locations.map(loc => (
+          {locations.map((loc) => (
             <Chip
               key={loc.id}
               label={loc.name}
@@ -849,7 +872,7 @@ export default function InventoryScreen() {
         subtitle={`Applies to all ${selectedIds.length} selected ${selectedIds.length === 1 ? 'item' : 'items'}`}
       >
         <View className="flex-row flex-wrap gap-2">
-          {CATEGORIES.filter(c => c.id !== 'all').map(cat => (
+          {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
             <Chip
               key={cat.id}
               label={cat.label}
@@ -896,7 +919,7 @@ export default function InventoryScreen() {
                   Category
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
-                  {CATEGORIES.filter(c => c.id !== 'all').map(cat => (
+                  {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
                     <Chip
                       key={cat.id}
                       label={cat.label}

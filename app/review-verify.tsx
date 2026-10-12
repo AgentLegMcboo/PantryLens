@@ -3,10 +3,10 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
+import { COLORS, FONTS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
-import { Badge, Button, Card, Chip, Input, Stepper, Text } from '../components/ui';
+import { Badge, Button, Card, Chip, Input, ItemThumb, Stepper, Text } from '../components/ui';
 import * as Crypto from 'expo-crypto';
 import { identifyRegion, ScanError } from '../lib/ai_vision';
 import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
@@ -20,7 +20,7 @@ import {
   CONDITION_LABELS,
   InventoryItem,
   isUsableCondition,
-  usePantryStore
+  usePantryStore,
 } from '../lib/store';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
@@ -111,7 +111,7 @@ export default function ReviewVerifyScreen() {
    * place that claims its category, and the batch picker becomes an override for
    * the odd load that all goes one place.
    */
-  const autoFiles = locations.some(l => l.categories?.length > 0);
+  const autoFiles = locations.some((l) => l.categories?.length > 0);
 
   const source: 'donation' | 'shelf_audit' =
     params.source === 'shelf_audit' ? 'shelf_audit' : 'donation';
@@ -155,11 +155,11 @@ export default function ReviewVerifyScreen() {
   }, []);
 
   const photo = currentScanPhotos[photoIndex];
-  const verifiedCount = draftItems.filter(i => verifiedIds[i.uid]).length;
+  const verifiedCount = draftItems.filter((i) => verifiedIds[i.uid]).length;
   const allVerified = draftItems.length > 0 && verifiedCount === draftItems.length;
 
   const updateItemAtIndex = (index: number, updates: Partial<InventoryItem>) => {
-    setDraftItems(prev => {
+    setDraftItems((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], ...updates };
       return next;
@@ -168,8 +168,8 @@ export default function ReviewVerifyScreen() {
 
   const removeItemAtIndex = (index: number) => {
     const removedId = draftItems[index].uid;
-    setDraftItems(prev => prev.filter((_, i) => i !== index));
-    setVerifiedIds(prev => {
+    setDraftItems((prev) => prev.filter((_, i) => i !== index));
+    setVerifiedIds((prev) => {
       const next = { ...prev };
       delete next[removedId];
       return next;
@@ -179,7 +179,7 @@ export default function ReviewVerifyScreen() {
 
   /** A box the volunteer dragged or resized. Their placement beats the model's. */
   const handleBoxChange = (id: string, box: DetectionBox) => {
-    setDraftItems(prev => prev.map(item => (item.uid === id ? { ...item, box } : item)));
+    setDraftItems((prev) => prev.map((item) => (item.uid === id ? { ...item, box } : item)));
   };
 
   /**
@@ -206,7 +206,7 @@ export default function ReviewVerifyScreen() {
       box,
     };
     cueSuccess();
-    setDraftItems(prev => [...prev, row]);
+    setDraftItems((prev) => [...prev, row]);
     setSelectedId(row.uid);
     setDrawMode(false);
   };
@@ -243,7 +243,7 @@ export default function ReviewVerifyScreen() {
    * does nothing. That beats confirming a row nobody has seen.
    */
   const confirmAndAdvance = (uid: string) => {
-    const row = draftItems.find(r => r.uid === uid);
+    const row = draftItems.find((r) => r.uid === uid);
     if (!row || !row.name?.trim()) return;
 
     let map = verifiedRef.current;
@@ -281,10 +281,13 @@ export default function ReviewVerifyScreen() {
    */
   const handleIdentify = async (uid: string) => {
     if (identifyingId) return;
-    const row = draftItems.find(r => r.uid === uid);
+    const row = draftItems.find((r) => r.uid === uid);
     const source = row ? currentScanPhotos[row.imageIndex ?? 0] : undefined;
     if (!row?.box || !source?.uri || !source.width || !source.height) {
-      Alert.alert('Nothing to look at', 'This item has no box on a photo. Type the name in instead.');
+      Alert.alert(
+        'Nothing to look at',
+        'This item has no box on a photo. Type the name in instead.',
+      );
       return;
     }
 
@@ -296,8 +299,8 @@ export default function ReviewVerifyScreen() {
         row.box,
       );
 
-      setDraftItems(prev =>
-        prev.map(r =>
+      setDraftItems((prev) =>
+        prev.map((r) =>
           r.uid !== uid
             ? r
             : {
@@ -358,13 +361,13 @@ export default function ReviewVerifyScreen() {
    */
   useEffect(() => {
     if (!pendingBarcode) return;
-    const index = draftItems.findIndex(i => i.uid === pendingBarcode.uid);
+    const index = draftItems.findIndex((i) => i.uid === pendingBarcode.uid);
     if (index < 0) {
       setPendingBarcode(null);
       return;
     }
 
-    setDraftItems(prev => {
+    setDraftItems((prev) => {
       const next = [...prev];
       next[index] = {
         ...next[index],
@@ -385,9 +388,8 @@ export default function ReviewVerifyScreen() {
       };
       return next;
     });
-    // Identified by its barcode and already confirmed by the human who chose to
-    // scan it — making them tick it again would be theatre.
-    setVerifiedIds(prev => ({ ...prev, [pendingBarcode.uid]: true }));
+    // The scanner only returns a product after the volunteer checks its preview.
+    setVerifiedIds((prev) => ({ ...prev, [pendingBarcode.uid]: true }));
     setPendingBarcode(null);
   }, [pendingBarcode]);
 
@@ -400,14 +402,13 @@ export default function ReviewVerifyScreen() {
        * mean matching rows back by position afterwards, which it does not
        * promise to preserve.
        */
-      const rows = draftItems.map(row => ({
+      const rows = draftItems.map((row) => ({
         ...row,
         id: row.id ?? Crypto.randomUUID(),
         // An explicit choice for the batch wins; otherwise each item goes to
         // whichever bin claims its category. Null when nothing claims it, which
         // leaves it unfiled rather than guessing.
-        location_id:
-          batchLocation ?? defaultLocationFor((row.category ?? 'unknown') as any),
+        location_id: batchLocation ?? defaultLocationFor((row.category ?? 'unknown') as any),
         source_org: draftSource,
       }));
       await addItems(rows, source, currentScan?.scanId ?? null);
@@ -425,17 +426,19 @@ export default function ReviewVerifyScreen() {
        */
       void finishScan(
         currentScan?.scanId ?? null,
-        rows.flatMap(row =>
+        rows.flatMap((row) =>
           row.scanItemId && row.detected
-            ? [{
-                id: row.scanItemId,
-                verdict: verdictFor(row.detected, row),
-                item_id: row.id ?? null,
-                name: row.name ?? '',
-                category: (row.category ?? 'unknown') as string,
-                count: row.count ?? 0,
-                expiration: row.expiration ?? null,
-              }]
+            ? [
+                {
+                  id: row.scanItemId,
+                  verdict: verdictFor(row.detected, row),
+                  item_id: row.id ?? null,
+                  name: row.name ?? '',
+                  category: (row.category ?? 'unknown') as string,
+                  count: row.count ?? 0,
+                  expiration: row.expiration ?? null,
+                },
+              ]
             : [],
         ),
       );
@@ -455,13 +458,12 @@ export default function ReviewVerifyScreen() {
        * wrong and none of the ones it gets right.
        */
       const lessons: ConfirmationEntry[] = draftItems
-        .filter(row => row.resolvedBy !== 'barcode' && row.rawName.trim() && row.name?.trim())
-        .map(row => ({
+        .filter((row) => row.resolvedBy !== 'barcode' && row.rawName.trim() && row.name?.trim())
+        .map((row) => ({
           raw_name: row.rawName,
           canonical_name: row.name!.trim(),
           category: (row.category ?? 'unknown') as any,
-          was_corrected:
-            row.rawName.trim().toLowerCase() !== row.name!.trim().toLowerCase(),
+          was_corrected: row.rawName.trim().toLowerCase() !== row.name!.trim().toLowerCase(),
         }));
       await recordConfirmations(settings.pantryId, lessons);
 
@@ -475,29 +477,29 @@ export default function ReviewVerifyScreen() {
        * standing between them and the confirmation.
        */
       if (settings.pantryId) {
-        const jobs: PhotoJob[] = rows.flatMap(row => {
+        const jobs: PhotoJob[] = rows.flatMap((row) => {
           if (row.image_url) return [];
           const photo = currentScanPhotos[row.imageIndex ?? 0];
           if (!row.box || !photo?.uri || !photo.width || !photo.height) return [];
-          return [{
-            id: row.id!,
-            pantryId: settings.pantryId!,
-            box: row.box,
-            uri: photo.uri,
-            width: photo.width,
-            height: photo.height,
-          }];
+          return [
+            {
+              id: row.id!,
+              pantryId: settings.pantryId!,
+              box: row.box,
+              uri: photo.uri,
+              width: photo.width,
+              height: photo.height,
+            },
+          ];
         });
-        attachItemPhotos(jobs).catch(err =>
-          log.error('store', 'the photo attach threw', err),
-        );
+        attachItemPhotos(jobs).catch((err) => log.error('store', 'the photo attach threw', err));
       }
 
       cueSuccess();
       Alert.alert(
         'Saved to inventory',
         `${draftItems.length} item${draftItems.length === 1 ? '' : 's'} added.`,
-        [{ text: 'View Inventory', onPress: () => router.replace('/(tabs)/inventory') }]
+        [{ text: 'View Inventory', onPress: () => router.replace('/(tabs)/inventory') }],
       );
     } catch (err: any) {
       log.error('store', 'save from review failed', err);
@@ -514,7 +516,7 @@ export default function ReviewVerifyScreen() {
     // A box drawn by hand starts with no name. Saving it would file "Unlabeled
     // Item" into the pantry, which is the one thing a hand-drawn box was meant
     // to avoid — so this one does block, and points at the row to fix.
-    const namelessIndex = draftItems.findIndex(i => !i.name?.trim());
+    const namelessIndex = draftItems.findIndex((i) => !i.name?.trim());
     if (namelessIndex >= 0) {
       cueWarn();
       setPhotoIndex(draftItems[namelessIndex].imageIndex ?? 0);
@@ -549,15 +551,15 @@ export default function ReviewVerifyScreen() {
           Nothing to review
         </Text>
         <Text variant="body" tone="soft" className="mt-2 text-center">
-          Every line was removed, or the scan came back empty. Photograph the donation again, or
-          add the items by hand.
+          Every line was removed, or the scan came back empty. Photograph the donation again, or add
+          the items by hand.
         </Text>
         <Button label="Back to camera" className="mt-6" onPress={() => router.back()} />
       </View>
     );
   }
 
-  const selectedIndex = selectedId ? draftItems.findIndex(i => i.uid === selectedId) : -1;
+  const selectedIndex = selectedId ? draftItems.findIndex((i) => i.uid === selectedId) : -1;
   const selectedItem = selectedIndex >= 0 ? draftItems[selectedIndex] : null;
 
   // Only what was found in the photo currently on screen.
@@ -572,12 +574,6 @@ export default function ReviewVerifyScreen() {
       verified: !!verifiedIds[item.uid],
       needsAttention: (item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition),
     }));
-
-  // Detections the model could not place. They are still real items and still
-  // need confirming, so they get a list rather than being quietly hidden.
-  const unplaced = draftItems
-    .map((item, i) => ({ item, i }))
-    .filter(({ item }) => !item.box && (item.imageIndex ?? 0) === photoIndex);
 
   /**
    * What the pinned bar offers right now: the obvious next move for the row on
@@ -611,7 +607,13 @@ export default function ReviewVerifyScreen() {
         action: () => {
           cueTap();
           focusRow(
-            nextRowToCheck(draftItems, verifiedRef.current, null, photoIndex, currentScanPhotos.length),
+            nextRowToCheck(
+              draftItems,
+              verifiedRef.current,
+              null,
+              photoIndex,
+              currentScanPhotos.length,
+            ),
           );
         },
       };
@@ -628,7 +630,11 @@ export default function ReviewVerifyScreen() {
             loading: identifyingId === uid,
             action: () => handleIdentify(uid),
           }
-        : { label: 'Name it first', hint: 'Type a name above to confirm it.', icon: 'pencil-outline' };
+        : {
+            label: 'Name it first',
+            hint: 'Type a name above to confirm it.',
+            icon: 'pencil-outline',
+          };
     }
     if (verifiedIds[uid]) {
       return {
@@ -649,170 +655,241 @@ export default function ReviewVerifyScreen() {
 
   return (
     <View className="flex-1 bg-canvas">
-    {/* Extra foot so the Save button can scroll clear of the pinned bar. */}
-    <KeyboardScreen scrollEnabled={scrollEnabled} contentContainerClassName="pb-40">
-      {/* Progress, stated once as a sentence rather than as a card full of
-          chrome. The bar is the only ornament it needs. */}
-      <View className="gap-2">
-        <View className="flex-row items-center justify-between">
-          <Text variant="heading">
-            {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
+      {/* Extra foot so the Save button can scroll clear of the pinned bar. */}
+      <KeyboardScreen scrollEnabled={scrollEnabled} contentContainerClassName="pb-40">
+        <View className="gap-2">
+          <Text variant="micro" tone="brand" className="font-semibold tracking-wide">
+            DONATION INTAKE · REVIEW
           </Text>
-          <MaterialCommunityIcons
-            name={allVerified ? 'shield-check' : 'shield-search'}
-            size={20}
-            color={allVerified ? COLORS.statusGood : COLORS.primaryLight}
-          />
-        </View>
-        <View className="h-1.5 overflow-hidden rounded-full bg-muted">
-          <View
-            className={allVerified ? 'h-full rounded-full bg-good' : 'h-full rounded-full bg-brand-light'}
-            style={{ width: `${(verifiedCount / draftItems.length) * 100}%` }}
-          />
-        </View>
-      </View>
-
-      {photo ? (
-        <View className="gap-3">
-          <DetectionOverlay
-            uri={photo.uri}
-            aspectRatio={photo.width && photo.height ? photo.width / photo.height : 4 / 3}
-            items={overlayItems}
-            selectedId={selectedId}
-            drawMode={drawMode}
-            onSelect={id => {
-              cueTap();
-              setSelectedId(prev => (prev === id ? null : id));
+          <Text
+            style={{
+              fontFamily: FONTS.serifSemi,
+              fontSize: 30,
+              lineHeight: 36,
+              color: COLORS.textPrimary,
             }}
-            onBoxChange={handleBoxChange}
-            onDraw={handleDrawBox}
-            onDragStateChange={dragging => setScrollEnabled(!dragging)}
-          />
-
-          <View className="flex-row items-center justify-between gap-3">
-            <Text variant="micro" tone="soft" className="flex-1">
-              {drawMode
-                ? 'Drag a rectangle around the item that was missed.'
-                : selectedId
-                  ? 'Drag to move it, or pull a corner to resize.'
-                  : 'Tap a box. Nudge it if it sits off the item.'}
+          >
+            Check your donation
+          </Text>
+          <Text variant="body" tone="soft">
+            Check names, quantities and condition before adding anything to your shelf.
+          </Text>
+        </View>
+        {/* Progress, stated once as a sentence rather than as a card full of
+          chrome. The bar is the only ornament it needs. */}
+        <View className="gap-2">
+          <View className="flex-row items-center justify-between">
+            <Text variant="heading">
+              {allVerified
+                ? 'Everything checked'
+                : `${verifiedCount} of ${draftItems.length} confirmed`}
             </Text>
-            <Button
-              label={drawMode ? 'Cancel' : 'Add missed item'}
-              variant={drawMode ? 'primary' : 'secondary'}
-              size="compact"
-              onPress={() => {
-                setDrawMode(m => !m);
-                setSelectedId(null);
-              }}
+            <MaterialCommunityIcons
+              name={allVerified ? 'shield-check' : 'shield-search'}
+              size={20}
+              color={allVerified ? COLORS.statusGood : COLORS.primaryLight}
+            />
+          </View>
+          <View className="h-1.5 overflow-hidden rounded-full bg-muted">
+            <View
+              className={
+                allVerified ? 'h-full rounded-full bg-good' : 'h-full rounded-full bg-brand-light'
+              }
+              style={{ width: `${(verifiedCount / draftItems.length) * 100}%` }}
             />
           </View>
         </View>
-      ) : (
-        <Card>
-          <Text variant="label" tone="soft">
-            The photo isn&apos;t available, so everything is listed below instead.
-          </Text>
-        </Card>
-      )}
 
-      {currentScanPhotos.length > 1 && (
-        <View className="flex-row flex-wrap gap-2">
-          {currentScanPhotos.map((_, i) => {
-            const pending = draftItems.filter(
-              item => (item.imageIndex ?? 0) === i && !verifiedIds[item.uid],
-            ).length;
-            return (
-              <Chip
-                key={i}
-                label={pending > 0 ? `Photo ${i + 1} · ${pending}` : `Photo ${i + 1}`}
-                selected={i === photoIndex}
+        {photo ? (
+          <View className="gap-3">
+            <DetectionOverlay
+              uri={photo.uri}
+              aspectRatio={photo.width && photo.height ? photo.width / photo.height : 4 / 3}
+              items={overlayItems}
+              selectedId={selectedId}
+              drawMode={drawMode}
+              onSelect={(id) => {
+                cueTap();
+                setSelectedId((prev) => (prev === id ? null : id));
+              }}
+              onBoxChange={handleBoxChange}
+              onDraw={handleDrawBox}
+              onDragStateChange={(dragging) => setScrollEnabled(!dragging)}
+            />
+
+            <View className="flex-row items-center justify-between gap-3">
+              <Text variant="micro" tone="soft" className="flex-1">
+                {drawMode
+                  ? 'Drag a rectangle around the item that was missed.'
+                  : selectedId
+                    ? 'Drag to move it, or pull a corner to resize.'
+                    : 'Tap a box. Nudge it if it sits off the item.'}
+              </Text>
+              <Button
+                label={drawMode ? 'Cancel' : 'Add missed item'}
+                variant={drawMode ? 'primary' : 'secondary'}
+                size="compact"
                 onPress={() => {
-                  setPhotoIndex(i);
+                  setDrawMode((m) => !m);
                   setSelectedId(null);
                 }}
               />
-            );
-          })}
-        </View>
-      )}
-
-      {locations.length > 0 && (
-        <View className="gap-2">
-          <Text variant="label" tone="soft" className="font-semibold">
-            {autoFiles ? 'Send the whole batch to one place?' : 'Where is this going?'}
-          </Text>
-          <View className="flex-row flex-wrap gap-2">
-            {locations.map(loc => (
-              <Chip
-                key={loc.id}
-                label={loc.name}
-                selected={batchLocation === loc.id}
-                onPress={() =>
-                  setBatchLocation(batchLocation === loc.id ? null : loc.id)
-                }
-              />
-            ))}
+            </View>
           </View>
-          <Text variant="micro" tone="soft">
-            {batchLocation
-              ? 'Every item in this scan is filed there, whatever its category.'
-              : autoFiles
-                ? 'Leave this off and each item goes to the bin that holds its category.'
-                : 'Optional — leave it off and these land unfiled. Set up which bin holds what in Settings and they will file themselves.'}
-          </Text>
-        </View>
-      )}
+        ) : (
+          <Card>
+            <Text variant="label" tone="soft">
+              The photo isn&apos;t available, so everything is listed below instead.
+            </Text>
+          </Card>
+        )}
 
-      {selectedItem && selectedIndex >= 0 ? (
-        <ItemEditor
-          item={selectedItem}
-          verified={!!verifiedIds[selectedId!]}
-          onChange={updates => updateItemAtIndex(selectedIndex, updates)}
-          onRemove={() => removeItemAtIndex(selectedIndex)}
-          onBarcode={() => handleBarcodeScan(selectedItem.uid)}
-          onUndoConfirm={() => unconfirm(selectedItem.uid)}
-          onIdentify={() => handleIdentify(selectedItem.uid)}
-          identifying={identifyingId === selectedItem.uid}
-          onClose={() => setSelectedId(null)}
-        />
-      ) : null}
-
-      {unplaced.length > 0 && (
-        <Card>
-          <Text variant="heading">Not pinned to a spot</Text>
-          <Text variant="label" tone="soft" className="mt-1">
-            Read, but the scanner could not say where they were.
-          </Text>
-          <View className="mt-4 gap-3">
-            {unplaced.map(({ item }) => {
-              const isVerified = !!verifiedIds[item.uid];
+        {currentScanPhotos.length > 1 && (
+          <View className="flex-row flex-wrap gap-2">
+            {currentScanPhotos.map((_, i) => {
+              const pending = draftItems.filter(
+                (item) => (item.imageIndex ?? 0) === i && !verifiedIds[item.uid],
+              ).length;
               return (
-                <Pressable
-                  key={item.uid}
-                  className="flex-row items-center gap-3"
+                <Chip
+                  key={i}
+                  label={pending > 0 ? `Photo ${i + 1} · ${pending}` : `Photo ${i + 1}`}
+                  selected={i === photoIndex}
                   onPress={() => {
-                    cueTap();
-                    setSelectedId(prev => (prev === item.uid ? null : item.uid));
+                    setPhotoIndex(i);
+                    setSelectedId(null);
                   }}
-                >
-                  <MaterialCommunityIcons
-                    name={isVerified ? 'check-circle' : 'circle-outline'}
-                    size={20}
-                    color={isVerified ? COLORS.statusGood : COLORS.textSecondary}
-                  />
-                  <Text variant="label" className="flex-1" numberOfLines={1}>
-                    {item.count && item.count > 1 ? `${item.count}× ` : ''}
-                    {item.name}
-                  </Text>
-                </Pressable>
+                />
               );
             })}
           </View>
-        </Card>
-      )}
+        )}
 
-    </KeyboardScreen>
+        {locations.length > 0 && (
+          <View className="gap-2">
+            <Text variant="label" tone="soft" className="font-semibold">
+              {autoFiles ? 'Send the whole batch to one place?' : 'Where is this going?'}
+            </Text>
+            <View className="flex-row flex-wrap gap-2">
+              {locations.map((loc) => (
+                <Chip
+                  key={loc.id}
+                  label={loc.name}
+                  selected={batchLocation === loc.id}
+                  onPress={() => setBatchLocation(batchLocation === loc.id ? null : loc.id)}
+                />
+              ))}
+            </View>
+            <Text variant="micro" tone="soft">
+              {batchLocation
+                ? 'Every item in this scan is filed there, whatever its category.'
+                : autoFiles
+                  ? 'Leave this off and each item goes to the bin that holds its category.'
+                  : 'Optional — leave it off and these land unfiled. Set up which bin holds what in Settings and they will file themselves.'}
+            </Text>
+          </View>
+        )}
+
+        {selectedItem && selectedIndex >= 0 ? (
+          <ItemEditor
+            item={selectedItem}
+            verified={!!verifiedIds[selectedId!]}
+            onChange={(updates) => updateItemAtIndex(selectedIndex, updates)}
+            onRemove={() => removeItemAtIndex(selectedIndex)}
+            onBarcode={() => handleBarcodeScan(selectedItem.uid)}
+            onUndoConfirm={() => unconfirm(selectedItem.uid)}
+            onIdentify={() => handleIdentify(selectedItem.uid)}
+            identifying={identifyingId === selectedItem.uid}
+            onClose={() => setSelectedId(null)}
+          />
+        ) : null}
+
+        <View className="gap-3">
+          <View className="flex-row flex-wrap items-center justify-between gap-2">
+            <Text variant="heading">Donation items</Text>
+            <Text variant="label" tone="soft">
+              {draftItems.length} products ·{' '}
+              {draftItems.reduce((sum, item) => sum + (item.count ?? 1), 0)} units
+            </Text>
+          </View>
+          <Text variant="label" tone="soft">
+            Tap an item to edit it or find it in the photo.
+          </Text>
+          {draftItems.map((item, index) => {
+            const checked = !!verifiedIds[item.uid];
+            const needsReview =
+              !checked && ((item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition));
+            return (
+              <Card
+                key={item.uid}
+                className="gap-3 p-4"
+                style={
+                  selectedId === item.uid
+                    ? { borderColor: COLORS.primary }
+                    : needsReview
+                      ? { borderLeftWidth: 3, borderLeftColor: COLORS.statusWarning }
+                      : undefined
+                }
+              >
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Edit ${item.name || 'Unnamed item'}`}
+                  className="flex-row items-start gap-3"
+                  onPress={() => {
+                    cueTap();
+                    focusRow(item);
+                  }}
+                >
+                  <ItemThumb
+                    imageUrl={item.image_url}
+                    category={item.category ?? 'unknown'}
+                    size="md"
+                  />
+                  <View className="flex-1 gap-1">
+                    <Text variant="body" className="font-semibold">
+                      {item.name || 'Name this item'}
+                    </Text>
+                    <Text variant="label" tone="soft" className="capitalize">
+                      {item.category ?? 'Unknown category'}
+                    </Text>
+                    <View className="flex-row items-center gap-1.5">
+                      <MaterialCommunityIcons
+                        name={checked ? 'check-circle-outline' : 'alert-circle-outline'}
+                        size={16}
+                        color={checked ? COLORS.statusGood : COLORS.primaryDark}
+                      />
+                      <Text variant="micro" tone={checked ? 'good' : 'soft'}>
+                        {checked ? 'Confirmed' : needsReview ? 'Needs review' : 'Ready to check'}
+                      </Text>
+                    </View>
+                  </View>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={20}
+                    color={COLORS.textSecondary}
+                  />
+                </Pressable>
+                <View className="flex-row flex-wrap items-center justify-between gap-3 border-t border-hairline pt-3">
+                  <Stepper
+                    value={item.count ?? 1}
+                    min={1}
+                    onChange={(count) => updateItemAtIndex(index, { count })}
+                  />
+                  <Button
+                    label={checked ? 'Edit' : 'Check item'}
+                    variant="secondary"
+                    size="compact"
+                    onPress={() => {
+                      cueTap();
+                      focusRow(item);
+                    }}
+                  />
+                </View>
+              </Card>
+            );
+          })}
+        </View>
+      </KeyboardScreen>
 
       {/* THE CONFIRM BAR.
           Pinned to the screen rather than living at the end of the editor card,
@@ -962,7 +1039,11 @@ function ItemEditor({
             </Pressable>
           )}
           <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove this item">
-            <MaterialCommunityIcons name="trash-can-outline" size={20} color={COLORS.textSecondary} />
+            <MaterialCommunityIcons
+              name="trash-can-outline"
+              size={20}
+              color={COLORS.textSecondary}
+            />
           </Pressable>
           <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
             <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
@@ -994,7 +1075,7 @@ function ItemEditor({
           label="Name"
           value={item.name}
           placeholder="What is it?"
-          onChangeText={txt => onChange({ name: txt })}
+          onChangeText={(txt) => onChange({ name: txt })}
         />
         {/* Only for boxes a volunteer drew. Scanned rows already have the
             model's reading, and re-asking would just return it again. Offered
@@ -1018,7 +1099,7 @@ function ItemEditor({
           Category
         </Text>
         <View className="flex-row flex-wrap gap-2">
-          {CATEGORIES.map(cat => (
+          {CATEGORIES.map((cat) => (
             <Chip
               key={cat}
               label={cat}
@@ -1034,7 +1115,7 @@ function ItemEditor({
           Condition
         </Text>
         <View className="flex-row flex-wrap gap-2">
-          {(Object.keys(CONDITION_LABELS) as Condition[]).map(cond => {
+          {(Object.keys(CONDITION_LABELS) as Condition[]).map((cond) => {
             const active = (item.condition || 'ok') === cond;
             const good = cond === 'ok';
             return (
@@ -1064,14 +1145,14 @@ function ItemEditor({
           <Text variant="label" tone="soft">
             Quantity
           </Text>
-          <Stepper value={item.count || 1} min={1} onChange={next => onChange({ count: next })} />
+          <Stepper value={item.count || 1} min={1} onChange={(next) => onChange({ count: next })} />
         </View>
         <View className="flex-1">
           <Input
             label="Expires"
             placeholder="YYYY-MM-DD"
             value={item.expiration || ''}
-            onChangeText={txt => onChange({ expiration: txt })}
+            onChangeText={(txt) => onChange({ expiration: txt })}
           />
         </View>
       </View>
@@ -1085,13 +1166,10 @@ function ItemEditor({
           variant="secondary"
           size="compact"
           className="mt-5"
-          icon={
-            <MaterialCommunityIcons name="barcode-scan" size={17} color={COLORS.textPrimary} />
-          }
+          icon={<MaterialCommunityIcons name="barcode-scan" size={17} color={COLORS.textPrimary} />}
           onPress={onBarcode}
         />
       )}
-
     </Card>
   );
 }

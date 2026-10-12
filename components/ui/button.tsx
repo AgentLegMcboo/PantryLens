@@ -20,36 +20,32 @@ import { cuePress, cueTap } from '../../lib/feedback';
  * ugliest thing this app did — `block` is opt-in, for the single committing
  * action at the end of a flow.
  */
-/** Full-size buttons get a lip you can actually see; compact ones scale down so
- *  a 40px chip is not two-thirds edge. */
-const LIP = 6;
-const LIP_COMPACT = 3;
-const LIP_PRESSED = 2;
+/** A shallow edge keeps the tactile press without the old heavy extrusion. */
+const LIP = 2;
+const LIP_COMPACT = 1;
+const LIP_PRESSED = 1;
 
-const buttonVariants = cva(
-  'flex-row items-center justify-center gap-2 rounded-lg self-start',
-  {
-    variants: {
-      variant: {
-        primary: 'bg-brand',
-        secondary: 'bg-card border-[1.5px] border-outline',
-        critical: 'bg-critical',
-        ghost: 'bg-transparent px-0',
-        // Destructive, but not the loudest thing on the page. Sign-out and
-        // "remove this item" are red because of what they do, not because they
-        // are what the screen wants you to press.
-        criticalGhost: 'bg-transparent px-0',
-      },
-      size: {
-        // 48 keeps the accessibility floor for the actions that matter.
-        default: 'min-h-[48px] px-6',
-        compact: 'min-h-[40px] px-4',
-      },
-      block: { true: 'w-full self-auto', false: '' },
+const buttonVariants = cva('flex-row items-center justify-center gap-2 rounded-lg self-start', {
+  variants: {
+    variant: {
+      primary: 'bg-brand',
+      secondary: 'bg-card border-[1.5px] border-outline',
+      critical: 'bg-critical',
+      ghost: 'bg-transparent px-0',
+      // Destructive, but not the loudest thing on the page. Sign-out and
+      // "remove this item" are red because of what they do, not because they
+      // are what the screen wants you to press.
+      criticalGhost: 'bg-transparent px-0',
     },
-    defaultVariants: { variant: 'primary', size: 'default', block: false },
+    size: {
+      // 48 keeps the accessibility floor for the actions that matter.
+      default: 'min-h-[52px] px-6 py-3',
+      compact: 'min-h-[48px] px-4 py-2',
+    },
+    block: { true: 'w-full self-auto', false: '' },
   },
-);
+  defaultVariants: { variant: 'primary', size: 'default', block: false },
+});
 
 const labelTone = {
   primary: 'on',
@@ -123,7 +119,7 @@ export function Button({
             tone={labelTone[variant ?? 'primary']}
             // Bold and slightly tracked, as in the reference. Not uppercased —
             // "CHECK" carries that well, "PHOTOGRAPH A DONATION" shouts.
-            className="font-bold tracking-wide"
+            className="shrink text-center font-semibold"
           >
             {label}
           </Text>

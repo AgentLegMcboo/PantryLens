@@ -198,8 +198,8 @@ export default function BuildBoxesScreen() {
                     `Enough of everything for ${requestedBoxes}`
                   )}
                 </Text>
-                <View className="flex-row items-center gap-1 rounded-full bg-white/15 px-3 py-2">
-                  <Text variant="micro" className="font-bold text-ink-on">
+                <View className="flex-row items-center gap-1 rounded-md bg-white/20 px-3 py-1.5">
+                  <Text variant="label" className="font-bold text-ink-on text-xs">
                     Why
                   </Text>
                   <MaterialCommunityIcons

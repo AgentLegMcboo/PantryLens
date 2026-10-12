@@ -57,17 +57,17 @@ export function Row({
       )}
     >
       {icon ? (
-        <View className="h-9 w-9 items-center justify-center rounded-full bg-subtle">
-          <MaterialCommunityIcons name={icon} size={18} color={glyphColour} />
+        <View className="h-10 w-10 items-center justify-center rounded-lg bg-subtle">
+          <MaterialCommunityIcons name={icon} size={20} color={glyphColour} />
         </View>
       ) : null}
 
       <View className="flex-1">
-        <Text variant="body" className="font-semibold" style={{ color: colour }}>
+        <Text variant="body" className="font-semibold text-base" style={{ color: colour }}>
           {label}
         </Text>
         {hint ? (
-          <Text variant="micro" tone="soft" className="mt-0.5">
+          <Text variant="label" tone="soft" className="mt-0.5 text-xs">
             {hint}
           </Text>
         ) : null}

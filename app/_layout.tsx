@@ -97,7 +97,7 @@ export default function RootLayout() {
     } else if (session && !pantryId && segments[0] !== 'pantry-selection') {
       // User is logged in but doesn't have a pantry assigned yet
       router.replace('/pantry-selection');
-    } else if (session && pantryId && (inAuthGroup || segments[0] === 'pantry-selection')) {
+    } else if (session && pantryId && inAuthGroup) {
       // User is logged in and has a pantry, keep them out of auth screens
       router.replace('/(tabs)');
     }

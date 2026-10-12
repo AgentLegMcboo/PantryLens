@@ -1,5 +1,7 @@
 import * as React from 'react';
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Pressable, View, type PressableProps } from 'react-native';
+import { COLORS } from '../../constants/theme';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
 import { cueTap } from '../../lib/feedback';
@@ -27,13 +29,13 @@ export function Chip({
         onPress?.(e);
       }}
       className={cn(
-        'rounded-full border-[1.5px] px-4 py-2 min-h-[40px] justify-center',
-        selected ? 'bg-brand-light border-brand-light' : 'bg-card border-outline',
+        'rounded-lg border px-4 py-2.5 min-h-[48px] justify-center',
+        selected ? 'bg-brand border-brand' : 'bg-card border-hairline',
         className,
       )}
       {...props}
     >
-      <Text variant="label" tone={selected ? 'on' : 'soft'} className="font-semibold">
+      <Text variant="label" tone={selected ? 'on' : 'soft'} className="font-semibold text-sm">
         {label}
       </Text>
     </Pressable>
@@ -51,16 +53,29 @@ export function Badge({
   className?: string;
 }) {
   const tones = {
-    neutral: 'bg-muted',
-    good: 'bg-good',
-    warn: 'bg-warn',
-    critical: 'bg-critical',
-    brand: 'bg-brand-light',
+    neutral: { background: COLORS.surfaceContainer, foreground: COLORS.textSecondary },
+    good: { background: '#EEF4E9', foreground: '#3C6534' },
+    warn: { background: '#FFF2DB', foreground: '#80500E' },
+    critical: { background: '#FCEBE8', foreground: '#982E26' },
+    brand: { background: '#F8E8DF', foreground: COLORS.primary },
   } as const;
+  const icon =
+    tone === 'good'
+      ? 'check-circle-outline'
+      : tone === 'warn'
+        ? 'alert-outline'
+        : tone === 'critical'
+          ? 'alert-circle-outline'
+          : null;
+  const colors = tones[tone];
 
   return (
-    <View className={cn('self-start rounded-sm px-2 py-0.5', tones[tone], className)}>
-      <Text variant="micro" tone={tone === 'neutral' ? 'default' : 'on'} className="font-bold">
+    <View
+      className={cn('self-start flex-row items-center gap-1.5 rounded-md px-2.5 py-1', className)}
+      style={{ backgroundColor: colors.background }}
+    >
+      {icon && <MaterialCommunityIcons name={icon} size={15} color={colors.foreground} />}
+      <Text variant="label" style={{ color: colors.foreground }} className="shrink font-semibold text-xs">
         {label}
       </Text>
     </View>

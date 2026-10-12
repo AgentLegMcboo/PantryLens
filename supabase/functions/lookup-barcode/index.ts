@@ -46,6 +46,10 @@ Deno.serve(async (req) => {
     const hit = resolved.get(barcode)
 
     if (!hit || !hit.name) {
+      if (hit?.unavailable) {
+        return json({ found: false, reason: 'UNAVAILABLE', barcode,
+          error: 'The product database is temporarily unavailable. Please retry.' })
+      }
       return json({
         found: false,
         reason: 'UNKNOWN',

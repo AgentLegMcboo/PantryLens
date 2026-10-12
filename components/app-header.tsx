@@ -36,7 +36,7 @@ export function AppHeader({ title }: { title: string }) {
   const warningLimit = new Date();
   warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
   const expiringCount = inventory.filter(
-    i => !!i.expiration && new Date(i.expiration) <= warningLimit,
+    (i) => !!i.expiration && new Date(i.expiration) <= warningLimit,
   ).length;
 
   const close = () => setMenuOpen(false);
@@ -63,16 +63,21 @@ export function AppHeader({ title }: { title: string }) {
           }}
           accessibilityRole="button"
           accessibilityLabel={`${settings.pantryName || 'PantryLens'}, ${title}. Opens pantry menu.`}
-          className="mr-auto max-w-[62%] flex-row items-center gap-2.5 rounded-full border-[1.5px] border-outline bg-card py-1.5 pl-1.5 pr-4"
+          className="mr-auto flex-1 flex-row items-center gap-2.5 py-1.5"
         >
-          <View className="h-9 w-9 items-center justify-center rounded-full bg-brand">
-            <Text variant="body" tone="on" className="font-bold">
+          <View className="h-10 w-10 items-center justify-center rounded-lg bg-brand">
+            <Text variant="body" tone="on" className="font-bold text-base">
               {(settings.pantryName || 'P').trim().charAt(0).toUpperCase()}
             </Text>
           </View>
-          <Text variant="heading" numberOfLines={1} className="shrink font-bold">
-            {settings.pantryName || 'PantryLens'}
-          </Text>
+          <View className="flex-1 gap-0.5">
+            <Text variant="micro" tone="soft" className="font-medium">
+              {title}
+            </Text>
+            <Text variant="body" numberOfLines={1} className="font-bold text-base">
+              {settings.pantryName || 'PantryLens'}
+            </Text>
+          </View>
         </Pressable>
 
         <HeaderButton
@@ -81,11 +86,7 @@ export function AppHeader({ title }: { title: string }) {
           badge={expiringCount}
           onPress={() => router.push('/expiring-soon')}
         />
-        <HeaderButton
-          icon="dots-vertical"
-          label="More"
-          onPress={() => setMenuOpen(true)}
-        />
+        <HeaderButton icon="dots-vertical" label="More" onPress={() => setMenuOpen(true)} />
       </View>
 
       {/* A sheet rather than a floating popover: anchoring a menu under an icon
@@ -93,9 +94,18 @@ export function AppHeader({ title }: { title: string }) {
           thumb anyway. */}
       <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={close}>
         <Pressable className="flex-1 justify-end bg-black/40" onPress={close}>
-          <Pressable className="rounded-t-lg bg-canvas px-gutter pb-10 pt-4" onPress={() => {}}>
-            <View className="mb-4 h-1 w-10 self-center rounded-full bg-hairline" />
+          <Pressable className="rounded-t-xl bg-canvas px-gutter pb-10 pt-4" onPress={() => {}}>
+            <View className="mb-4 h-1.5 w-12 self-center rounded-md bg-hairline" />
 
+            <MenuRow
+              icon="swap-horizontal"
+              label="Switch food bank"
+              hint={`Currently at ${settings.pantryName || 'this pantry'}`}
+              onPress={() => {
+                close();
+                router.push('/pantry-selection');
+              }}
+            />
             <MenuRow
               icon="chart-box-outline"
               label="Reports"
@@ -119,12 +129,7 @@ export function AppHeader({ title }: { title: string }) {
               label={settings.pantryName || 'This pantry'}
               hint={`You are signed in as ${settings.userRole}`}
             />
-            <MenuRow
-              icon="logout"
-              label="Sign out"
-              tone="critical"
-              onPress={handleSignOut}
-            />
+            <MenuRow icon="logout" label="Sign out" tone="critical" onPress={handleSignOut} />
           </Pressable>
         </Pressable>
       </Modal>
@@ -151,12 +156,12 @@ function HeaderButton({
         cueTap();
         onPress();
       }}
-      className="h-12 w-12 items-center justify-center rounded-full border-[1.5px] border-outline bg-card"
+      className="h-12 w-12 items-center justify-center rounded-lg bg-card border border-hairline/70"
     >
       <MaterialCommunityIcons name={icon} size={22} color={COLORS.textPrimary} />
       {!!badge && badge > 0 && (
-        <View className="absolute -right-0.5 -top-0.5 min-w-[18px] items-center justify-center rounded-full bg-warn px-1 py-0.5">
-          <Text variant="micro" tone="on" className="text-[10px] font-bold">
+        <View className="absolute -right-1 -top-1 min-w-[20px] items-center justify-center rounded-md bg-warn px-1.5 py-0.5">
+          <Text variant="micro" tone="on" className="text-[11px] font-bold">
             {badge > 99 ? '99+' : badge}
           </Text>
         </View>
@@ -186,21 +191,21 @@ function MenuRow({
       className="flex-row items-center gap-3 py-3.5"
       accessibilityRole={onPress ? 'button' : undefined}
     >
-      <View className="h-9 w-9 items-center justify-center rounded-full bg-subtle">
-        <MaterialCommunityIcons name={icon} size={18} color={colour} />
+      <View className="h-10 w-10 items-center justify-center rounded-lg bg-subtle">
+        <MaterialCommunityIcons name={icon} size={20} color={colour} />
       </View>
       <View className="flex-1">
-        <Text variant="body" style={{ color: colour }} className="font-semibold">
+        <Text variant="body" style={{ color: colour }} className="font-semibold text-base">
           {label}
         </Text>
         {hint ? (
-          <Text variant="micro" tone="soft" className="mt-0.5">
+          <Text variant="micro" tone="soft" className="mt-0.5 text-xs">
             {hint}
           </Text>
         ) : null}
       </View>
       {onPress ? (
-        <MaterialCommunityIcons name="chevron-right" size={18} color={COLORS.textSecondary} />
+        <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
       ) : null}
     </Pressable>
   );
@@ -236,9 +241,9 @@ export function StackHeader({
             cueTap();
             onBack();
           }}
-          className="h-12 w-12 items-center justify-center rounded-full border-[1.5px] border-outline bg-card"
+          className="h-12 w-12 items-center justify-center rounded-lg border border-hairline bg-card"
         >
-          <MaterialCommunityIcons name="chevron-left" size={24} color={COLORS.textPrimary} />
+          <MaterialCommunityIcons name="chevron-left" size={26} color={COLORS.textPrimary} />
         </Pressable>
 
         <Text

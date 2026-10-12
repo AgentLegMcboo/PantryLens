@@ -19,9 +19,8 @@ import { Text } from './text';
  * Barely there, and deliberately so.
  *
  * The edge defines the card; the shadow only settles it onto the page. The
- * bottom border is a pixel heavier than the other three — the same trick the
- * reference card uses. It reads as a thin object with a visible near edge,
- * which is what makes it feel like a physical thing rather than a rectangle.
+ * border is a single warm outline, matching the Stitch export. A light shadow
+ * separates the white surface from the cream canvas without heavy framing.
  */
 export const cardShadow = {
   shadowColor: COLORS.shadow,
@@ -34,7 +33,7 @@ export const cardShadow = {
 export function Card({ className, style, ...props }: ViewProps) {
   return (
     <View
-      className={cn('rounded-lg border-2 border-b-[3px] border-hairline bg-card p-card', className)}
+      className={cn('rounded-lg border border-hairline bg-card p-card', className)}
       style={[cardShadow, style]}
       {...props}
     />
@@ -47,7 +46,7 @@ export function Card({ className, style, ...props }: ViewProps) {
 export function Panel({ className, ...props }: ViewProps) {
   return (
     <View
-      className={cn('rounded-lg border-2 border-b-[3px] border-hairline bg-subtle p-card', className)}
+      className={cn('rounded-lg border border-hairline bg-subtle p-card', className)}
       {...props}
     />
   );

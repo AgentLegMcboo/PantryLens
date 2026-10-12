@@ -133,7 +133,7 @@ export default function ReadyBoxesScreen() {
                   />
                 )}
                 <View className="flex-1 items-center">
-                  <View className="h-11 w-11 items-center justify-center rounded-full bg-subtle">
+                  <View className="h-11 w-11 items-center justify-center rounded-lg bg-subtle">
                     <MaterialCommunityIcons
                       name={step.icon}
                       size={20}
@@ -237,7 +237,7 @@ export default function ReadyBoxesScreen() {
             hitSlop={10}
             accessibilityRole="button"
             accessibilityLabel={`Name or file ${run.label ?? boxType}`}
-            className="h-9 w-9 items-center justify-center rounded-full bg-subtle"
+            className="h-9 w-9 items-center justify-center rounded-lg bg-subtle"
           >
             <MaterialCommunityIcons
               name="pencil-outline"

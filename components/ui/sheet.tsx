@@ -283,7 +283,7 @@ export function Sheet({
                 hitSlop={12}
                 className="items-center pb-1 pt-3"
               >
-                <View className="h-1 w-10 rounded-full bg-outline" />
+                <View className="h-1.5 w-12 rounded-md bg-outline" />
               </Pressable>
 
               <View className="flex-row items-start gap-3 px-gutter pb-3 pt-2">
@@ -299,7 +299,7 @@ export function Sheet({
                   onPress={onClose}
                   hitSlop={10}
                   accessibilityLabel="Close"
-                  className="h-9 w-9 items-center justify-center rounded-full bg-subtle"
+                  className="h-9 w-9 items-center justify-center rounded-lg bg-subtle"
                 >
                   <MaterialCommunityIcons name="close" size={18} color={COLORS.textPrimary} />
                 </Pressable>

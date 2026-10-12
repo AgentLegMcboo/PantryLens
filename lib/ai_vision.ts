@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { usePantryStore } from './store';
+import { usePantryStore, type Category } from './store';
 import { applyCatalogue } from './catalogue';
 import { cropRegion } from './photo';
 import {
@@ -9,6 +9,7 @@ import {
   type ScanCandidate,
 } from './scan-normalize';
 import { describeImage, log } from './log';
+import { normaliseBarcode, sameBarcode } from './barcode-scanner';
 
 /**
  * The bridge between a photo and a draft inventory row.
@@ -171,7 +172,7 @@ export interface BarcodeLookup {
   barcode?: string;
   name?: string;
   brand?: string | null;
-  category?: string | null;
+  category?: Category | null;
   /** The manufacturer's pack shot, when the provider had one. */
   imageUrl?: string | null;
   /**
@@ -202,9 +203,14 @@ export interface BarcodeLookup {
  * alone and let a human name it.
  */
 export async function lookupBarcode(barcode: string): Promise<BarcodeLookup> {
+  const code = normaliseBarcode(barcode);
+  if (!code) return { found: false, reason: 'INVALID', error: 'Check the digits under the barcode and try again.' };
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 25_000);
   try {
     const { data, error } = await supabase.functions.invoke('lookup-barcode', {
-      body: { barcode },
+      body: { barcode: code },
+      signal: controller.signal,
     });
 
     if (error) {
@@ -217,11 +223,24 @@ export async function lookupBarcode(barcode: string): Promise<BarcodeLookup> {
       };
     }
 
-    log.debug('scan', `barcode ${barcode}: ${data?.found ? data.name : 'no match'}`);
-    return data as BarcodeLookup;
+    if (!data || typeof data.found !== 'boolean' ||
+      (data.found && (!sameBarcode(data.barcode, code) || typeof data.name !== 'string' || !data.name.trim()))) {
+      return { found: false, reason: 'ERROR', error: 'The product response did not match this barcode. Please retry.' };
+    }
+    log.debug('scan', `barcode ${code}: ${data.found ? data.name : 'no match'}`);
+    const categories: Category[] = ['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygiene', 'baby', 'unknown'];
+    return {
+      ...data,
+      barcode: code,
+      category: categories.includes(data.category) ? data.category : null,
+      imageUrl: typeof data.imageUrl === 'string' ? data.imageUrl : null,
+      error: typeof data.error === 'string' ? data.error : undefined,
+    } as BarcodeLookup;
   } catch (err) {
     log.error('scan', 'barcode lookup threw', err);
     return { found: false, reason: 'ERROR', error: 'Could not reach the product database.' };
+  } finally {
+    clearTimeout(timer);
   }
 }
 

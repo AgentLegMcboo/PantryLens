@@ -360,6 +360,89 @@ export function ownedPhotoPath(url: string | null | undefined): string | null {
 const DEFAULT_BOX_RULES: BoxRules = { grain: 2, vegetable: 2, protein: 2, breakfast: 1, snack: 1, hygiene: 1, baby: 0 };
 const DEFAULT_THRESHOLDS: CategoryThresholds = { grain: 15, vegetable: 15, protein: 15, breakfast: 10, snack: 10, hygiene: 8, baby: 5 };
 
+export interface DemoPantry {
+  id: string;
+  name: string;
+  location: string;
+  description: string;
+  boxTarget: number;
+  inventory: InventoryItem[];
+  readyBoxes: PackRun[];
+  activities: { id: string; text: string; time: string; icon: string }[];
+  thresholds: CategoryThresholds;
+}
+
+export const DEMO_PANTRIES: DemoPantry[] = [
+  {
+    id: 'st-jude',
+    name: 'St. Jude Food Bank',
+    location: 'Central Annex · Hall B',
+    description: 'Regional distribution center for family boxes',
+    boxTarget: 42,
+    inventory: [
+      { id: '1', name: 'Black Beans (15oz)', category: 'protein', count: 24, expiration: '2026-11-15', date_added: '2026-10-01', source: 'donation' },
+      { id: '2', name: 'Peanut Butter (16oz)', category: 'protein', count: 3, expiration: '2026-10-20', date_added: '2026-10-01', source: 'donation' },
+      { id: '3', name: 'Whole Grain Pasta (16oz)', category: 'grain', count: 45, expiration: '2027-01-10', date_added: '2026-10-02', source: 'donation' },
+      { id: '4', name: 'Canned Sweet Corn (15oz)', category: 'vegetable', count: 32, expiration: '2026-12-05', date_added: '2026-10-02', source: 'donation' },
+      { id: '5', name: 'Fresh Whole Milk (1 Gallon)', category: 'vegetable', count: 8, expiration: '2026-10-12', date_added: '2026-10-09', source: 'donation' },
+      { id: '6', name: 'Canned Tuna in Water', category: 'protein', count: 6, expiration: '2027-02-14', date_added: '2026-10-04', source: 'donation' },
+      { id: '7', name: 'Rolled Oats (42oz)', category: 'breakfast', count: 18, expiration: '2026-12-20', date_added: '2026-10-03', source: 'donation' },
+    ],
+    readyBoxes: [
+      { id: 'rb-1', box_name: 'Family Distribution Box', boxes: 18, boxes_collected: 0, units_taken: 90, per_box: null, created_at: new Date().toISOString(), label: null, folder_id: null },
+    ],
+    activities: [
+      { id: 'act-1', text: 'Elena M. logged 24 cans black beans', time: new Date(Date.now() - 12 * 60000).toISOString(), icon: 'format-list-bulleted' },
+      { id: 'act-2', text: 'David K. packed Box #18', time: new Date(Date.now() - 25 * 60000).toISOString(), icon: 'package-variant-closed' },
+    ],
+    thresholds: { grain: 15, vegetable: 15, protein: 15, breakfast: 10, snack: 10, hygiene: 8, baby: 5 },
+  },
+  {
+    id: 'grace-community',
+    name: 'Grace Community Pantry',
+    location: '450 Oak Ave · Fellowship Hall',
+    description: 'Neighborhood church walk-in food pantry',
+    boxTarget: 25,
+    inventory: [
+      { id: 'g-1', name: 'Toasted Oat Cereal', category: 'breakfast', count: 28, expiration: '2027-03-01', date_added: '2026-10-05', source: 'donation' },
+      { id: 'g-2', name: 'Canned Chicken Breast', category: 'protein', count: 12, expiration: '2027-06-15', date_added: '2026-10-05', source: 'donation' },
+      { id: 'g-3', name: 'Long Grain White Rice (2 lb)', category: 'grain', count: 35, expiration: '2028-01-01', date_added: '2026-10-04', source: 'donation' },
+      { id: 'g-4', name: 'Cut Green Beans (14.5oz)', category: 'vegetable', count: 40, expiration: '2027-04-10', date_added: '2026-10-04', source: 'donation' },
+      { id: 'g-5', name: 'Applesauce Cups (6 pk)', category: 'snack', count: 16, expiration: '2026-11-20', date_added: '2026-10-06', source: 'donation' },
+    ],
+    readyBoxes: [
+      { id: 'rb-g1', box_name: 'Senior Essentials Pack', boxes: 14, boxes_collected: 0, units_taken: 56, per_box: null, created_at: new Date().toISOString(), label: null, folder_id: null },
+    ],
+    activities: [
+      { id: 'act-g1', text: 'Sarah T. shelved 35 bags of rice', time: new Date(Date.now() - 40 * 60000).toISOString(), icon: 'format-list-bulleted' },
+      { id: 'act-g2', text: 'Mark R. packed 8 Senior Boxes', time: new Date(Date.now() - 75 * 60000).toISOString(), icon: 'package-variant-closed' },
+    ],
+    thresholds: { grain: 12, vegetable: 12, protein: 10, breakfast: 8, snack: 8, hygiene: 6, baby: 4 },
+  },
+  {
+    id: 'hope-harvest',
+    name: 'Hope Harvest Food Share',
+    location: '88 County Rd · Community Center',
+    description: 'Rural family food relief and farm rescue',
+    boxTarget: 50,
+    inventory: [
+      { id: 'h-1', name: 'Diced Tomatoes (28oz)', category: 'vegetable', count: 52, expiration: '2027-08-01', date_added: '2026-10-07', source: 'donation' },
+      { id: 'h-2', name: 'Dry Pinto Beans (1 lb)', category: 'protein', count: 60, expiration: '2028-02-15', date_added: '2026-10-07', source: 'donation' },
+      { id: 'h-3', name: 'Whole Wheat Flour (5 lb)', category: 'grain', count: 15, expiration: '2027-01-20', date_added: '2026-10-08', source: 'donation' },
+      { id: 'h-4', name: 'Creamy Peanut Butter', category: 'protein', count: 5, expiration: '2026-10-18', date_added: '2026-10-02', source: 'donation' },
+      { id: 'h-5', name: 'Baby Formula Powder', category: 'baby', count: 14, expiration: '2027-05-10', date_added: '2026-10-09', source: 'donation' },
+    ],
+    readyBoxes: [
+      { id: 'rb-h1', box_name: 'Family Harvest Box', boxes: 22, boxes_collected: 0, units_taken: 110, per_box: null, created_at: new Date().toISOString(), label: null, folder_id: null },
+    ],
+    activities: [
+      { id: 'act-h1', text: 'Carlos B. weighed 120 lb bulk potatoes', time: new Date(Date.now() - 20 * 60000).toISOString(), icon: 'scale-balance' },
+      { id: 'act-h2', text: 'Maria L. assembled 10 Harvest Boxes', time: new Date(Date.now() - 55 * 60000).toISOString(), icon: 'package-variant-closed' },
+    ],
+    thresholds: { grain: 20, vegetable: 20, protein: 18, breakfast: 12, snack: 10, hygiene: 10, baby: 8 },
+  },
+];
+
 /**
  * Live subscription to the pantry's tables.
  *
@@ -515,6 +598,8 @@ interface AppState {
   fetchData: () => Promise<void>;
   signOut: () => Promise<void>;
   completeOnboarding: () => Promise<void>;
+  loginAsDemo: (pantryId?: string) => void;
+  switchDemoPantry: (pantryId: string) => void;
   setActivePantry: (pantryId: string, pantryName: string, role: string) => void;
 
   fetchMembers: () => Promise<void>;
@@ -878,7 +963,80 @@ export const usePantryStore = create<AppState>((set, get) => ({
     // Closed before the session goes, or the socket keeps trying to reconnect
     // with credentials that no longer exist.
     unsubscribeFromPantry();
-    await supabase.auth.signOut();
+    await supabase.auth.signOut().catch(() => {});
+    set({
+      session: null,
+      inventory: [],
+      bulkLots: [],
+      activities: [],
+      locations: [],
+      boxTemplates: [],
+      readyBoxes: [],
+      boxFolders: [],
+      members: [],
+      settings: {
+        ...get().settings,
+        pantryId: null,
+        pantryName: '',
+        userRole: 'volunteer',
+        inviteCode: '',
+        dropoffLocation: '',
+        dropoffHours: '',
+      },
+      isLoaded: true,
+      ...(__DEV__ ? { onboarded: false } : null),
+    });
+  },
+
+  loginAsDemo: (pantryId = 'st-jude') => {
+    const pantry = DEMO_PANTRIES.find((p) => p.id === pantryId) || DEMO_PANTRIES[0];
+    set({
+      session: {
+        user: {
+          id: 'demo-user-123',
+          email: 'volunteer@pantrylens.org',
+          user_metadata: { full_name: 'Elena Martinez' },
+          app_metadata: {},
+          aud: 'authenticated',
+          created_at: new Date().toISOString(),
+        },
+        access_token: 'demo-token',
+        refresh_token: 'demo-refresh',
+        expires_in: 3600,
+        token_type: 'bearer',
+      } as any,
+      settings: {
+        ...get().settings,
+        pantryId: pantry.id,
+        pantryName: pantry.name,
+        userRole: 'volunteer',
+        boxTarget: pantry.boxTarget,
+        expirationWarningDays: 30,
+      },
+      inventory: pantry.inventory,
+      readyBoxes: pantry.readyBoxes,
+      activities: pantry.activities,
+      thresholds: pantry.thresholds,
+      isLoaded: true,
+      onboarded: true,
+    });
+  },
+
+  switchDemoPantry: (pantryId: string) => {
+    const pantry = DEMO_PANTRIES.find((p) => p.id === pantryId);
+    if (!pantry) return;
+    set({
+      settings: {
+        ...get().settings,
+        pantryId: pantry.id,
+        pantryName: pantry.name,
+        boxTarget: pantry.boxTarget,
+      },
+      inventory: pantry.inventory,
+      readyBoxes: pantry.readyBoxes,
+      activities: pantry.activities,
+      thresholds: pantry.thresholds,
+    });
   },
 
   // Storage alone is not enough — the router reads this from state, so both

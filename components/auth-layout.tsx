@@ -16,20 +16,13 @@ import { Button, Card, Text } from './ui';
  * every one of them had a faint horizontal seam near the bottom of the screen.
  * One copy, ending on the real canvas colour.
  */
-export function AuthBackdrop({ blurRadius = 5 }: { blurRadius?: number }) {
+export function AuthBackdrop({ blurRadius }: { blurRadius?: number } = {}) {
   return (
-    <>
-      <Image
-        source={require('../assets/images/pantry-bg.jpg')}
-        style={[StyleSheet.absoluteFill, { opacity: 0.55 }]}
-        blurRadius={blurRadius}
-      />
-      <LinearGradient
-        colors={['rgba(255,255,255,0.55)', 'rgba(255,255,255,0.90)', COLORS.background]}
-        locations={[0, 0.48, 1]}
-        style={StyleSheet.absoluteFill}
-      />
-    </>
+    <LinearGradient
+      colors={[COLORS.cardSurface, COLORS.surfaceContainer, COLORS.background]}
+      locations={[0, 0.45, 1]}
+      style={StyleSheet.absoluteFill}
+    />
   );
 }
 
@@ -45,7 +38,7 @@ export function AuthBrand({
 }) {
   return (
     <View className="mb-8 items-center">
-      <View className="mb-3 h-16 w-16 items-center justify-center rounded-full bg-brand">
+      <View className="mb-3 h-16 w-16 items-center justify-center rounded-2xl bg-brand">
         <MaterialCommunityIcons name={icon} size={34} color={COLORS.textOnPrimary} />
       </View>
       {/* Newsreader, and the only place in the app that gets it at this size.
