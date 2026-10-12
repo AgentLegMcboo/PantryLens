@@ -4,7 +4,7 @@ import React, { useState } from 'react';
 import { Alert, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Card, Input, Segmented, Text } from '../components/ui';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_BELOW_FAINT, RULE_ABOVE_FAINT } from '../constants/theme';
 import { cueSuccess, cueTap } from '../lib/feedback';
 import { DEMO_PANTRIES, usePantryStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
@@ -124,7 +124,7 @@ export default function PantrySelectionScreen() {
   return (
     <View style={{ paddingTop: insets.top }} className="flex-1 bg-canvas">
       {/* Top Bar */}
-      <View className="flex-row items-center justify-between border-b border-hairline/60 bg-canvas px-gutter py-3.5">
+      <View className="flex-row items-center justify-between bg-canvas px-gutter py-3.5" style={RULE_BELOW_FAINT}>
         {currentPantryId ? (
           <Pressable
             accessibilityRole="button"
@@ -237,7 +237,7 @@ export default function PantrySelectionScreen() {
                   </Text>
 
                   {/* Key Stats */}
-                  <View className="flex-row items-center gap-4 border-t border-hairline/60 pt-3">
+                  <View className="flex-row items-center gap-4 pt-3" style={RULE_ABOVE_FAINT}>
                     <View className="flex-row items-center gap-1.5">
                       <MaterialCommunityIcons name="package-variant-closed" size={18} color={COLORS.textSecondary} />
                       <Text variant="label" tone="soft" className="text-sm">

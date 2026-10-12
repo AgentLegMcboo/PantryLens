@@ -3,7 +3,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
 import { Alert, Image, Pressable, View } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_BELOW } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
 import { Button, Card, CardHeader, EmptyState, Panel, Row, Screen, Text } from '../components/ui';
 import { processImageScan, ScanError } from '../lib/ai_vision';
@@ -205,9 +205,8 @@ export default function ShelfAuditScreen() {
                   cueTap();
                   setLocationId(place.id);
                 }}
-                className={`min-h-[56px] flex-row items-center gap-3 py-2 ${
-                  i === locations.length - 1 ? '' : 'border-b border-hairline'
-                }`}
+                className="min-h-[56px] flex-row items-center gap-3 py-2"
+                style={i === locations.length - 1 ? undefined : RULE_BELOW}
               >
                 <MaterialCommunityIcons
                   name={active ? 'radiobox-marked' : 'radiobox-blank'}

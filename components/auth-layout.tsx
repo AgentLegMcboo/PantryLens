@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { LinearGradient } from 'expo-linear-gradient';
 import React from 'react';
 import { Image, StyleSheet, View } from 'react-native';
-import { COLORS, FONTS } from '../constants/theme';
+import { COLORS } from '../constants/theme';
 import { GoogleLogo } from './google-logo';
 import { KeyboardScreen } from './keyboard-screen';
 import { Button, Card, Text } from './ui';
@@ -41,9 +41,8 @@ export function AuthBrand({
       <View className="mb-3 h-16 w-16 items-center justify-center rounded-2xl bg-brand">
         <MaterialCommunityIcons name={icon} size={34} color={COLORS.textOnPrimary} />
       </View>
-      {/* Newsreader, and the only place in the app that gets it at this size.
-          The working UI stays in the system sans; the front door is allowed a
-          voice.
+      {/* The splash's wordmark (components/brand-splash.tsx): system sans at
+          800 with tight tracking, so the front door matches the launch screen.
 
           lineHeight is NOT optional here. `Text` defaults to the `body` variant,
           which carries a 22px line box from the type scale — so a 32px glyph set
@@ -51,9 +50,10 @@ export function AuthBrand({
           component has to bring its own lineHeight. */}
       <Text
         style={{
-          fontFamily: FONTS.serifSemi,
           fontSize: 32,
           lineHeight: 40,
+          fontWeight: '800',
+          letterSpacing: -0.6,
           color: COLORS.textPrimary,
         }}
       >

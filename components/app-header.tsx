@@ -51,7 +51,7 @@ export function AppHeader({ title }: { title: string }) {
 
   return (
     <View style={{ paddingTop: insets.top }} className="bg-canvas">
-      <View className="flex-row items-center gap-2.5 px-gutter pb-4 pt-3">
+      <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
         {/* The pantry as a pill rather than a bare title: the initial gives it
             an identity you recognise at a glance, and the whole thing is the
             tap target for switching or signing out — which is what a volunteer
@@ -233,7 +233,7 @@ export function StackHeader({
 
   return (
     <View style={{ paddingTop: insets.top }} className="bg-canvas">
-      <View className="flex-row items-center gap-2.5 px-gutter pb-4 pt-3">
+      <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Go back"

@@ -23,6 +23,9 @@ import { BrandSplash } from '../components/brand-splash';
 import { StackHeader } from '../components/app-header';
 import { View } from 'react-native';
 
+/** Dev only: replay onboarding on every launch, signed in or not. */
+const REPLAY_INTRO_IN_DEV = true;
+
 export default function RootLayout() {
   const initialize = usePantryStore(state => state.initialize);
   const isLoaded = usePantryStore(state => state.isLoaded);
@@ -79,14 +82,22 @@ export default function RootLayout() {
     if (!isLoaded || onboarded === null) return;
 
     const onOnboarding = segments[0] === 'onboarding';
-    const inAuthGroup = segments[0] === '(auth)' || segments[0] === 'login' || segments[0] === 'sign-up';
+    const inAuthGroup =
+      segments[0] === '(auth)' ||
+      segments[0] === 'login' ||
+      segments[0] === 'sign-up' ||
+      // Google's redirect back; see app/auth/callback.tsx.
+      segments[0] === 'auth';
 
-    // The intro only ever precedes sign-in, and only once.
-    if (!session && !onboarded) {
+    // The intro only ever precedes sign-in, and only once. In development it
+    // also plays for a signed-in volunteer on every launch, so it can be looked
+    // at without signing out; finishing it goes straight to the pantry.
+    const introForSignedIn = __DEV__ && REPLAY_INTRO_IN_DEV;
+    if ((!session || introForSignedIn) && !onboarded) {
       if (!onOnboarding) router.replace('/onboarding');
       return;
     }
-    if (onOnboarding && (session || onboarded)) {
+    if (onOnboarding && (onboarded || (session && !introForSignedIn))) {
       router.replace(session ? '/(tabs)' : '/login');
       return;
     }
@@ -150,6 +161,7 @@ export default function RootLayout() {
         <Stack.Screen name="login" options={{ title: 'Log In', headerShown: false }} />
         <Stack.Screen name="sign-up" options={{ title: 'Sign Up', headerShown: false }} />
         <Stack.Screen name="pantry-selection" options={{ title: 'Join a Pantry', headerShown: false }} />
+        <Stack.Screen name="auth/callback" options={{ headerShown: false, animation: 'fade' }} />
       </Stack>
       ) : (
         // Brand-coloured hold rather than a white flash while state resolves.

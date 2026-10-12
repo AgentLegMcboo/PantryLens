@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as React from 'react';
 import { Platform, Pressable, Switch, View } from 'react-native';
 import Animated from 'react-native-reanimated';
-import { COLORS } from '../../constants/theme';
+import { COLORS, RULE_BELOW } from '../../constants/theme';
 import { usePressScale } from '../motion';
 import { cueTap } from '../../lib/feedback';
 import { cn } from '../../lib/cn';
@@ -52,9 +52,11 @@ export function Row({
     <View
       className={cn(
         'min-h-[56px] flex-row items-center gap-3 py-2',
-        divider && 'border-b border-hairline',
         className,
       )}
+      // A style prop, not `border-b border-hairline`: on Android that class pair
+      // boxed every row in on all four sides instead of underlining it.
+      style={divider ? RULE_BELOW : undefined}
     >
       {icon ? (
         <View className="h-10 w-10 items-center justify-center rounded-lg bg-subtle">

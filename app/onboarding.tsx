@@ -21,7 +21,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackdrop } from '../components/auth-layout';
 import { BoxesMock, ScanMock, VerifyMock, WeighMock } from '../components/onboarding-mocks';
 import { Button, Text } from '../components/ui';
-import { COLORS, FONTS } from '../constants/theme';
+import { COLORS } from '../constants/theme';
 import { cueSuccess, cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
 
@@ -76,6 +76,8 @@ export default function OnboardingScreen() {
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const completeOnboarding = usePantryStore(state => state.completeOnboarding);
+  // Signed in only when the intro is replayed in development.
+  const signedIn = usePantryStore(state => !!state.session);
   const [page, setPage] = useState(0);
 
   const isLast = page === PHASES.length - 1;
@@ -85,7 +87,7 @@ export default function OnboardingScreen() {
     // Must land before the navigation, or the root gate still sees the intro
     // as incomplete and sends us straight back here.
     await completeOnboarding();
-    router.replace('/login');
+    router.replace(signedIn ? '/(tabs)' : '/login');
   };
 
   const next = () => {
@@ -96,7 +98,7 @@ export default function OnboardingScreen() {
   const skip = async () => {
     cueTap();
     await completeOnboarding();
-    router.replace('/login');
+    router.replace(signedIn ? '/(tabs)' : '/login');
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
@@ -125,10 +127,12 @@ export default function OnboardingScreen() {
               />
             </View>
             <Text
+              // The splash's wordmark (components/brand-splash.tsx), scaled down.
               style={{
-                fontFamily: FONTS.serifSemi,
                 fontSize: 19,
                 lineHeight: 24,
+                fontWeight: '800',
+                letterSpacing: -0.4,
                 color: COLORS.textPrimary,
               }}
             >
@@ -165,23 +169,25 @@ export default function OnboardingScreen() {
                 <View className="pb-4">
                   {/* Every nested span carries its own lineHeight. `Text`
                       defaults to the `body` variant and its 22px line box, and a
-                      33px serif dropped into that gets clipped — which is
+                      large headline dropped into that gets clipped — which is
                       exactly what happened to "Photograph what just came in."
-                      Sizing up here means sizing the line box up with it. */}
+                      Sizing up here means sizing the line box up with it.
+                      Set in the app's sans like every other screen; the serif is
+                      kept for the wordmark only. */}
                   <Text
                     style={{
-                      fontFamily: FONTS.serif,
-                      fontSize: 33,
-                      lineHeight: 42,
-                      letterSpacing: -0.3,
+                      fontSize: 30,
+                      lineHeight: 37,
+                      fontWeight: '700',
+                      letterSpacing: -0.5,
                       color: COLORS.textPrimary,
                     }}
                   >
                     <Text
                       style={{
-                        fontFamily: FONTS.serifSemi,
-                        fontSize: 33,
-                        lineHeight: 42,
+                        fontSize: 30,
+                        lineHeight: 37,
+                        fontWeight: '700',
                         color: COLORS.primaryLight,
                       }}
                     >

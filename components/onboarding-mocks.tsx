@@ -1,393 +1,342 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useEffect } from 'react';
-import { Image, StyleSheet, Text, View } from 'react-native';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import React, { useEffect } from "react";
+import { Image, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withRepeat,
-  withSequence,
   withTiming,
-} from 'react-native-reanimated';
-import { COLORS, RADII, SPACING } from '../constants/theme';
+} from "react-native-reanimated";
+import { DetectionOverlay } from "./detection-overlay";
+import { ProgressBar } from "./motion";
+import {
+  Button,
+  Card,
+  CategoryIcon,
+  Chip,
+  ItemThumb,
+  Stepper,
+  Text,
+} from "./ui";
+import { COLORS } from "../constants/theme";
 
 /**
- * Miniature previews of real PantryLens screens, shown behind each onboarding
- * headline. They are rebuilt from the app's own components rather than being
- * screenshots, so they never drift out of date when a screen changes, and they
- * can animate to show the flow rather than just describe it.
+ * Pieces of the real app, shown behind each onboarding headline.
+ *
+ * Every mock is assembled from the same components the screens use — Card,
+ * Chip, Stepper, Button, CategoryIcon, the scan's DetectionOverlay — so a
+ * volunteer meets the actual controls before they meet the actual screens, and
+ * nothing here can drift from what the app really looks like. They are inert
+ * (`pointerEvents="none"`): pictures of controls, not controls.
+ *
+ * Each phase is one main piece in the middle and two small ones floating at
+ * opposite corners — top right and bottom left — so the composition balances.
  */
 
 const EASE = Easing.bezier(0.16, 1, 0.3, 1);
+const noop = () => {};
 
-/** Shared floating card that gives every mock the same tilt and shadow. */
-function FloatingCard({
+/** Eases a piece up into place, tilted slightly so it reads as laid on the page. */
+function Float({
   children,
-  rotate = '0deg',
+  rotate = "0deg",
   delay = 0,
   style,
 }: {
   children: React.ReactNode;
   rotate?: string;
   delay?: number;
-  style?: any;
+  style?: object;
 }) {
   const enter = useSharedValue(0);
   useEffect(() => {
-    enter.value = withDelay(delay, withTiming(1, { duration: 620, easing: EASE }));
+    enter.value = withDelay(
+      delay,
+      withTiming(1, { duration: 620, easing: EASE }),
+    );
   }, [delay, enter]);
 
   const animated = useAnimatedStyle(() => ({
     opacity: enter.value,
     transform: [
-      { translateY: (1 - enter.value) * 24 },
-      { scale: 0.94 + enter.value * 0.06 },
+      { translateY: (1 - enter.value) * 20 },
+      { scale: 0.95 + enter.value * 0.05 },
       { rotate },
     ],
   }));
 
-  return <Animated.View style={[styles.card, style, animated]}>{children}</Animated.View>;
-}
-
-/**
- * The photo is preloaded in the root layout, so it is normally in cache before
- * this mounts. The fade is insurance: if it ever does arrive late, it eases in
- * rather than popping over the dark viewfinder backing.
- */
-function ViewfinderPhoto() {
-  const loaded = useSharedValue(0);
-  const style = useAnimatedStyle(() => ({ opacity: loaded.value }));
-
   return (
-    <Animated.View style={[styles.vfPhoto, style]}>
-      <Image
-        source={require('../assets/images/donation-scan.jpg')}
-        style={styles.vfPhotoInner}
-        resizeMode="cover"
-        onLoad={() => {
-          loaded.value = withTiming(1, { duration: 260, easing: EASE });
-        }}
-      />
+    <Animated.View pointerEvents="none" style={[style, animated]}>
+      {children}
     </Animated.View>
   );
 }
 
-/** Phase 1 — guided capture. A viewfinder with items resolving out of the frame. */
-export function ScanMock() {
-  const sweep = useSharedValue(0);
-  useEffect(() => {
-    sweep.value = withRepeat(
-      withSequence(
-        withTiming(1, { duration: 1900, easing: Easing.inOut(Easing.quad) }),
-        withTiming(0, { duration: 1900, easing: Easing.inOut(Easing.quad) }),
-      ),
-      -1,
-      false,
-    );
-  }, [sweep]);
-
-  const scanLine = useAnimatedStyle(() => ({
-    transform: [{ translateY: 24 + sweep.value * 150 }],
-    opacity: 0.35 + sweep.value * 0.4,
-  }));
-
+/**
+ * The stage every mock shares. The two floats are anchored to the main piece,
+ * overlapping its top-right and bottom-left corners, so they read as part of the
+ * same picture rather than drifting to the edges of the screen.
+ */
+function Stage({
+  main,
+  topRight,
+  bottomLeft,
+}: {
+  main: React.ReactNode;
+  topRight: React.ReactNode;
+  bottomLeft: React.ReactNode;
+}) {
   return (
-    <View style={styles.stage}>
-      <FloatingCard rotate="-3deg" style={styles.viewfinder}>
-        <View style={styles.vfInner}>
-          {/* Photo first — brackets and the sweep draw on top of it, so the
-              frame reads as a live camera rather than an illustration. */}
-          <ViewfinderPhoto />
-
-          {/* corner brackets */}
-          <View style={[styles.corner, styles.cTL]} />
-          <View style={[styles.corner, styles.cTR]} />
-          <View style={[styles.corner, styles.cBL]} />
-          <View style={[styles.corner, styles.cBR]} />
-
-          <Animated.View style={[styles.scanLine, scanLine]} />
-
-        </View>
-      </FloatingCard>
-
-      <FloatingCard rotate="4deg" delay={520} style={styles.detectPill}>
-        <View style={[styles.dot, { backgroundColor: COLORS.categories.vegetable }]} />
-        <Text style={styles.detectText}>Canned corn</Text>
-        <Text style={styles.detectCount}>×12</Text>
-      </FloatingCard>
-
-      <FloatingCard rotate="-5deg" delay={760} style={styles.detectPillLow}>
-        <View style={[styles.dot, { backgroundColor: COLORS.categories.protein }]} />
-        <Text style={styles.detectText}>Peanut butter</Text>
-        <Text style={styles.detectCount}>×4</Text>
-      </FloatingCard>
+    <View style={styles.stage} pointerEvents="none">
+      <View>
+        <Float rotate="-2deg">{main}</Float>
+        <Float rotate="3deg" delay={480} style={styles.topRight}>
+          {topRight}
+        </Float>
+        <Float rotate="-3deg" delay={700} style={styles.bottomLeft}>
+          {bottomLeft}
+        </Float>
+      </View>
     </View>
   );
 }
 
-/** Phase 2 — the verification step, including the inspection control. */
+type TagTone = "brand" | "good" | "warn" | "critical";
+const TAG_COLORS: Record<TagTone, string> = {
+  brand: COLORS.primaryLight,
+  good: COLORS.statusGood,
+  warn: COLORS.statusWarning,
+  critical: COLORS.statusCritical,
+};
+
+/**
+ * The one floating piece every phase uses: a small white card with a glyph in
+ * a tinted disc and a label. Same size, same shape, same type everywhere, so
+ * the corners of each mock read as a set; the tone only colours the glyph.
+ */
+function Tag({
+  icon,
+  label,
+  tone = "brand",
+}: {
+  icon: React.ComponentProps<typeof MaterialCommunityIcons>["name"];
+  label: string;
+  tone?: TagTone;
+}) {
+  const color = TAG_COLORS[tone];
+  return (
+    <Card className="flex-row items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5">
+      <View
+        className="h-7 w-7 items-center justify-center rounded-full"
+        style={{ backgroundColor: `${color}22` }}
+      >
+        <MaterialCommunityIcons name={icon} size={16} color={color} />
+      </View>
+      <Text variant="label" className="font-semibold">
+        {label}
+      </Text>
+    </Card>
+  );
+}
+
+const SCAN_PHOTO = Image.resolveAssetSource(
+  require("../assets/images/donation-scan.jpg"),
+);
+
+/** Phase 1 — a photographed donation with the scan's own detection boxes on it. */
+export function ScanMock() {
+  return (
+    <Stage
+      main={
+        <Card className="w-[312px] gap-3 p-3">
+          <View style={styles.photo}>
+            <DetectionOverlay
+              uri={SCAN_PHOTO.uri}
+              aspectRatio={1.45}
+              items={[
+                {
+                  id: "a",
+                  label: "Tomato soup",
+                  count: 4,
+                  verified: true,
+                  needsAttention: false,
+                  box: { top: 0.04, left: 0.12, width: 0.36, height: 0.3 },
+                },
+                {
+                  id: "b",
+                  label: "Green beans",
+                  count: 6,
+                  verified: false,
+                  needsAttention: false,
+                  box: { top: 0.04, left: 0.52, width: 0.36, height: 0.3 },
+                },
+                {
+                  id: "c",
+                  label: "Canned corn",
+                  count: 12,
+                  verified: false,
+                  needsAttention: true,
+                  box: { top: 0.32, left: 0.1, width: 0.8, height: 0.3 },
+                },
+              ]}
+              selectedId={null}
+              drawMode={false}
+              onSelect={noop}
+              onBoxChange={noop}
+              onDraw={noop}
+              onDragStateChange={noop}
+            />
+          </View>
+          <Button
+            label="Detect items in 1 photo"
+            size="compact"
+            block
+            onPress={noop}
+          />
+        </Card>
+      }
+      topRight={<Tag icon="carrot" label="Canned corn ×12" tone="good" />}
+      bottomLeft={<Tag icon="hand-heart-outline" label="Grocery rescue" />}
+    />
+  );
+}
+
+/** Phase 2 — one line of the review list, the way a volunteer checks it. */
 export function VerifyMock() {
   return (
-    <View style={styles.stage}>
-      <FloatingCard rotate="-2deg" style={styles.verifyCard}>
-        <View style={styles.lowConfBadge}>
-          <MaterialCommunityIcons name="alert-circle" size={11} color={COLORS.statusWarning} />
-          <Text style={styles.lowConfText}>NEEDS HUMAN CHECK · 64%</Text>
-        </View>
-
-        <Text style={styles.itemName}>Canned green beans</Text>
-
-        <View style={styles.chipRow}>
-          <View style={[styles.miniChip, { backgroundColor: COLORS.categories.vegetable }]}>
-            <Text style={styles.miniChipTextOn}>vegetable</Text>
+    <Stage
+      main={
+        <Card className="w-[312px] gap-3 p-4">
+          <View className="flex-row items-center gap-3">
+            <ItemThumb category="vegetable" />
+            <View className="flex-1">
+              <Text variant="body" className="font-semibold">
+                Green beans 14.5 oz
+              </Text>
+              <Text variant="micro" tone="soft">
+                Expires Oct 28, 2026
+              </Text>
+            </View>
           </View>
-          <View style={styles.miniChip}>
-            <Text style={styles.miniChipText}>protein</Text>
+          <View className="flex-row gap-2">
+            <Chip label="Vegetable" selected onPress={noop} />
+            <Chip label="Protein" onPress={noop} />
           </View>
-        </View>
-
-        <View style={styles.verifyFooter}>
-          <View style={styles.miniStepper}>
-            <Text style={styles.miniStepGlyph}>−</Text>
-            <Text style={styles.miniStepVal}>5</Text>
-            <Text style={styles.miniStepGlyph}>+</Text>
+          <View className="flex-row items-center justify-between">
+            <Text variant="label" tone="soft">
+              Count
+            </Text>
+            <Stepper value={6} onChange={noop} />
           </View>
-          <View style={[styles.miniChip, { backgroundColor: COLORS.statusGood, borderColor: COLORS.statusGood }]}>
-            <Text style={styles.miniChipTextOn}>Good</Text>
-          </View>
-        </View>
-      </FloatingCard>
-
-      <FloatingCard rotate="5deg" delay={560} style={styles.conditionPill}>
-        <MaterialCommunityIcons name="close-octagon-outline" size={13} color={COLORS.textOnPrimary} />
-        <Text style={styles.conditionText}>DENTED · held back</Text>
-      </FloatingCard>
-    </View>
+        </Card>
+      }
+      topRight={<Tag icon="clock-alert-outline" label="Use first" tone="warn" />}
+      bottomLeft={<Tag icon="alert-circle-outline" label="Dented · held back" tone="critical" />}
+    />
   );
 }
 
-/** Phase 3 — bulk drops that get weighed, not counted. */
+/** Phase 3 — bulk intake: the weight is recorded, the units are estimated from it. */
 export function WeighMock() {
   return (
-    <View style={styles.stage}>
-      <FloatingCard rotate="-2deg" style={styles.scaleCard}>
-        <Text style={styles.scaleLabel}>WEIGHT AT THE SCALE</Text>
-        <View style={styles.scaleRow}>
-          <Text style={styles.scaleValue}>84</Text>
-          <Text style={styles.scaleUnit}>lb</Text>
-        </View>
-        <View style={styles.scaleDivider} />
-        <View style={styles.estRow}>
-          <MaterialCommunityIcons name="scale-balance" size={15} color={COLORS.secondary} />
-          <Text style={styles.estText}>≈ 84 units estimated</Text>
-        </View>
-        <Text style={styles.estHint}>Weight is what gets recorded.</Text>
-      </FloatingCard>
-
-      <FloatingCard rotate="6deg" delay={560} style={styles.binPill}>
-        <View style={[styles.dot, { backgroundColor: COLORS.categories.protein }]} />
-        <Text style={styles.detectText}>Protein bin</Text>
-      </FloatingCard>
-    </View>
+    <Stage
+      main={
+        <Card className="w-[312px] gap-3 p-4">
+          <Text variant="label" tone="soft" className="font-semibold">
+            Weight at the scale
+          </Text>
+          <View className="flex-row items-baseline gap-2">
+            <Text variant="display">60</Text>
+            <Text variant="title" tone="soft">
+              lb
+            </Text>
+          </View>
+          <View className="h-px bg-hairline" />
+          <View className="flex-row items-center justify-between">
+            <View>
+              <Text variant="label" className="font-semibold">
+                Estimated units
+              </Text>
+              <Text variant="micro" tone="soft">
+                1 lb per protein unit
+              </Text>
+            </View>
+            <Stepper value={60} onChange={noop} />
+          </View>
+        </Card>
+      }
+      topRight={<Tag icon="food-drumstick" label="Protein bin" />}
+      bottomLeft={<Tag icon="truck-outline" label="Food bank drop" />}
+    />
   );
 }
 
-/** Phase 4 — the payoff: the allocation engine naming what blocks distribution. */
+/** Phase 4 — what the shelf can make, and which category is holding it back. */
 export function BoxesMock() {
-  const bars = [
-    { label: 'Grain', pct: 1, color: COLORS.categories.grain },
-    { label: 'Vegetable', pct: 0.86, color: COLORS.categories.vegetable },
-    { label: 'Protein', pct: 0.28, color: COLORS.statusCritical },
-    { label: 'Breakfast', pct: 0.74, color: COLORS.categories.breakfast },
+  const rows = [
+    { category: "grain", label: "Grain", have: 33, need: 24 },
+    { category: "vegetable", label: "Vegetable", have: 40, need: 24 },
+    { category: "protein", label: "Protein", have: 13, need: 24 },
   ];
 
   return (
-    <View style={styles.stage}>
-      <FloatingCard rotate="-2deg" style={styles.planCard}>
-        <Text style={styles.planLabel}>YOU CAN BUILD</Text>
-        <View style={styles.planRow}>
-          <Text style={styles.planValue}>20</Text>
-          <Text style={styles.planUnit}>balanced boxes</Text>
-        </View>
-
-        {bars.map(b => (
-          <View key={b.label} style={styles.barRow}>
-            <Text style={styles.barLabel}>{b.label}</Text>
-            <View style={styles.barTrack}>
-              <BarFill pct={b.pct} color={b.color} />
-            </View>
+    <Stage
+      main={
+        <Card className="w-[312px] gap-3 p-4">
+          <View className="flex-row items-baseline gap-2">
+            <Text variant="display" tone="brand">
+              6
+            </Text>
+            <Text variant="body" tone="soft">
+              of 12 boxes you can pack
+            </Text>
           </View>
-        ))}
-      </FloatingCard>
-
-      <FloatingCard rotate="5deg" delay={620} style={styles.limitPill}>
-        <MaterialCommunityIcons name="alert-circle" size={13} color={COLORS.textOnPrimary} />
-        <Text style={styles.conditionText}>PROTEIN IS THE LIMIT</Text>
-      </FloatingCard>
-    </View>
+          {rows.map((r) => {
+            const short = r.have < r.need;
+            return (
+              <View key={r.category} className="flex-row items-center gap-3">
+                <CategoryIcon
+                  category={r.category}
+                  tone={short ? "critical" : "brand"}
+                />
+                <View className="flex-1 gap-1">
+                  <View className="flex-row justify-between">
+                    <Text variant="label" className="font-semibold">
+                      {r.label}
+                    </Text>
+                    <Text
+                      variant="micro"
+                      tone={short ? "critical" : "soft"}
+                      className="font-semibold"
+                    >
+                      {r.have} / {r.need}
+                    </Text>
+                  </View>
+                  <ProgressBar
+                    progress={Math.min(1, r.have / r.need)}
+                    color={short ? COLORS.statusCritical : COLORS.statusGood}
+                  />
+                </View>
+              </View>
+            );
+          })}
+        </Card>
+      }
+      topRight={<Tag icon="alert-circle-outline" label="Protein is the limit" tone="critical" />}
+      bottomLeft={<Tag icon="bullhorn-outline" label="Ask donors for protein" />}
+    />
   );
 }
 
-function BarFill({ pct, color }: { pct: number; color: string }) {
-  const w = useSharedValue(0);
-  useEffect(() => {
-    w.value = withDelay(500, withTiming(pct, { duration: 900, easing: EASE }));
-  }, [pct, w]);
-  const style = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
-  return <Animated.View style={[styles.barFill, { backgroundColor: color }, style]} />;
-}
-
 const styles = StyleSheet.create({
-  stage: { flex: 1, alignItems: 'center', justifyContent: 'center', width: '100%' },
-  card: {
-    backgroundColor: COLORS.cardSurface,
-    borderRadius: RADII.lg,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    shadowColor: '#2B2420',
-    shadowOpacity: 0.13,
-    shadowRadius: 22,
-    shadowOffset: { width: 0, height: 12 },
-    elevation: 7,
-  },
-
-  // scan
-  viewfinder: { width: 208, height: 226, padding: SPACING.sm, backgroundColor: '#2B2420' },
-  vfInner: { flex: 1, borderRadius: RADII.md, backgroundColor: '#3B322C', overflow: 'hidden' },
-  corner: { position: 'absolute', width: 22, height: 22, borderColor: COLORS.primaryLight },
-  cTL: { top: 8, left: 8, borderTopWidth: 3, borderLeftWidth: 3, borderTopLeftRadius: 6 },
-  cTR: { top: 8, right: 8, borderTopWidth: 3, borderRightWidth: 3, borderTopRightRadius: 6 },
-  cBL: { bottom: 8, left: 8, borderBottomWidth: 3, borderLeftWidth: 3, borderBottomLeftRadius: 6 },
-  cBR: { bottom: 8, right: 8, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 6 },
-  scanLine: { position: 'absolute', left: 10, right: 10, height: 2, backgroundColor: COLORS.primaryLight },
-  vfPhoto: { ...StyleSheet.absoluteFill, width: '100%', height: '100%' },
-  vfPhotoInner: { width: '100%', height: '100%' },
-
-  detectPill: {
-    position: 'absolute',
-    top: 26,
-    right: 2,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 7,
-    borderRadius: RADII.full,
-  },
-  detectPillLow: {
-    position: 'absolute',
-    bottom: 34,
-    left: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 7,
-    borderRadius: RADII.full,
-  },
-  dot: { width: 7, height: 7, borderRadius: 4 },
-  detectText: { fontSize: 12, fontWeight: '700', color: COLORS.textPrimary },
-  detectCount: { fontSize: 12, fontWeight: '800', color: COLORS.primaryLight },
-
-  // verify
-  verifyCard: { width: 232, padding: SPACING.sm + 2, gap: 7 },
-  lowConfBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 3,
-    alignSelf: 'flex-start',
-    backgroundColor: '#FCF0DC',
-    paddingHorizontal: 6,
-    paddingVertical: 3,
-    borderRadius: RADII.sm,
-  },
-  lowConfText: { fontSize: 8.5, fontWeight: '800', color: COLORS.statusWarning },
-  itemName: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
-  chipRow: { flexDirection: 'row', gap: 5 },
-  miniChip: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: RADII.full,
-    borderWidth: 1,
-    borderColor: COLORS.borderSoft,
-    backgroundColor: COLORS.background,
-  },
-  miniChipText: { fontSize: 10, fontWeight: '600', color: COLORS.textSecondary },
-  miniChipTextOn: { fontSize: 10, fontWeight: '700', color: COLORS.textOnPrimary },
-  verifyFooter: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginTop: 3,
-  },
-  miniStepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  miniStepGlyph: { fontSize: 15, fontWeight: '800', color: COLORS.primaryDark },
-  miniStepVal: { fontSize: 15, fontWeight: '800', color: COLORS.textPrimary },
-  conditionPill: {
-    position: 'absolute',
-    bottom: 30,
-    right: 4,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 7,
-    borderRadius: RADII.full,
-    backgroundColor: COLORS.statusCritical,
-    borderColor: COLORS.statusCritical,
-  },
-  conditionText: { fontSize: 10, fontWeight: '800', color: COLORS.textOnPrimary },
-
-  // weigh
-  scaleCard: { width: 226, padding: SPACING.md, alignItems: 'center' },
-  scaleLabel: { fontSize: 9, fontWeight: '800', color: COLORS.textSecondary, letterSpacing: 0.8 },
-  scaleRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 5, marginTop: 4 },
-  scaleValue: { fontSize: 52, fontWeight: '800', color: COLORS.textPrimary, lineHeight: 56 },
-  scaleUnit: { fontSize: 18, fontWeight: '700', color: COLORS.textSecondary, marginBottom: 8 },
-  scaleDivider: { height: 1, alignSelf: 'stretch', backgroundColor: COLORS.borderSoft, marginVertical: SPACING.sm },
-  estRow: { flexDirection: 'row', alignItems: 'center', gap: 5 },
-  estText: { fontSize: 13, fontWeight: '700', color: COLORS.secondary },
-  estHint: { fontSize: 10, color: COLORS.textSecondary, marginTop: 3 },
-  binPill: {
-    position: 'absolute',
-    top: 40,
-    right: 6,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 7,
-    borderRadius: RADII.full,
-  },
-
-  // boxes
-  planCard: { width: 236, padding: SPACING.md, gap: 5 },
-  planLabel: { fontSize: 9, fontWeight: '800', color: COLORS.textSecondary, letterSpacing: 0.8 },
-  planRow: { flexDirection: 'row', alignItems: 'flex-end', gap: 6, marginBottom: SPACING.sm },
-  planValue: { fontSize: 44, fontWeight: '800', color: COLORS.statusGood, lineHeight: 48 },
-  planUnit: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 8 },
-  barRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  barLabel: { fontSize: 10, fontWeight: '600', color: COLORS.textSecondary, width: 62 },
-  barTrack: {
+  stage: {
     flex: 1,
-    height: 7,
-    borderRadius: 7,
-    backgroundColor: COLORS.surfaceVariant,
-    overflow: 'hidden',
+    alignItems: "center",
+    justifyContent: "center",
+    width: "100%",
   },
-  barFill: { height: 7, borderRadius: 7 },
-  limitPill: {
-    position: 'absolute',
-    bottom: 26,
-    left: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-    paddingHorizontal: SPACING.sm,
-    paddingVertical: 7,
-    borderRadius: RADII.full,
-    backgroundColor: COLORS.statusCritical,
-    borderColor: COLORS.statusCritical,
-  },
+  topRight: { position: "absolute", top: -46, right: -8 },
+  bottomLeft: { position: "absolute", bottom: -46, left: -8 },
+  photo: { borderRadius: 10, overflow: "hidden" },
 });

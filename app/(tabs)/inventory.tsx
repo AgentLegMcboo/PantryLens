@@ -12,7 +12,7 @@ import {
   TextInput,
   View,
 } from 'react-native';
-import { COLORS } from '../../constants/theme';
+import { COLORS, RULE_ABOVE } from '../../constants/theme';
 import { isPastDate, windowEndISO } from '../../lib/expiry';
 import { cueTap, cueWarn } from '../../lib/feedback';
 import { PlacesManager } from '../../components/places-manager';
@@ -422,7 +422,7 @@ export default function InventoryScreen() {
               ) : null}
             </View>
           </View>
-          <View className="mt-3 flex-row items-center justify-between gap-3 border-t border-hairline pt-3">
+          <View className="mt-3 flex-row items-center justify-between gap-3 pt-3" style={RULE_ABOVE}>
             <Text variant="label" tone="soft" className="flex-1 capitalize">
               {item.category} · {picking ? `${item.count} units` : 'Units on shelf'}
             </Text>
@@ -484,7 +484,7 @@ export default function InventoryScreen() {
 
   return (
     <View className="flex-1 bg-canvas">
-      <View className="px-gutter pt-4 gap-4">
+      <View className="px-gutter pt-gutter gap-4">
         {!picking && (
           <View className="gap-1">
             <Text variant="headline">Your shelves</Text>

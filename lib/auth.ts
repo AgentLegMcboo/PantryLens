@@ -1,6 +1,7 @@
 import { makeRedirectUri } from 'expo-auth-session';
 import * as WebBrowser from 'expo-web-browser';
-import { supabase } from './supabase';
+import Constants, { ExecutionEnvironment } from 'expo-constants';
+import { implicitAuthClient, supabase } from './supabase';
 
 // Lets the in-app browser hand control back to the app after the redirect.
 WebBrowser.maybeCompleteAuthSession();
@@ -49,8 +50,31 @@ function readCallbackParams(url: string): URLSearchParams {
  * Opens Google in a system browser sheet and turns the redirect into a session.
  * Resolves with the session, or throws OAuthCancelled if the user backed out.
  */
+/**
+ * Supabase will not redirect to a private LAN address — `exp://192.168.x.x`,
+ * `10.x`, `172.16–31.x` — even when the exact URL is allow-listed; it falls back
+ * to the Site URL instead, so the volunteer is dropped on a dead page. Loopback
+ * (an emulator with `adb reverse`) and hostnames (`expo start --tunnel`) work.
+ * Expo Go over plain LAN can't, so say so up front.
+ */
+function isPrivateLanRedirect(uri: string): boolean {
+  const host = uri.match(/^exp:\/\/([^:/]+)/)?.[1] ?? '';
+  return /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+}
+
 export async function signInWithGoogle() {
-  const { data, error } = await supabase.auth.signInWithOAuth({
+  if (isPrivateLanRedirect(oauthRedirectUri)) {
+    throw new Error(
+      `Google sign-in can't return to ${oauthRedirectUri} — Supabase won't redirect to a LAN address. ` +
+        'Start Expo with --tunnel, use the emulator, or sign in with email and password.',
+    );
+  }
+
+  // Expo Go only: see implicitAuthClient in lib/supabase.ts for why.
+  const inExpoGo = Constants.executionEnvironment === ExecutionEnvironment.StoreClient;
+  const client = inExpoGo ? implicitAuthClient : supabase;
+
+  const { data, error } = await client.auth.signInWithOAuth({
     provider: 'google',
     options: {
       redirectTo: oauthRedirectUri,

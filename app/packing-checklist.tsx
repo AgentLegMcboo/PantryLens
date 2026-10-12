@@ -3,7 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_BELOW } from '../constants/theme';
 import { computeAllocation, isBulkUnit } from '../lib/allocation';
 import { DIET_TAG_LABELS, normaliseDietTags } from '../lib/diet';
 import { normaliseRules } from '../lib/box-presets';
@@ -273,7 +273,8 @@ export default function PackingChecklistScreen() {
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: isChecked }}
                     // 56px so it can be hit while holding a tin.
-                    className="min-h-[56px] flex-row items-center gap-3 border-b border-hairline py-2"
+                    className="min-h-[56px] flex-row items-center gap-3 py-2"
+                    style={RULE_BELOW}
                   >
                     <MaterialCommunityIcons
                       name={isChecked ? 'check-circle' : 'circle-outline'}

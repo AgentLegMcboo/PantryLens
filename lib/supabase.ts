@@ -77,3 +77,26 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     flowType: 'pkce',
   },
 });
+
+/**
+ * A second, throwaway client used ONLY to start Google sign-in inside Expo Go.
+ *
+ * Expo Go on Android delivers the OAuth redirect twice — to the in-app browser
+ * session and to the router as a deep link — and the browser session can pick
+ * up a stale ?code= from an earlier attempt whose PKCE verifier has since been
+ * replaced ("code challenge does not match previously saved code verifier").
+ * With the implicit flow the redirect carries the tokens themselves, so a
+ * duplicate or stale delivery cannot fail; lib/auth.ts hands them to the main
+ * client with setSession. It keeps nothing of its own: no storage, no refresh.
+ *
+ * Real builds (pantrylens://) never use this — they stay on PKCE.
+ */
+export const implicitAuthClient = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    flowType: 'implicit',
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false,
+  },
+});
+

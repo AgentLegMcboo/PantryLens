@@ -5,10 +5,8 @@ import { AuthLayout } from '../components/auth-layout';
 import { Button, Input, Text } from '../components/ui';
 import { OAuthCancelled, oauthRedirectUri, signInWithGoogle } from '../lib/auth';
 import { supabase } from '../lib/supabase';
-import { DEMO_PANTRIES, usePantryStore } from '../lib/store';
 
 export default function LoginScreen() {
-  const loginAsDemo = usePantryStore((state) => state.loginAsDemo);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
@@ -89,40 +87,6 @@ export default function LoginScreen() {
       />
 
       <Button label="Sign in" block loading={loading} disabled={googleLoading} onPress={handleLogin} />
-
-      <View className="relative my-3 items-center justify-center">
-        <View className="h-px w-full bg-hairline/60" />
-        <Text variant="label" tone="soft" className="absolute bg-card px-3 font-medium">
-          Or try a food bank directly
-        </Text>
-      </View>
-
-      <View className="gap-2.5">
-        {DEMO_PANTRIES.map((pantry) => (
-          <Pressable
-            key={pantry.id}
-            accessibilityRole="button"
-            accessibilityLabel={`Enter ${pantry.name}`}
-            onPress={() => loginAsDemo(pantry.id)}
-            style={({ pressed }) => ({ opacity: pressed ? 0.8 : 1 })}
-            className="flex-row items-center justify-between rounded-lg border border-hairline bg-canvas p-3.5"
-          >
-            <View className="flex-1 pr-3">
-              <Text style={{ fontSize: 16, fontWeight: '700', color: '#2B2420' }}>
-                {pantry.name}
-              </Text>
-              <Text variant="label" tone="soft" className="mt-0.5">
-                {pantry.description}
-              </Text>
-            </View>
-            <View className="rounded-md border border-hairline bg-card px-3 py-1.5">
-              <Text variant="label" tone="brand" className="font-bold">
-                Open →
-              </Text>
-            </View>
-          </Pressable>
-        ))}
-      </View>
 
       {/* Dev only: the Expo Go redirect host changes with the network, and it
           must be allow-listed in Supabase or login falls back to Site URL. */}

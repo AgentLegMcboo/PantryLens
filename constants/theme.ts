@@ -99,3 +99,17 @@ export const CARD_ELEVATION = {
   shadowOffset: { width: 0, height: 3 },
   elevation: 2,
 } as const;
+
+/**
+ * One-sided rules, as style objects.
+ *
+ * The className pairs (`border-b border-hairline`, `border-t border-hairline`)
+ * draw a box on all four sides on Android instead of a single line — a divider
+ * turns into a square outline around the whole row. Plain style props do
+ * exactly what they say.
+ */
+export const RULE_BELOW = { borderBottomWidth: 1, borderBottomColor: COLORS.borderSoft } as const;
+export const RULE_ABOVE = { borderTopWidth: 1, borderTopColor: COLORS.borderSoft } as const;
+/** The same rules at 60%, for the lighter dividers on pantry selection. */
+export const RULE_BELOW_FAINT = { borderBottomWidth: 1, borderBottomColor: 'rgba(224,205,187,0.6)' } as const;
+export const RULE_ABOVE_FAINT = { borderTopWidth: 1, borderTopColor: 'rgba(224,205,187,0.6)' } as const;

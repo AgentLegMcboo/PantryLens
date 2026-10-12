@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
 import { Alert, Pressable, View } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_BELOW } from '../constants/theme';
 import { type BoxFolderKind, usePantryStore } from '../lib/store';
 import { Button, Chip, Input, Row, Text } from './ui';
 
@@ -214,7 +214,7 @@ export function FolderManager({
         const n = counts[folder.id] ?? 0;
         if (editingId === folder.id) {
           return (
-            <View key={folder.id} className="gap-2 border-b border-hairline py-3">
+            <View key={folder.id} className="gap-2 py-3" style={RULE_BELOW}>
               <Input
                 value={editName}
                 onChangeText={setEditName}
