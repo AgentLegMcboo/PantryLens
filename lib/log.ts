@@ -12,7 +12,7 @@
 
 const ENABLED = __DEV__;
 
-type Tag = 'scan' | 'store' | 'auth' | 'nav';
+type Tag = 'scan' | 'store' | 'auth' | 'nav' | 'offline' | 'barcode';
 
 function line(level: 'log' | 'warn' | 'error', tag: Tag, message: string, detail?: unknown) {
   if (!ENABLED && level === 'log') return;
