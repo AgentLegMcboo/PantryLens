@@ -20,7 +20,7 @@ import Animated, {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AuthBackdrop } from '../components/auth-layout';
 import { BrandMark } from '../components/brand-mark';
-import { BoxesMock, ScanMock, VerifyMock, WeighMock } from '../components/onboarding-mocks';
+import { BoxesMock, CameraMock, ScanMock } from '../components/onboarding-mocks';
 import { Button, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
 import { cueSuccess, cueTap } from '../lib/feedback';
@@ -40,28 +40,20 @@ const { width: SCREEN_W } = Dimensions.get('window');
  */
 const PHASES = [
   {
-    key: 'scan',
-    Mock: ScanMock,
-    lead: 'Photograph',
-    title: 'what just came in.',
-    body: 'Point the camera at a donation bag or a shelf. PantryLens drafts the item list so nobody writes counts on paper.',
+    key: 'camera',
+    Mock: CameraMock,
+    lead: 'Point',
+    title: 'the camera at the pantry.',
+    body: 'A donation pile or a whole shelf. Take as many photos as it needs without leaving the camera.',
     tint: '#F6ECE2',
   },
   {
-    key: 'verify',
-    Mock: VerifyMock,
-    lead: 'You',
-    title: 'have the final say.',
-    body: 'The AI only guesses. Fix a count, change a category, flag a dented can — nothing reaches inventory until you confirm it.',
-    tint: '#F5EBDF',
-  },
-  {
-    key: 'weigh',
-    Mock: WeighMock,
-    lead: 'Weigh',
-    title: 'the bulk drops.',
-    body: 'Big grocery and food-bank loads get weighed, not counted. Record the pounds and PantryLens still works out what it adds to your boxes.',
-    tint: '#F6EADC',
+    key: 'scan',
+    Mock: ScanMock,
+    lead: 'Every label',
+    title: 'read for you.',
+    body: 'PantryLens turns the photos into an item list, so nobody writes counts on paper.',
+    tint: '#F7EBDF',
   },
   {
     key: 'boxes',
