@@ -53,7 +53,7 @@ const PHASES = [
     lead: 'You',
     title: 'have the final say.',
     body: 'The AI only guesses. Fix a count, change a category, flag a dented can — nothing reaches inventory until you confirm it.',
-    tint: '#F3EDE0',
+    tint: '#F5EBDF',
   },
   {
     key: 'weigh',
@@ -61,7 +61,7 @@ const PHASES = [
     lead: 'Weigh',
     title: 'the bulk drops.',
     body: 'Big grocery and food-bank loads get weighed, not counted. Record the pounds and PantryLens still works out what it adds to your boxes.',
-    tint: '#EDF0E4',
+    tint: '#F6EADC',
   },
   {
     key: 'boxes',

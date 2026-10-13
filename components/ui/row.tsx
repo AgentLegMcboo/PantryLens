@@ -46,7 +46,7 @@ export function Row({
   const colour = tone === 'critical' ? COLORS.statusCritical : COLORS.textPrimary;
   // The glyph is brand-tinted rather than ink, matching the dashboard's activity
   // rows — a disc of dark grey on cream reads as disabled.
-  const glyphColour = tone === 'critical' ? COLORS.statusCritical : COLORS.primaryLight;
+  const glyphColour = tone === 'critical' ? COLORS.statusCritical : COLORS.secondaryDark;
 
   const body = (
     <View
@@ -59,7 +59,14 @@ export function Row({
       style={divider ? RULE_BELOW : undefined}
     >
       {icon ? (
-        <View className="h-10 w-10 items-center justify-center rounded-lg bg-subtle">
+        <View
+          className={cn(
+            'h-10 w-10 items-center justify-center rounded-lg',
+            // Green wash for an ordinary row; a problem row keeps the neutral
+            // tile so its red glyph isn't sitting on green.
+            tone === 'critical' ? 'bg-subtle' : 'bg-secondary-tint',
+          )}
+        >
           <MaterialCommunityIcons name={icon} size={20} color={glyphColour} />
         </View>
       ) : null}

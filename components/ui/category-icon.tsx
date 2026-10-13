@@ -43,27 +43,34 @@ const SIZES = {
 export function CategoryIcon({
   category,
   size = 'sm',
-  tone = 'brand',
+  tone = 'secondary',
   shape = 'circle',
   className,
 }: {
   category: string;
   size?: keyof typeof SIZES;
-  /** 'brand' for an ordinary row; 'critical' where the row is the problem. */
-  tone?: 'brand' | 'critical';
+  /** 'brand' for an ordinary row; 'critical' where the row is the problem;
+   *  'secondary' for the green treatment. */
+  tone?: 'brand' | 'critical' | 'secondary';
   /** Square where it shares a column with photographs, so the list stays even. */
   shape?: 'circle' | 'square';
   className?: string;
 }) {
   const { box, glyph } = SIZES[size];
-  const colour = tone === 'critical' ? COLORS.statusCritical : COLORS.primaryLight;
+  const colour =
+    tone === 'critical'
+      ? COLORS.statusCritical
+      : tone === 'secondary'
+        ? COLORS.secondaryDark
+        : COLORS.primaryLight;
 
   return (
     <View
       accessibilityElementsHidden
       importantForAccessibility="no"
       className={cn(
-        'items-center justify-center bg-subtle rounded-lg',
+        'items-center justify-center rounded-lg',
+        tone === 'secondary' ? 'bg-secondary-tint' : 'bg-subtle',
         box,
         className,
       )}
@@ -92,13 +99,13 @@ export function ItemThumb({
   imageUrl,
   category,
   size = 'md',
-  tone = 'brand',
+  tone = 'secondary',
   className,
 }: {
   imageUrl?: string | null;
   category: string;
   size?: keyof typeof SIZES;
-  tone?: 'brand' | 'critical';
+  tone?: 'brand' | 'critical' | 'secondary';
   className?: string;
 }) {
   if (!imageUrl) {

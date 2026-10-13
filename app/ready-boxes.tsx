@@ -133,11 +133,11 @@ export default function ReadyBoxesScreen() {
                   />
                 )}
                 <View className="flex-1 items-center">
-                  <View className="h-11 w-11 items-center justify-center rounded-lg bg-subtle">
+                  <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
                     <MaterialCommunityIcons
                       name={step.icon}
                       size={20}
-                      color={COLORS.primaryLight}
+                      color={COLORS.secondaryDark}
                     />
                   </View>
                   <Text
@@ -195,11 +195,11 @@ export default function ReadyBoxesScreen() {
     return (
       <Card key={run.id} className="gap-3">
         <View className="flex-row items-start gap-3">
-          <View className="h-11 w-11 items-center justify-center rounded-md bg-subtle">
+          <View className="h-11 w-11 items-center justify-center rounded-md bg-secondary-tint">
             <MaterialCommunityIcons
               name="package-variant-closed"
               size={22}
-              color={COLORS.primaryLight}
+              color={COLORS.secondaryDark}
             />
           </View>
 
@@ -237,12 +237,12 @@ export default function ReadyBoxesScreen() {
             hitSlop={10}
             accessibilityRole="button"
             accessibilityLabel={`Name or file ${run.label ?? boxType}`}
-            className="h-9 w-9 items-center justify-center rounded-lg bg-subtle"
+            className="h-9 w-9 items-center justify-center rounded-lg bg-secondary-tint"
           >
             <MaterialCommunityIcons
               name="pencil-outline"
               size={17}
-              color={COLORS.primaryDark}
+              color={COLORS.secondaryDark}
             />
           </Pressable>
         </View>

@@ -27,7 +27,7 @@ module.exports = {
           dark: COLORS.primaryDark,
           deep: COLORS.primaryDeep,
         },
-        secondary: COLORS.secondary,
+        secondary: { DEFAULT: COLORS.secondary, dark: COLORS.secondaryDark, tint: COLORS.secondaryTint },
 
         canvas: COLORS.background,
         card: COLORS.cardSurface,

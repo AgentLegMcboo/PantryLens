@@ -16,10 +16,16 @@ import { cueTap } from '../../lib/feedback';
 export function Chip({
   label,
   selected,
+  tone = 'brand',
   className,
   onPress,
   ...props
-}: Omit<PressableProps, 'children'> & { label: string; selected?: boolean }) {
+}: Omit<PressableProps, 'children'> & {
+  label: string;
+  selected?: boolean;
+  /** Fill when selected: terracotta by default, or the green secondary. */
+  tone?: 'brand' | 'secondary';
+}) {
   return (
     <Pressable
       accessibilityRole="button"
@@ -30,7 +36,11 @@ export function Chip({
       }}
       className={cn(
         'rounded-lg border px-4 py-2.5 min-h-[48px] justify-center',
-        selected ? 'bg-brand border-brand' : 'bg-card border-hairline',
+        selected
+          ? tone === 'secondary'
+            ? 'bg-secondary-dark border-secondary-dark'
+            : 'bg-brand border-brand'
+          : 'bg-card border-hairline',
         className,
       )}
       {...props}

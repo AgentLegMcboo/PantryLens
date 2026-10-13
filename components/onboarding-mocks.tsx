@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect } from "react";
-import { Image, StyleSheet, View } from "react-native";
+import { StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -8,7 +8,6 @@ import Animated, {
   withDelay,
   withTiming,
 } from "react-native-reanimated";
-import { DetectionOverlay } from "./detection-overlay";
 import { ProgressBar } from "./motion";
 import {
   Button,
@@ -25,7 +24,7 @@ import { COLORS } from "../constants/theme";
  * Pieces of the real app, shown behind each onboarding headline.
  *
  * Every mock is assembled from the same components the screens use — Card,
- * Chip, Stepper, Button, CategoryIcon, the scan's DetectionOverlay — so a
+ * Chip, Stepper, Button, CategoryIcon, ItemThumb — so a
  * volunteer meets the actual controls before they meet the actual screens, and
  * nothing here can drift from what the app really looks like. They are inert
  * (`pointerEvents="none"`): pictures of controls, not controls.
@@ -153,63 +152,50 @@ function Tag({
   );
 }
 
-const SCAN_PHOTO = Image.resolveAssetSource(
-  require("../assets/images/donation-scan.jpg"),
-);
-
-/** Phase 1 — a photographed donation with the scan's own detection boxes on it. */
+/**
+ * Phase 1 — what a scan hands back: the items it read off one photo.
+ *
+ * It used to show the donation illustration with detection boxes on it, whose
+ * teal, brown and green cans fought the warm palette. The result list says the
+ * same thing — point the camera, get a list — in the app's own colours.
+ */
 export function ScanMock() {
+  const found = [
+    { category: "vegetable", name: "Canned corn", count: 12 },
+    { category: "protein", name: "Tomato soup", count: 4 },
+    { category: "vegetable", name: "Green beans", count: 6 },
+    { category: "grain", name: "Rotini pasta", count: 3 },
+  ];
   return (
     <Stage
       main={
-        <Card style={MOCK_SHADOW} className="w-[312px] gap-3 p-3">
-          <View style={styles.photo}>
-            <DetectionOverlay
-              uri={SCAN_PHOTO.uri}
-              aspectRatio={1.45}
-              items={[
-                {
-                  id: "a",
-                  label: "Tomato soup",
-                  count: 4,
-                  verified: true,
-                  needsAttention: false,
-                  box: { top: 0.04, left: 0.12, width: 0.36, height: 0.3 },
-                },
-                {
-                  id: "b",
-                  label: "Green beans",
-                  count: 6,
-                  verified: false,
-                  needsAttention: false,
-                  box: { top: 0.04, left: 0.52, width: 0.36, height: 0.3 },
-                },
-                {
-                  id: "c",
-                  label: "Canned corn",
-                  count: 12,
-                  verified: false,
-                  needsAttention: true,
-                  box: { top: 0.32, left: 0.1, width: 0.8, height: 0.3 },
-                },
-              ]}
-              selectedId={null}
-              drawMode={false}
-              onSelect={noop}
-              onBoxChange={noop}
-              onDraw={noop}
-              onDragStateChange={noop}
-            />
+        <Card style={MOCK_SHADOW} className="w-[312px] gap-3 p-4">
+          <View className="flex-row items-center gap-2">
+            <View className="h-7 w-7 items-center justify-center rounded-md bg-brand">
+              <MaterialCommunityIcons name="camera" size={15} color={COLORS.textOnPrimary} />
+            </View>
+            <Text variant="label" className="flex-1 font-bold">
+              Found in your photo
+            </Text>
+            <Text variant="micro" tone="soft" className="font-semibold">
+              {found.length} items
+            </Text>
           </View>
-          <Button
-            label="Detect items in 1 photo"
-            size="compact"
-            block
-            onPress={noop}
-          />
+          {found.map((f) => (
+            <View key={f.name} className="flex-row items-center gap-3">
+              <ItemThumb category={f.category} size="sm" />
+              <Text variant="body" className="flex-1 font-semibold">
+                {f.name}
+              </Text>
+              <Text variant="label" className="font-bold" style={{ color: COLORS.primary }}>
+                ×{f.count}
+              </Text>
+            </View>
+          ))}
+          <Button label="Check these 4 items" size="compact" block onPress={noop} />
         </Card>
       }
-      topRight={<Tag icon="carrot" label="Canned corn ×12" tone="good" />}
+      topRight={<Tag icon="camera-outline" label="1 photo" />}
       bottomLeft={<Tag icon="hand-heart-outline" label="Grocery rescue" />}
     />
   );
@@ -319,7 +305,7 @@ export function BoxesMock() {
               <View key={r.category} className="flex-row items-center gap-3">
                 <CategoryIcon
                   category={r.category}
-                  tone={short ? "critical" : "brand"}
+                  tone={short ? "critical" : "secondary"}
                 />
                 <View className="flex-1 gap-1">
                   <View className="flex-row justify-between">
@@ -336,7 +322,7 @@ export function BoxesMock() {
                   </View>
                   <ProgressBar
                     progress={Math.min(1, r.have / r.need)}
-                    color={short ? COLORS.statusCritical : COLORS.statusGood}
+                    color={short ? COLORS.statusCritical : COLORS.primaryLight}
                   />
                 </View>
               </View>
@@ -367,5 +353,4 @@ const styles = StyleSheet.create({
   },
   topRight: { position: "absolute", top: -46, right: -8 },
   bottomLeft: { position: "absolute", bottom: -46, left: -8 },
-  photo: { borderRadius: 10, overflow: "hidden" },
 });

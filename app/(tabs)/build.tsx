@@ -5,10 +5,18 @@ import { Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
-import { DIET_TAG_LABELS, EXCLUSION_CAVEAT, type DietTag } from "../../lib/diet";
+import {
+  DIET_TAG_LABELS,
+  EXCLUSION_CAVEAT,
+  type DietTag,
+} from "../../lib/diet";
 import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
 import { BoxPicker, type BoxSelection } from "../../components/box-picker";
-import { AnimatedCounter, FadeInUp, ProgressBar } from "../../components/motion";
+import {
+  AnimatedCounter,
+  FadeInUp,
+  ProgressBar,
+} from "../../components/motion";
 import {
   Button,
   Card,
@@ -37,8 +45,12 @@ import { BoxRules, usePantryStore } from "../../lib/store";
  */
 export default function BuildBoxesScreen() {
   const router = useRouter();
-  const { inventory, bulkLots, boxRules, boxTemplates, readyBoxes, settings } = usePantryStore();
-  const readyCount = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
+  const { inventory, bulkLots, boxRules, boxTemplates, readyBoxes, settings } =
+    usePantryStore();
+  const readyCount = readyBoxes.reduce(
+    (sum, r) => sum + (r.boxes - r.boxes_collected),
+    0,
+  );
 
   const [requestedBoxes, setRequestedBoxes] = useState(settings.boxTarget);
   // Build is a tab, so it mounts before the pantry has loaded and seeds itself
@@ -190,16 +202,19 @@ export default function BuildBoxesScreen() {
                       >
                         {plan.limitingCategory}
                       </Text>{" "}
-                      runs out first — short {
-                        plan.shortfallPerCategory[plan.limitingCategory]
-                      } for {requestedBoxes}
+                      runs out first — short{" "}
+                      {plan.shortfallPerCategory[plan.limitingCategory]} for{" "}
+                      {requestedBoxes}
                     </>
                   ) : (
                     `Enough of everything for ${requestedBoxes}`
                   )}
                 </Text>
                 <View className="flex-row items-center gap-1 rounded-md bg-white/20 px-3 py-1.5">
-                  <Text variant="label" className="font-bold text-ink-on text-xs">
+                  <Text
+                    variant="label"
+                    className="font-bold text-ink-on text-xs"
+                  >
                     Why
                   </Text>
                   <MaterialCommunityIcons
@@ -231,14 +246,17 @@ export default function BuildBoxesScreen() {
                 <Text variant="micro" tone="soft">
                   <Text variant="micro" className="font-bold">
                     {plan.excluded.dietary.units} good unit
-                    {plan.excluded.dietary.units === 1 ? "" : "s"} held back by this box&apos;s rules.
+                    {plan.excluded.dietary.units === 1 ? "" : "s"} held back by
+                    this box&apos;s rules.
                   </Text>{" "}
                   {box.requires.length > 0
                     ? `Only food recorded as ${box.requires
-                        .map(t => DIET_TAG_LABELS[t].toLowerCase())
-                        .join(" and ")} can go in, and anything untagged does not qualify.`
+                        .map((t) => DIET_TAG_LABELS[t].toLowerCase())
+                        .join(
+                          " and ",
+                        )} can go in, and anything untagged does not qualify.`
                     : `Anything known to contain ${box.excludes
-                        .map(t => DIET_TAG_LABELS[t].toLowerCase())
+                        .map((t) => DIET_TAG_LABELS[t].toLowerCase())
                         .join(" or ")} is left out.`}
                 </Text>
                 {box.excludes.length > 0 && (
@@ -251,7 +269,8 @@ export default function BuildBoxesScreen() {
           </FadeInUp>
         )}
 
-        {(plan.excluded.pastDate.units > 0 || plan.excluded.flagged.units > 0) && (
+        {(plan.excluded.pastDate.units > 0 ||
+          plan.excluded.flagged.units > 0) && (
           <FadeInUp index={1}>
             <Panel className="flex-row gap-3">
               <MaterialCommunityIcons
@@ -275,14 +294,20 @@ export default function BuildBoxesScreen() {
                   ]
                     .filter(Boolean)
                     .join(" and ")}{" "}
-                  {plan.excluded.pastDate.units + plan.excluded.flagged.units === 1
+                  {plan.excluded.pastDate.units +
+                    plan.excluded.flagged.units ===
+                  1
                     ? "is"
                     : "are"}{" "}
                   on the shelf but left out of this plan.
                 </Text>
                 {plan.excluded.pastDate.units > 0 && (
                   <Pressable onPress={() => router.push("/expiring-soon")}>
-                    <Text variant="micro" tone="brand" className="font-semibold">
+                    <Text
+                      variant="micro"
+                      tone="brand"
+                      className="font-semibold"
+                    >
                       Check what is out of date →
                     </Text>
                   </Pressable>
@@ -304,18 +329,23 @@ export default function BuildBoxesScreen() {
               accessibilityLabel={`Box: ${box.name}. Tap to change.`}
               className="flex-row items-center gap-3"
             >
-              <View className="h-11 w-11 items-center justify-center rounded-md bg-subtle">
+              <View className="h-11 w-11 items-center justify-center rounded-md bg-secondary-tint">
                 <MaterialCommunityIcons
                   name="package-variant-closed"
                   size={22}
-                  color={COLORS.primaryLight}
+                  color={COLORS.secondaryDark}
                 />
               </View>
               <View className="flex-1">
                 <Text variant="body" className="font-bold">
                   {box.name}
                 </Text>
-                <Text variant="micro" tone="soft" numberOfLines={2} className="mt-0.5">
+                <Text
+                  variant="micro"
+                  tone="soft"
+                  numberOfLines={2}
+                  className="mt-0.5"
+                >
                   {describeRules(box.rules)}
                 </Text>
               </View>
@@ -332,7 +362,7 @@ export default function BuildBoxesScreen() {
                 value={requestedBoxes}
                 min={1}
                 max={200}
-                onChange={next => {
+                onChange={(next) => {
                   touchedBoxes.current = true;
                   setRequestedBoxes(next);
                 }}
@@ -341,7 +371,9 @@ export default function BuildBoxesScreen() {
 
             {box.scales ? (
               <View className="gap-2">
-                <Text variant="body" className="font-semibold">How big are the families?</Text>
+                <Text variant="body" className="font-semibold">
+                  How big are the families?
+                </Text>
                 <View className="flex-row gap-2">
                   {[2, 4, 6].map((size) => (
                     <Chip
@@ -355,7 +387,8 @@ export default function BuildBoxesScreen() {
               </View>
             ) : (
               <Text variant="micro" tone="soft">
-                This box doesn&apos;t scale: every household gets the same amounts.
+                This box doesn&apos;t scale: every household gets the same
+                amounts.
               </Text>
             )}
           </Card>
@@ -399,16 +432,6 @@ export default function BuildBoxesScreen() {
                 });
               }}
             />
-
-            {isShort && (
-              <Button
-                label="Ask donors for what's short"
-                variant="secondary"
-                size="compact"
-                onPress={() => router.push("/(tabs)/needs")}
-              />
-            )}
-
           </View>
         </FadeInUp>
 
@@ -466,7 +489,11 @@ export default function BuildBoxesScreen() {
                   return (
                     <View key={run.id} className="gap-1.5">
                       <View className="flex-row items-center justify-between gap-3">
-                        <Text variant="body" numberOfLines={1} className="flex-1 font-semibold">
+                        <Text
+                          variant="body"
+                          numberOfLines={1}
+                          className="flex-1 font-semibold"
+                        >
                           {run.label || run.box_name || "Packed boxes"}
                         </Text>
                         <View
@@ -485,11 +512,14 @@ export default function BuildBoxesScreen() {
                         </View>
                       </View>
                       <ProgressBar
-                        progress={run.boxes > 0 ? run.boxes_collected / run.boxes : 0}
+                        progress={
+                          run.boxes > 0 ? run.boxes_collected / run.boxes : 0
+                        }
                         color={COLORS.statusGood}
                       />
                       <Text variant="micro" tone="soft">
-                        {left} of {run.boxes} left · packed {packedAgo(run.created_at)}
+                        {left} of {run.boxes} left · packed{" "}
+                        {packedAgo(run.created_at)}
                       </Text>
                     </View>
                   );
@@ -503,6 +533,15 @@ export default function BuildBoxesScreen() {
             )}
           </Card>
         </FadeInUp>
+
+        {isShort && (
+          <Button
+            label="Ask donors for what's short"
+            variant="secondary"
+            size="compact"
+            onPress={() => router.push("/(tabs)/needs")}
+          />
+        )}
 
         {!canPack && (
           <FadeInUp index={4}>
@@ -535,12 +574,14 @@ export default function BuildBoxesScreen() {
               className="flex-row items-center gap-3 rounded-md bg-card px-4 py-3"
               style={{
                 borderWidth: 1.5,
-                borderColor: limiting ? COLORS.statusCritical : COLORS.borderSoft,
+                borderColor: limiting
+                  ? COLORS.statusCritical
+                  : COLORS.borderSoft,
               }}
             >
               <CategoryIcon
                 category={String(cat)}
-                tone={limiting ? "critical" : "brand"}
+                tone={limiting ? "critical" : "secondary"}
               />
               <View className="flex-1">
                 <Text variant="body" className="font-semibold capitalize">
@@ -589,4 +630,3 @@ function packedAgo(iso: string): string {
   if (days === 1) return "yesterday";
   return `${days} days ago`;
 }
-

@@ -6,6 +6,11 @@ export const COLORS = {
   /** The lip under a pressed-in button. Must be clearly darker than primary. */
   primaryDeep: '#5E2411',
   secondary: '#6B8E4E',
+  /** Secondary for text and solid fills: 5.4:1 on cream, white on it 5.8:1.
+   *  The plain sage is only 3.5:1 — fine for icons, too light for words. */
+  secondaryDark: '#4F6E3A',
+  /** A wash of the secondary, behind icons. */
+  secondaryTint: '#EEF3E8',
 
   // Surfaces
   //

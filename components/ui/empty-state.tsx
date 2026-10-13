@@ -39,7 +39,7 @@ export function EmptyState({
   children?: React.ReactNode;
   className?: string;
 }) {
-  const colour = tone === 'good' ? COLORS.statusGood : COLORS.textSecondary;
+  const colour = tone === 'good' ? COLORS.statusGood : COLORS.secondaryDark;
 
   return (
     <View className={cn('items-center px-8 py-16', className)}>
@@ -47,7 +47,7 @@ export function EmptyState({
           floating in white space. */}
       <View
         className="h-20 w-20 items-center justify-center rounded-2xl"
-        style={{ backgroundColor: tone === 'good' ? '#E8F0E6' : COLORS.surfaceContainer }}
+        style={{ backgroundColor: tone === 'good' ? '#E8F0E6' : COLORS.secondaryTint }}
       >
         <MaterialCommunityIcons name={icon} size={38} color={colour} />
       </View>

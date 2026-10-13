@@ -215,8 +215,12 @@ export function AppHeader({ title }: { title: string }) {
             />
             <MenuRow
               icon="account-multiple-outline"
-              label={settings.pantryName || 'This pantry'}
-              hint={`You are signed in as ${settings.userRole}`}
+              label="Team"
+              hint={`People in ${settings.pantryName || 'this pantry'} and what they've done`}
+              onPress={() => {
+                close();
+                router.push('/team');
+              }}
             />
             <MenuRow icon="logout" label="Sign out" tone="critical" onPress={handleSignOut} />
           </Pressable>
@@ -280,8 +284,16 @@ function MenuRow({
       className="flex-row items-center gap-3 py-3.5"
       accessibilityRole={onPress ? 'button' : undefined}
     >
-      <View className="h-10 w-10 items-center justify-center rounded-lg bg-subtle">
-        <MaterialCommunityIcons name={icon} size={20} color={colour} />
+      <View
+        className={`h-10 w-10 items-center justify-center rounded-lg ${
+          tone === 'critical' ? 'bg-subtle' : 'bg-secondary-tint'
+        }`}
+      >
+        <MaterialCommunityIcons
+          name={icon}
+          size={20}
+          color={tone === 'critical' ? colour : COLORS.secondaryDark}
+        />
       </View>
       <View className="flex-1">
         <Text variant="body" style={{ color: colour }} className="font-semibold text-base">

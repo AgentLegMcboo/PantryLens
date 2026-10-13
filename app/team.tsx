@@ -2,11 +2,13 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { COLORS } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
-import { Badge, Button, Card, CardHeader, EmptyState, Row, Screen, Sheet, Text } from '../components/ui';
+import { Badge, Card, CardHeader, EmptyState, Row, Screen, Text } from '../components/ui';
 import { cueSuccess } from '../lib/feedback';
 import {
+  canEditPantry,
   canManageTeam,
   ROLE_BLURBS,
   ROLE_ICONS,
@@ -41,16 +43,15 @@ function displayName(member: PantryMember): string {
 }
 
 export default function TeamScreen() {
-  const { settings, session, members, fetchMembers, setMemberRole, transferOwnership, removeMember } =
-    usePantryStore();
+  const { settings, session, members, fetchMembers } = usePantryStore();
 
   const [refreshing, setRefreshing] = useState(false);
   const [loading, setLoading] = useState(members.length === 0);
-  const [selected, setSelected] = useState<PantryMember | null>(null);
-  const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
 
   const isOwner = canManageTeam(settings.userRole);
+  const canSeeActivity = canEditPantry(settings.userRole);
+  const router = useRouter();
   const myId = session?.user?.id;
 
   const load = async () => {
@@ -81,55 +82,6 @@ export default function TeamScreen() {
     setTimeout(() => setCopied(false), 2500);
   };
 
-  /** Runs one of the owner-only actions, closing the sheet only if it worked. */
-  const run = async (what: string, action: () => Promise<void>) => {
-    setBusy(true);
-    try {
-      await action();
-      setSelected(null);
-      cueSuccess();
-    } catch (err: any) {
-      Alert.alert(`Could not ${what}`, err?.message ?? 'Please try again.');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const changeRole = (member: PantryMember, role: 'admin' | 'volunteer') =>
-    run('change that role', () => setMemberRole(member.user_id, role));
-
-  const confirmTransfer = (member: PantryMember) => {
-    Alert.alert(
-      `Make ${displayName(member)} the owner?`,
-      'They take over the pantry, including who may do what. You stay on as a manager — ' +
-        'only they can change that afterwards.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Hand it over',
-          style: 'destructive',
-          onPress: () => run('transfer the pantry', () => transferOwnership(member.user_id)),
-        },
-      ],
-    );
-  };
-
-  const confirmRemove = (member: PantryMember) => {
-    Alert.alert(
-      `Remove ${displayName(member)}?`,
-      'They lose access to this pantry straight away. Anything they scanned, packed or logged ' +
-        'stays. They can rejoin with the invite code.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Remove',
-          style: 'destructive',
-          onPress: () => run('remove that person', () => removeMember(member.user_id)),
-        },
-      ],
-    );
-  };
-
   if (loading) {
     return (
       <View className="flex-1 items-center justify-center bg-canvas">
@@ -153,8 +105,10 @@ export default function TeamScreen() {
             </Text>
             <Text variant="body" tone="soft" className="mt-1">
               {isOwner
-                ? 'Tap anyone to change what they can do.'
-                : 'Your pantry owner decides who can do what.'}
+                ? 'Tap anyone to see what they have done here and change what they can do.'
+                : canSeeActivity
+                  ? 'Tap anyone to see what they have done here.'
+                  : 'Your pantry owner decides who can do what.'}
             </Text>
           </View>
         </FadeInUp>
@@ -198,9 +152,9 @@ export default function TeamScreen() {
             ) : (
               members.map((member, i) => {
                 const me = member.user_id === myId;
-                // The owner may act on anyone but themselves — stepping down
-                // is a transfer, which starts from the other person's row.
-                const tappable = isOwner && !me;
+                // Owners and managers open anyone's page (their activity, and
+                // for the owner the role controls); everyone can open their own.
+                const tappable = canSeeActivity || me;
                 return (
                   <Row
                     key={member.user_id}
@@ -208,11 +162,18 @@ export default function TeamScreen() {
                     label={me ? `${displayName(member)} (you)` : displayName(member)}
                     hint={`${ROLE_LABELS[member.role]} · joined ${timeAgo(member.joined_at)}`}
                     divider={i < members.length - 1}
-                    onPress={tappable ? () => setSelected(member) : undefined}
+                    onPress={
+                      tappable
+                        ? () => router.push({ pathname: '/member', params: { id: member.user_id } })
+                        : undefined
+                    }
                     right={
-                      tappable ? undefined : (
+                      <View className="flex-row items-center gap-2">
                         <Badge label={ROLE_LABELS[member.role]} tone={ROLE_TONE[member.role]} />
-                      )
+                        {tappable && (
+                          <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
+                        )}
+                      </View>
                     }
                   />
                 );
@@ -246,63 +207,6 @@ export default function TeamScreen() {
         </FadeInUp>
       </Screen>
 
-      <Sheet
-        visible={!!selected}
-        title={selected ? displayName(selected) : ''}
-        subtitle={selected ? `Currently a ${ROLE_LABELS[selected.role].toLowerCase()}` : undefined}
-        onClose={() => !busy && setSelected(null)}
-      >
-        {selected && (
-          <View className="gap-2">
-            <Row
-              icon={ROLE_ICONS.admin}
-              label="Manager"
-              hint={ROLE_BLURBS.admin}
-              right={
-                selected.role === 'admin' ? (
-                  <MaterialCommunityIcons name="check" size={22} color={COLORS.statusGood} />
-                ) : undefined
-              }
-              onPress={selected.role === 'admin' ? undefined : () => changeRole(selected, 'admin')}
-            />
-            <Row
-              icon={ROLE_ICONS.volunteer}
-              label="Volunteer"
-              hint={ROLE_BLURBS.volunteer}
-              right={
-                selected.role === 'volunteer' ? (
-                  <MaterialCommunityIcons name="check" size={22} color={COLORS.statusGood} />
-                ) : undefined
-              }
-              onPress={
-                selected.role === 'volunteer' ? undefined : () => changeRole(selected, 'volunteer')
-              }
-            />
-
-            <View className="mt-2 gap-2">
-              <Button
-                label="Make them the owner"
-                variant="secondary"
-                block
-                icon={
-                  <MaterialCommunityIcons
-                    name="crown-outline"
-                    size={18}
-                    color={COLORS.primaryDark}
-                  />
-                }
-                onPress={() => confirmTransfer(selected)}
-              />
-              <Button
-                label="Remove from pantry"
-                variant="criticalGhost"
-                block
-                onPress={() => confirmRemove(selected)}
-              />
-            </View>
-          </View>
-        )}
-      </Sheet>
     </>
   );
 }

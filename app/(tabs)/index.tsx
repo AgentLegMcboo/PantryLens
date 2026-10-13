@@ -144,8 +144,8 @@ export default function DashboardScreen() {
             className="flex-row items-center justify-between rounded-xl border border-hairline bg-card p-4 shadow-sm"
           >
             <View className="flex-1 flex-row items-center gap-3">
-              <View className="h-11 w-11 items-center justify-center rounded-lg bg-brand/10">
-                <MaterialCommunityIcons name="lightning-bolt" size={24} color={COLORS.primary} />
+              <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
+                <MaterialCommunityIcons name="lightning-bolt" size={24} color={COLORS.secondaryDark} />
               </View>
               <View className="flex-1">
                 <Text variant="body" className="font-bold text-base">
@@ -350,7 +350,9 @@ export default function DashboardScreen() {
             className="flex-1"
           >
             <Card className="gap-2 p-4">
-              <MaterialCommunityIcons name="scale" size={26} color={COLORS.primary} />
+              <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
+                <MaterialCommunityIcons name="scale" size={24} color={COLORS.secondaryDark} />
+              </View>
               <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textPrimary }}>
                 Weigh Deliveries
               </Text>
@@ -371,11 +373,13 @@ export default function DashboardScreen() {
             className="flex-1"
           >
             <Card className="gap-2 p-4">
-              <MaterialCommunityIcons
-                name="clipboard-check-outline"
-                size={26}
-                color={COLORS.primary}
-              />
+              <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
+                <MaterialCommunityIcons
+                  name="clipboard-check-outline"
+                  size={24}
+                  color={COLORS.secondaryDark}
+                />
+              </View>
               <Text style={{ fontSize: 16, fontWeight: '700', color: COLORS.textPrimary }}>
                 Count Shelves
               </Text>
@@ -404,11 +408,11 @@ export default function DashboardScreen() {
             ) : (
               activities.slice(0, 4).map((act, index) => (
                 <View key={act.id || index} className="flex-row items-center gap-3 p-3.5">
-                  <View className="h-9 w-9 items-center justify-center rounded-md bg-subtle">
+                  <View className="h-9 w-9 items-center justify-center rounded-md bg-secondary-tint">
                     <MaterialCommunityIcons
                       name={act.icon as any}
                       size={20}
-                      color={COLORS.primary}
+                      color={COLORS.secondaryDark}
                     />
                   </View>
                   <View className="flex-1">

@@ -900,7 +900,7 @@ export default function ReviewVerifyScreen() {
               <ItemThumb
                 imageUrl={selectedItem.image_url}
                 category={selectedItem.category ?? 'unknown'}
-                tone={damaged ? 'critical' : 'brand'}
+                tone={damaged ? 'critical' : 'secondary'}
               />
               <View className="flex-1 gap-1.5">
                 {/* Edits in place: it looks like the item's name, not a form box. */}

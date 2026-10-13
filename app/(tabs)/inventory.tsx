@@ -1,7 +1,7 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import { useShallow } from 'zustand/react/shallow';
-import React, { useCallback, useMemo, useState } from 'react';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useShallow } from "zustand/react/shallow";
+import React, { useCallback, useDeferredValue, useMemo, useState } from "react";
 import {
   Alert,
   FlatList,
@@ -12,14 +12,17 @@ import {
   Pressable,
   TextInput,
   View,
-} from 'react-native';
-import { COLORS } from '../../constants/theme';
-import { isPastDate, windowEndISO } from '../../lib/expiry';
-import { cueTap, cueWarn } from '../../lib/feedback';
-import { PlacesManager } from '../../components/places-manager';
-import ReanimatedSwipeable from 'react-native-gesture-handler/ReanimatedSwipeable';
-import Animated, { useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
-import type { SwipeableMethods } from 'react-native-gesture-handler/lib/typescript/components/ReanimatedSwipeable/ReanimatedSwipeableProps';
+} from "react-native";
+import { COLORS } from "../../constants/theme";
+import { isPastDate, windowEndISO } from "../../lib/expiry";
+import { cueTap, cueWarn } from "../../lib/feedback";
+import { PlacesManager } from "../../components/places-manager";
+import ReanimatedSwipeable from "react-native-gesture-handler/ReanimatedSwipeable";
+import Animated, {
+  useAnimatedStyle,
+  type SharedValue,
+} from "react-native-reanimated";
+import type { SwipeableMethods } from "react-native-gesture-handler/lib/typescript/components/ReanimatedSwipeable/ReanimatedSwipeableProps";
 import {
   Button,
   Card,
@@ -31,15 +34,15 @@ import {
   Sheet,
   Stepper,
   Text,
-} from '../../components/ui';
+} from "../../components/ui";
 import {
   CONDITION_LABELS,
   type ExitReason,
   InventoryItem,
   isUsableCondition,
   usePantryStore,
-} from '../../lib/store';
-import { QuickAddStaplesModal } from '../../components/quick-add-staples';
+} from "../../lib/store";
+import { QuickAddStaplesModal } from "../../components/quick-add-staples";
 
 /**
  * The shelf, as a list.
@@ -52,14 +55,14 @@ import { QuickAddStaplesModal } from '../../components/quick-add-staples';
  */
 
 const CATEGORIES = [
-  { id: 'all', label: 'All' },
-  { id: 'grain', label: 'Grain' },
-  { id: 'vegetable', label: 'Vegetables' },
-  { id: 'protein', label: 'Protein' },
-  { id: 'breakfast', label: 'Breakfast' },
-  { id: 'snack', label: 'Snacks' },
-  { id: 'hygiene', label: 'Hygiene' },
-  { id: 'baby', label: 'Baby' },
+  { id: "all", label: "All" },
+  { id: "grain", label: "Grain" },
+  { id: "vegetable", label: "Vegetables" },
+  { id: "protein", label: "Protein" },
+  { id: "breakfast", label: "Breakfast" },
+  { id: "snack", label: "Snacks" },
+  { id: "hygiene", label: "Hygiene" },
+  { id: "baby", label: "Baby" },
 ];
 
 /**
@@ -75,12 +78,12 @@ const CATEGORIES = [
  * flipping between them one at a time.
  */
 const GROUPS = [
-  { id: 'place', label: 'By place' },
-  { id: 'category', label: 'By category' },
-  { id: 'none', label: 'Flat list' },
+  { id: "place", label: "By place" },
+  { id: "category", label: "By category" },
+  { id: "none", label: "Flat list" },
 ] as const;
 
-type GroupBy = (typeof GROUPS)[number]['id'];
+type GroupBy = (typeof GROUPS)[number]["id"];
 
 /** How far the row travels when the action is fully open. */
 const SWIPE_WIDTH = 96;
@@ -109,7 +112,11 @@ function SwipeAction({ translation }: { translation: SharedValue<number> }) {
       className="mb-3 items-end justify-center overflow-hidden rounded-lg bg-critical pr-5"
     >
       <View className="items-center">
-        <MaterialCommunityIcons name="tray-arrow-up" size={22} color={COLORS.textOnPrimary} />
+        <MaterialCommunityIcons
+          name="tray-arrow-up"
+          size={22}
+          color={COLORS.textOnPrimary}
+        />
         <Text variant="micro" tone="on" className="mt-1 font-bold">
           Take off
         </Text>
@@ -119,10 +126,10 @@ function SwipeAction({ translation }: { translation: SharedValue<number> }) {
 }
 
 const SORTS = [
-  { id: 'expiration', label: 'Expiring first' },
-  { id: 'oldest', label: 'Oldest' },
-  { id: 'count', label: 'Most stock' },
-  { id: 'name', label: 'A–Z' },
+  { id: "expiration", label: "Expiring first" },
+  { id: "oldest", label: "Oldest" },
+  { id: "count", label: "Most stock" },
+  { id: "name", label: "A–Z" },
 ] as const;
 
 /**
@@ -156,11 +163,11 @@ const InventoryRow = React.memo(function InventoryRow({
 }) {
   const router = useRouter();
   const pastDate = isPastDate(item.expiration);
-  const expiringSoon = !pastDate && !!item.expiration && item.expiration <= warningStr;
+  const expiringSoon =
+    !pastDate && !!item.expiration && item.expiration <= warningStr;
   const damaged = !isUsableCondition(item.condition);
   // Both keep it out of the boxes, so both get the red treatment.
   const blocked = damaged || pastDate;
-
 
   const row = (
     <Pressable
@@ -170,7 +177,7 @@ const InventoryRow = React.memo(function InventoryRow({
       onPress={() =>
         picking
           ? onToggle(item.id)
-          : router.push({ pathname: '/item-detail', params: { id: item.id } })
+          : router.push({ pathname: "/item-detail", params: { id: item.id } })
       }
       onLongPress={() => onToggle(item.id)}
       delayLongPress={250}
@@ -179,15 +186,21 @@ const InventoryRow = React.memo(function InventoryRow({
           under it, and the count on the right. Expiry only when there is
           one — "No expiry recorded" on every tin of soap was just noise. */}
       <Card
-        className={isSelected ? 'mb-2.5 bg-subtle px-4 py-3.5' : 'mb-2.5 px-4 py-3.5'}
+        className={
+          isSelected
+            ? "mb-2.5 bg-subtle px-4 py-3.5"
+            : "mb-2.5 px-4 py-3.5 shadow-md shadow-black"
+        }
         // A lighter edge than other cards: in a long list a full-strength
         // outline on every row adds up to a lot of lines.
-        style={{ borderColor: isSelected ? COLORS.primary : 'rgba(224,205,187,0.6)' }}
+        style={{
+          borderColor: isSelected ? COLORS.primary : "rgba(224,205,187,0.6)",
+        }}
       >
         <View className="flex-row items-center gap-3.5">
           {picking && (
             <MaterialCommunityIcons
-              name={isSelected ? 'check-circle' : 'circle-outline'}
+              name={isSelected ? "check-circle" : "circle-outline"}
               size={24}
               color={isSelected ? COLORS.primaryLight : COLORS.borderStrong}
             />
@@ -198,7 +211,7 @@ const InventoryRow = React.memo(function InventoryRow({
             imageUrl={item.image_url}
             category={item.category}
             size="md"
-            tone={blocked ? 'critical' : 'brand'}
+            tone={blocked ? "critical" : "secondary"}
           />
 
           <View className="flex-1 gap-1">
@@ -208,11 +221,14 @@ const InventoryRow = React.memo(function InventoryRow({
             {/* At most one status, worst first, then the details that exist. */}
             {(() => {
               const status = damaged
-                ? { text: CONDITION_LABELS[item.condition || 'ok'], tone: 'critical' as const }
+                ? {
+                    text: CONDITION_LABELS[item.condition || "ok"],
+                    tone: "critical" as const,
+                  }
                 : pastDate
-                  ? { text: 'Out of date', tone: 'critical' as const }
+                  ? { text: "Out of date", tone: "critical" as const }
                   : expiringSoon
-                    ? { text: 'Use first', tone: 'warn' as const }
+                    ? { text: "Use first", tone: "warn" as const }
                     : null;
               const details = [
                 item.expiration ? `Exp ${shortDate(item.expiration)}` : null,
@@ -222,12 +238,16 @@ const InventoryRow = React.memo(function InventoryRow({
               return (
                 <Text variant="micro" tone="soft" numberOfLines={1}>
                   {status ? (
-                    <Text variant="micro" tone={status.tone} className="font-bold">
+                    <Text
+                      variant="micro"
+                      tone={status.tone}
+                      className="font-bold"
+                    >
                       {status.text}
-                      {details.length ? ' · ' : ''}
+                      {details.length ? " · " : ""}
                     </Text>
                   ) : null}
-                  {details.join(' · ')}
+                  {details.join(" · ")}
                 </Text>
               );
             })()}
@@ -247,12 +267,17 @@ const InventoryRow = React.memo(function InventoryRow({
                 const write =
                   next === 0
                     ? usePantryStore.getState().deleteItem(item.id)
-                    : usePantryStore.getState().updateItem(item.id, { count: next });
+                    : usePantryStore
+                        .getState()
+                        .updateItem(item.id, { count: next });
                 // These used to be fired and forgotten, so a rejected write was
                 // an unhandled promise and a silently unchanged shelf.
                 write.catch((err: any) => {
                   cueWarn();
-                  Alert.alert('Could not save that change', err?.message ?? 'Please try again.');
+                  Alert.alert(
+                    "Could not save that change",
+                    err?.message ?? "Please try again.",
+                  );
                 });
               }}
             />
@@ -281,7 +306,7 @@ const InventoryRow = React.memo(function InventoryRow({
         return <SwipeAction translation={translation} />;
       }}
       onSwipeableOpen={(direction) => {
-        if (direction !== 'left') return;
+        if (direction !== "left") return;
         cueWarn();
         methods?.close();
         // Straight to the reason sheet rather than a silent delete: "a family
@@ -293,31 +318,40 @@ const InventoryRow = React.memo(function InventoryRow({
       {row}
     </ReanimatedSwipeable>
   );
-
 });
 
 export default function InventoryScreen() {
   const router = useRouter();
   // Only what this screen uses, compared shallowly, so unrelated store changes
   // (members loading, photos attaching, scan state) don't re-render it.
-  const { inventory, locations, updateItem, deleteItem, deleteItems, updateItems, recordExit, addItems, settings } =
-    usePantryStore(
-      useShallow((s) => ({
-        inventory: s.inventory,
-        locations: s.locations,
-        updateItem: s.updateItem,
-        deleteItem: s.deleteItem,
-        deleteItems: s.deleteItems,
-        updateItems: s.updateItems,
-        recordExit: s.recordExit,
-        addItems: s.addItems,
-        settings: s.settings,
-      })),
-    );
+  const {
+    inventory,
+    locations,
+    updateItem,
+    deleteItem,
+    deleteItems,
+    updateItems,
+    recordExit,
+    addItems,
+    settings,
+  } = usePantryStore(
+    useShallow((s) => ({
+      inventory: s.inventory,
+      locations: s.locations,
+      updateItem: s.updateItem,
+      deleteItem: s.deleteItem,
+      deleteItems: s.deleteItems,
+      updateItems: s.updateItems,
+      recordExit: s.recordExit,
+      addItems: s.addItems,
+      settings: s.settings,
+    })),
+  );
 
-  const [search, setSearch] = useState('');
-  const [selectedCategory, setSelectedCategory] = useState<string>('all');
-  const [sortBy, setSortBy] = useState<(typeof SORTS)[number]['id']>('expiration');
+  const [search, setSearch] = useState("");
+  const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [sortBy, setSortBy] =
+    useState<(typeof SORTS)[number]["id"]>("expiration");
 
   /**
    * Which rows are picked, and therefore whether the screen is in picking mode at
@@ -333,7 +367,7 @@ export default function InventoryScreen() {
   /** Which rows the exit sheet is about: a selection, or the single row swiped. */
   const [exitIds, setExitIds] = useState<string[] | null>(null);
   const [managingPlaces, setManagingPlaces] = useState(false);
-  const [groupBy, setGroupBy] = useState<GroupBy>('place');
+  const [groupBy, setGroupBy] = useState<GroupBy>("place");
   /** Sections the volunteer has folded away, by section id. */
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({});
   /**
@@ -348,10 +382,10 @@ export default function InventoryScreen() {
 
   const [modalVisible, setModalVisible] = useState(false);
   const [staplesModalVisible, setStaplesModalVisible] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newCat, setNewCat] = useState<InventoryItem['category']>('grain');
+  const [newName, setNewName] = useState("");
+  const [newCat, setNewCat] = useState<InventoryItem["category"]>("grain");
   const [newCount, setNewCount] = useState(1);
-  const [newExp, setNewExp] = useState('');
+  const [newExp, setNewExp] = useState("");
 
   const warningStr = windowEndISO(settings.expirationWarningDays);
 
@@ -367,27 +401,53 @@ export default function InventoryScreen() {
   const needsAttention = (item: InventoryItem) =>
     !isUsableCondition(item.condition) || isPastDate(item.expiration);
 
-  const filteredItems = inventory
-    .filter((item) => {
-      const matchCat = selectedCategory === 'all' || item.category === selectedCategory;
-      const matchSearch = item.name.toLowerCase().includes(search.toLowerCase());
-      const matchFlag = !onlyFlagged || needsAttention(item);
-      return matchCat && matchSearch && matchFlag;
-    })
-    .sort((a, b) => {
-      if (sortBy === 'name') return a.name.localeCompare(b.name);
-      if (sortBy === 'count') return b.count - a.count;
-      // FIFO: what has been sitting on the shelf longest goes out first.
-      if (sortBy === 'oldest') return (a.date_added || '').localeCompare(b.date_added || '');
-      if (!a.expiration) return 1;
-      if (!b.expiration) return -1;
-      const byDate = new Date(a.expiration).getTime() - new Date(b.expiration).getTime();
-      // Two tins with the same printed date are separated by which arrived
-      // first, which is what FIFO actually means.
-      return byDate !== 0 ? byDate : (a.date_added || '').localeCompare(b.date_added || '');
-    });
+  /**
+   * The list works from deferred copies of the controls. Tapping a category or
+   * typing updates the chip / field straight away; the list catches up in a
+   * render React can interrupt, instead of every tap waiting on a full
+   * re-filter, re-sort, re-group and a batch of rows (each with a swipe
+   * gesture) mounting before anything on screen responds.
+   */
+  const dCategory = useDeferredValue(selectedCategory);
+  const dSearch = useDeferredValue(search);
+  const dFlagged = useDeferredValue(onlyFlagged);
+  const dSort = useDeferredValue(sortBy);
+  const dGroup = useDeferredValue(groupBy);
 
-  const flaggedCount = inventory.filter(needsAttention).length;
+  const filteredItems = useMemo(() => {
+    const q = dSearch.trim().toLowerCase();
+    const rows = inventory.filter(
+      (item) =>
+        (dCategory === "all" || item.category === dCategory) &&
+        (!q || item.name.toLowerCase().includes(q)) &&
+        (!dFlagged || needsAttention(item)),
+    );
+    if (dSort === "name")
+      return rows.sort((a, b) => a.name.localeCompare(b.name));
+    if (dSort === "count") return rows.sort((a, b) => b.count - a.count);
+    // FIFO: what has been sitting on the shelf longest goes out first.
+    if (dSort === "oldest")
+      return rows.sort((a, b) =>
+        (a.date_added || "").localeCompare(b.date_added || ""),
+      );
+    // ISO dates compare as strings, so no Date parsing inside the comparator.
+    // Two tins with the same printed date are separated by which arrived first.
+    return rows.sort((a, b) => {
+      if (!a.expiration) return b.expiration ? 1 : 0;
+      if (!b.expiration) return -1;
+      const byDate = a.expiration.localeCompare(b.expiration);
+      return byDate !== 0
+        ? byDate
+        : (a.date_added || "").localeCompare(b.date_added || "");
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [inventory, dCategory, dSearch, dFlagged, dSort]);
+
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const flaggedCount = useMemo(
+    () => inventory.filter(needsAttention).length,
+    [inventory],
+  );
 
   /**
    * The list, cut into sections.
@@ -395,18 +455,26 @@ export default function InventoryScreen() {
    * A collapsed section keeps its header and its counts and drops its rows —
    * folding a shelf away must not make it look like the shelf is empty.
    */
-  const sections = (() => {
-    if (groupBy === 'none') {
-      return [{ id: 'all', title: '', units: 0, data: filteredItems }];
+  const sections = useMemo(() => {
+    if (dGroup === "none") {
+      return [{ id: "all", title: "", units: 0, data: filteredItems }];
     }
 
     const buckets: { id: string; title: string; data: InventoryItem[] }[] =
-      groupBy === 'place'
+      dGroup === "place"
         ? [
-            ...locations.map((l) => ({ id: l.id, title: l.name, data: [] as InventoryItem[] })),
-            { id: 'none', title: 'Not filed anywhere', data: [] as InventoryItem[] },
+            ...locations.map((l) => ({
+              id: l.id,
+              title: l.name,
+              data: [] as InventoryItem[],
+            })),
+            {
+              id: "none",
+              title: "Not filed anywhere",
+              data: [] as InventoryItem[],
+            },
           ]
-        : CATEGORIES.filter((c) => c.id !== 'all').map((c) => ({
+        : CATEGORIES.filter((c) => c.id !== "all").map((c) => ({
             id: c.id,
             title: c.label,
             data: [] as InventoryItem[],
@@ -414,21 +482,30 @@ export default function InventoryScreen() {
 
     const fallback = buckets[buckets.length - 1];
     for (const item of filteredItems) {
-      const key = groupBy === 'place' ? (item.location_id ?? 'none') : item.category;
+      const key =
+        dGroup === "place" ? (item.location_id ?? "none") : item.category;
       (buckets.find((b) => b.id === key) ?? fallback).data.push(item);
     }
 
     // An empty shelf is worth seeing when you are looking at the room; an empty
     // one while you are searching is just noise.
-    const searching = !!search || onlyFlagged || selectedCategory !== 'all';
+    const searching = !!dSearch || dFlagged || dCategory !== "all";
     return buckets
-      .filter((b) => b.data.length > 0 || (!searching && groupBy === 'place'))
+      .filter((b) => b.data.length > 0 || (!searching && dGroup === "place"))
       .map((b) => ({
         ...b,
         units: b.data.reduce((sum, i) => sum + i.count, 0),
         data: collapsed[b.id] ? [] : b.data,
       }));
-  })();
+  }, [
+    filteredItems,
+    dGroup,
+    locations,
+    collapsed,
+    dSearch,
+    dFlagged,
+    dCategory,
+  ]);
 
   const selectedIds = Object.keys(selected).filter((id) => selected[id]);
   const picking = selectedIds.length > 0;
@@ -441,13 +518,16 @@ export default function InventoryScreen() {
   const clearSelection = () => setSelected({});
 
   /** Applies an action to the picked rows, then leaves picking mode. */
-  const runOnSelection = async (action: () => Promise<void>, failureTitle: string) => {
+  const runOnSelection = async (
+    action: () => Promise<void>,
+    failureTitle: string,
+  ) => {
     try {
       await action();
       clearSelection();
     } catch (err: any) {
       cueWarn();
-      Alert.alert(failureTitle, err?.message ?? 'Please try again.');
+      Alert.alert(failureTitle, err?.message ?? "Please try again.");
     }
   };
 
@@ -462,34 +542,43 @@ export default function InventoryScreen() {
   const handleExit = (reason: ExitReason) => {
     const ids = exitIds ?? [];
     const count = ids.length;
-    const units = inventory.filter((i) => ids.includes(i.id)).reduce((sum, i) => sum + i.count, 0);
+    const units = inventory
+      .filter((i) => ids.includes(i.id))
+      .reduce((sum, i) => sum + i.count, 0);
 
-    const prompts: Record<ExitReason, { title: string; body: string; verb: string }> = {
+    const prompts: Record<
+      ExitReason,
+      { title: string; body: string; verb: string }
+    > = {
       given_out: {
-        title: `Give out ${units} ${units === 1 ? 'unit' : 'units'}?`,
-        body: 'They come off the shelf and are counted as food that reached a household.',
-        verb: 'Give out',
+        title: `Give out ${units} ${units === 1 ? "unit" : "units"}?`,
+        body: "They come off the shelf and are counted as food that reached a household.",
+        verb: "Give out",
       },
       discarded: {
-        title: `Throw away ${units} ${units === 1 ? 'unit' : 'units'}?`,
-        body: 'They come off the shelf and are counted as waste — the other number funders ask for.',
-        verb: 'Throw away',
+        title: `Throw away ${units} ${units === 1 ? "unit" : "units"}?`,
+        body: "They come off the shelf and are counted as waste — the other number funders ask for.",
+        verb: "Throw away",
       },
       correction: {
-        title: `Remove ${count} ${count === 1 ? 'row' : 'rows'}?`,
-        body: 'For fixing a mistake. Nothing is counted as given out or wasted.',
-        verb: 'Remove',
+        title: `Remove ${count} ${count === 1 ? "row" : "rows"}?`,
+        body: "For fixing a mistake. Nothing is counted as given out or wasted.",
+        verb: "Remove",
       },
     };
     const prompt = prompts[reason];
 
     setExitIds(null);
     Alert.alert(prompt.title, prompt.body, [
-      { text: 'Cancel', style: 'cancel' },
+      { text: "Cancel", style: "cancel" },
       {
         text: prompt.verb,
-        style: reason === 'given_out' ? 'default' : 'destructive',
-        onPress: () => runOnSelection(() => recordExit(ids, reason), 'Could not record that'),
+        style: reason === "given_out" ? "default" : "destructive",
+        onPress: () =>
+          runOnSelection(
+            () => recordExit(ids, reason),
+            "Could not record that",
+          ),
       },
     ]);
   };
@@ -505,11 +594,11 @@ export default function InventoryScreen() {
           expiration: newExp.trim() || null,
         },
       ],
-      'manual',
+      "manual",
     );
-    setNewName('');
+    setNewName("");
     setNewCount(1);
-    setNewExp('');
+    setNewExp("");
     setModalVisible(false);
   };
 
@@ -520,7 +609,11 @@ export default function InventoryScreen() {
   }, []);
   const swipeOut = useCallback((id: string) => setExitIds([id]), []);
   const placeNames = useMemo(
-    () => Object.fromEntries(locations.map((l) => [l.id, l.name])) as Record<string, string>,
+    () =>
+      Object.fromEntries(locations.map((l) => [l.id, l.name])) as Record<
+        string,
+        string
+      >,
     [locations],
   );
 
@@ -530,7 +623,7 @@ export default function InventoryScreen() {
       picking={picking}
       isSelected={!!selected[item.id]}
       placeName={item.location_id ? placeNames[item.location_id] : undefined}
-      showPlace={groupBy !== 'place'}
+      showPlace={dGroup !== "place"}
       warningStr={warningStr}
       onToggle={toggleSelectStable}
       onSwipeOut={swipeOut}
@@ -541,11 +634,11 @@ export default function InventoryScreen() {
     <View className="flex-1 bg-canvas">
       <View className="px-gutter pt-gutter gap-4">
         {!picking && (
-          <View className="gap-1">
+          <View className="flex-row items-center justify-between">
             <Text variant="headline">Your shelves</Text>
             <Text variant="label" tone="soft">
-              {inventory.length} products · {inventory.reduce((sum, item) => sum + item.count, 0)}{' '}
-              units
+              {inventory.length} products ·{" "}
+              {inventory.reduce((sum, item) => sum + item.count, 0)} units
             </Text>
           </View>
         )}
@@ -560,7 +653,11 @@ export default function InventoryScreen() {
                 hitSlop={8}
                 className="h-12 w-12 items-center justify-center rounded-md border-[1.5px] border-outline bg-card"
               >
-                <MaterialCommunityIcons name="close" size={22} color={COLORS.textPrimary} />
+                <MaterialCommunityIcons
+                  name="close"
+                  size={22}
+                  color={COLORS.textPrimary}
+                />
               </Pressable>
 
               <Text variant="heading" className="flex-1">
@@ -572,14 +669,18 @@ export default function InventoryScreen() {
                   cueTap();
                   const all = filteredItems.every((i) => selected[i.id]);
                   setSelected(
-                    all ? {} : Object.fromEntries(filteredItems.map((i) => [i.id, true])),
+                    all
+                      ? {}
+                      : Object.fromEntries(
+                          filteredItems.map((i) => [i.id, true]),
+                        ),
                   );
                 }}
                 hitSlop={8}
                 className="px-2 py-2"
               >
                 <Text variant="label" tone="brand" className="font-bold">
-                  {filteredItems.every((i) => selected[i.id]) ? 'None' : 'All'}
+                  {filteredItems.every((i) => selected[i.id]) ? "None" : "All"}
                 </Text>
               </Pressable>
             </View>
@@ -607,7 +708,11 @@ export default function InventoryScreen() {
                 size="compact"
                 className="flex-1 justify-center"
                 icon={
-                  <MaterialCommunityIcons name="tag-outline" size={17} color={COLORS.textPrimary} />
+                  <MaterialCommunityIcons
+                    name="tag-outline"
+                    size={17}
+                    color={COLORS.textPrimary}
+                  />
                 }
                 onPress={() => setRecategorising(true)}
               />
@@ -630,7 +735,11 @@ export default function InventoryScreen() {
         ) : (
           <View className="flex-row items-center gap-3">
             <View className="h-12 flex-1 flex-row items-center gap-2 rounded-md border-[1.5px] border-outline bg-card px-3">
-              <MaterialCommunityIcons name="magnify" size={20} color={COLORS.textSecondary} />
+              <MaterialCommunityIcons
+                name="magnify"
+                size={20}
+                color={COLORS.textSecondary}
+              />
               <TextInput
                 className="flex-1 text-body text-ink"
                 placeholder="Search items"
@@ -639,7 +748,7 @@ export default function InventoryScreen() {
                 placeholderTextColor={COLORS.textSecondary}
               />
               {search ? (
-                <Pressable onPress={() => setSearch('')} hitSlop={8}>
+                <Pressable onPress={() => setSearch("")} hitSlop={8}>
                   <MaterialCommunityIcons
                     name="close-circle"
                     size={18}
@@ -659,11 +768,14 @@ export default function InventoryScreen() {
               })}
               className="h-12 w-12 items-center justify-center rounded-md bg-brand"
             >
-              <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
+              <MaterialCommunityIcons
+                name="plus"
+                size={22}
+                color={COLORS.textOnPrimary}
+              />
             </Pressable>
           </View>
         )}
-
 
         {!picking && flaggedCount > 0 && (
           <Pressable
@@ -672,7 +784,9 @@ export default function InventoryScreen() {
               setOnlyFlagged((v) => !v);
             }}
             className={`flex-row items-center gap-3 rounded-md border-[1.5px] px-4 py-3 ${
-              onlyFlagged ? 'border-critical bg-critical' : 'border-hairline bg-subtle'
+              onlyFlagged
+                ? "border-critical bg-critical"
+                : "border-hairline bg-subtle"
             }`}
           >
             <MaterialCommunityIcons
@@ -682,13 +796,18 @@ export default function InventoryScreen() {
             />
             <Text
               variant="label"
-              tone={onlyFlagged ? 'on' : 'default'}
+              tone={onlyFlagged ? "on" : "default"}
               className="flex-1 font-semibold"
             >
-              {flaggedCount} {flaggedCount === 1 ? 'item is' : 'items are'} out of date or damaged
+              {flaggedCount} {flaggedCount === 1 ? "item is" : "items are"} out
+              of date or damaged
             </Text>
-            <Text variant="micro" tone={onlyFlagged ? 'on' : 'soft'} className="font-bold">
-              {onlyFlagged ? 'Show all' : 'Show them'}
+            <Text
+              variant="micro"
+              tone={onlyFlagged ? "on" : "soft"}
+              className="font-bold"
+            >
+              {onlyFlagged ? "Show all" : "Show them"}
             </Text>
           </Pressable>
         )}
@@ -718,41 +837,49 @@ export default function InventoryScreen() {
         // Keep only a few screens' worth of rows mounted. Every mounted row
         // carries a swipe gesture and a stepper; holding hundreds of them made
         // each update slow.
-        initialNumToRender={12}
-        maxToRenderPerBatch={10}
+        initialNumToRender={8}
+        maxToRenderPerBatch={6}
+        updateCellsBatchingPeriod={40}
         windowSize={7}
-        removeClippedSubviews={Platform.OS === 'android'}
-        stickySectionHeadersEnabled={groupBy !== 'none'}
+        removeClippedSubviews={Platform.OS === "android"}
+        stickySectionHeadersEnabled={dGroup !== "none"}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         contentContainerClassName="px-gutter pt-4 pb-28"
         renderSectionHeader={({ section }) => {
-          if (groupBy === 'none' || picking) return null;
+          if (dGroup === "none" || picking) return null;
           const isCollapsed = !!collapsed[section.id];
           return (
             <Pressable
               onPress={() => {
                 cueTap();
-                setCollapsed((prev) => ({ ...prev, [section.id]: !prev[section.id] }));
+                setCollapsed((prev) => ({
+                  ...prev,
+                  [section.id]: !prev[section.id],
+                }));
               }}
               // Opaque, because it sticks: a translucent header would let rows
               // scroll through the text behind it.
               className="mb-3 flex-row items-center gap-2 bg-canvas pb-2 pt-1"
             >
               <MaterialCommunityIcons
-                name={isCollapsed ? 'chevron-right' : 'chevron-down'}
+                name={isCollapsed ? "chevron-right" : "chevron-down"}
                 size={20}
-                color={COLORS.textSecondary}
+                color={COLORS.secondary}
               />
               <Text variant="heading" className="flex-1">
                 {section.title}
               </Text>
               {/* Units, not rows. "12 tins" is the number a volunteer standing in
                   front of the shelf is actually checking against. */}
-              <Text variant="micro" tone="soft" className="font-semibold">
+              <Text
+                variant="micro"
+                className="font-bold"
+                style={{ color: COLORS.secondaryDark }}
+              >
                 {section.units === 0
-                  ? 'empty'
-                  : `${section.units} ${section.units === 1 ? 'unit' : 'units'}`}
+                  ? "empty"
+                  : `${section.units} ${section.units === 1 ? "unit" : "units"}`}
               </Text>
             </Pressable>
           );
@@ -768,7 +895,7 @@ export default function InventoryScreen() {
                 <ListControl
                   icon="view-agenda-outline"
                   caption="Group"
-                  value={GROUPS.find((g) => g.id === groupBy)?.label ?? ''}
+                  value={GROUPS.find((g) => g.id === groupBy)?.label ?? ""}
                   accessibilityLabel={`Grouped ${GROUPS.find((g) => g.id === groupBy)?.label}. Tap to change.`}
                   onPress={() => {
                     cueTap();
@@ -779,7 +906,7 @@ export default function InventoryScreen() {
                 <ListControl
                   icon="swap-vertical"
                   caption="Sort"
-                  value={SORTS.find((x) => x.id === sortBy)?.label ?? ''}
+                  value={SORTS.find((x) => x.id === sortBy)?.label ?? ""}
                   accessibilityLabel={`Sorted by ${SORTS.find((x) => x.id === sortBy)?.label}. Tap to change.`}
                   onPress={() => {
                     cueTap();
@@ -787,7 +914,7 @@ export default function InventoryScreen() {
                     setSortBy(SORTS[(i + 1) % SORTS.length].id);
                   }}
                 />
-                {groupBy === 'place' && (
+                {groupBy === "place" && (
                   <Pressable
                     onPress={() => {
                       cueTap();
@@ -798,7 +925,11 @@ export default function InventoryScreen() {
                     accessibilityLabel="Manage places"
                     className="h-[52px] w-[52px] items-center justify-center rounded-lg border border-hairline bg-card"
                   >
-                    <MaterialCommunityIcons name="map-marker-outline" size={22} color={COLORS.textPrimary} />
+                    <MaterialCommunityIcons
+                      name="map-marker-outline"
+                      size={22}
+                      color={COLORS.secondaryDark}
+                    />
                   </Pressable>
                 )}
               </View>
@@ -811,19 +942,21 @@ export default function InventoryScreen() {
             title="Nothing here yet"
             body={
               onlyFlagged
-                ? 'Nothing is flagged for inspection. Everything on the shelf is fit to give out.'
-                : search || selectedCategory !== 'all'
-                  ? 'Try another search, or clear the filters.'
-                  : 'Photograph a donation to fill the shelves.'
+                ? "Nothing is flagged for inspection. Everything on the shelf is fit to give out."
+                : search || selectedCategory !== "all"
+                  ? "Try another search, or clear the filters."
+                  : "Photograph a donation to fill the shelves."
             }
             actionLabel={
-              onlyFlagged || search || selectedCategory !== 'all' ? 'Clear the filters' : undefined
+              onlyFlagged || search || selectedCategory !== "all"
+                ? "Clear the filters"
+                : undefined
             }
             onAction={
-              onlyFlagged || search || selectedCategory !== 'all'
+              onlyFlagged || search || selectedCategory !== "all"
                 ? () => {
-                    setSearch('');
-                    setSelectedCategory('all');
+                    setSearch("");
+                    setSelectedCategory("all");
                     setOnlyFlagged(false);
                   }
                 : undefined
@@ -845,26 +978,26 @@ export default function InventoryScreen() {
         visible={!!exitIds}
         onClose={() => setExitIds(null)}
         title="Where is it going?"
-        subtitle={`${exitIds?.length ?? 0} ${exitIds?.length === 1 ? 'item' : 'items'} leaving the shelf`}
+        subtitle={`${exitIds?.length ?? 0} ${exitIds?.length === 1 ? "item" : "items"} leaving the shelf`}
       >
         <Row
           icon="hand-heart-outline"
           label="Given out"
           hint="A household took it home. Counted as food distributed."
-          onPress={() => handleExit('given_out')}
+          onPress={() => handleExit("given_out")}
         />
         <Row
           icon="delete-alert-outline"
           label="Thrown away"
           hint="Expired, damaged or unsafe. Counted as waste."
-          onPress={() => handleExit('discarded')}
+          onPress={() => handleExit("discarded")}
         />
         <Row
           icon="pencil-outline"
           label="Remove — it was a mistake"
           hint="Never really on the shelf. Counted as neither."
           divider={false}
-          onPress={() => handleExit('correction')}
+          onPress={() => handleExit("correction")}
         />
       </Sheet>
 
@@ -872,7 +1005,7 @@ export default function InventoryScreen() {
         visible={relocating}
         onClose={() => setRelocating(false)}
         title="Move to"
-        subtitle={`Where these ${selectedIds.length} ${selectedIds.length === 1 ? 'item goes' : 'items go'}`}
+        subtitle={`Where these ${selectedIds.length} ${selectedIds.length === 1 ? "item goes" : "items go"}`}
       >
         <View className="flex-row flex-wrap gap-2">
           {locations.map((loc) => (
@@ -883,7 +1016,7 @@ export default function InventoryScreen() {
                 setRelocating(false);
                 runOnSelection(
                   () => updateItems(selectedIds, { location_id: loc.id }),
-                  'Could not move those items',
+                  "Could not move those items",
                 );
               }}
             />
@@ -894,7 +1027,7 @@ export default function InventoryScreen() {
               setRelocating(false);
               runOnSelection(
                 () => updateItems(selectedIds, { location_id: null }),
-                'Could not move those items',
+                "Could not move those items",
               );
             }}
           />
@@ -905,10 +1038,10 @@ export default function InventoryScreen() {
         visible={recategorising}
         onClose={() => setRecategorising(false)}
         title="Change category"
-        subtitle={`Applies to all ${selectedIds.length} selected ${selectedIds.length === 1 ? 'item' : 'items'}`}
+        subtitle={`Applies to all ${selectedIds.length} selected ${selectedIds.length === 1 ? "item" : "items"}`}
       >
         <View className="flex-row flex-wrap gap-2">
-          {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
+          {CATEGORIES.filter((c) => c.id !== "all").map((cat) => (
             <Chip
               key={cat.id}
               label={cat.label}
@@ -916,7 +1049,7 @@ export default function InventoryScreen() {
                 setRecategorising(false);
                 runOnSelection(
                   () => updateItems(selectedIds, { category: cat.id as any }),
-                  'Could not change those categories',
+                  "Could not change those categories",
                 );
               }}
             />
@@ -932,14 +1065,18 @@ export default function InventoryScreen() {
       >
         <KeyboardAvoidingView
           style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
         >
           <View className="flex-1 justify-end bg-black/50">
             <View className="rounded-t-lg bg-canvas px-gutter pb-10 pt-6 gap-4">
               <View className="flex-row items-center justify-between">
                 <Text variant="title">Add an item</Text>
                 <Pressable onPress={() => setModalVisible(false)} hitSlop={8}>
-                  <MaterialCommunityIcons name="close" size={24} color={COLORS.textPrimary} />
+                  <MaterialCommunityIcons
+                    name="close"
+                    size={24}
+                    color={COLORS.textPrimary}
+                  />
                 </Pressable>
               </View>
 
@@ -951,7 +1088,11 @@ export default function InventoryScreen() {
                 className="flex-row items-center justify-between rounded-lg border border-brand/30 bg-brand/5 p-3"
               >
                 <View className="flex-row items-center gap-2">
-                  <MaterialCommunityIcons name="lightning-bolt" size={20} color={COLORS.primary} />
+                  <MaterialCommunityIcons
+                    name="lightning-bolt"
+                    size={20}
+                    color={COLORS.primary}
+                  />
                   <Text variant="label" tone="brand" className="font-bold">
                     Or tap common staples directly (No typing)
                   </Text>
@@ -973,7 +1114,7 @@ export default function InventoryScreen() {
                   Category
                 </Text>
                 <View className="flex-row flex-wrap gap-2">
-                  {CATEGORIES.filter((c) => c.id !== 'all').map((cat) => (
+                  {CATEGORIES.filter((c) => c.id !== "all").map((cat) => (
                     <Chip
                       key={cat.id}
                       label={cat.label}
@@ -1001,7 +1142,12 @@ export default function InventoryScreen() {
                 </View>
               </View>
 
-              <Button label="Add to inventory" block className="mt-2" onPress={handleManualAdd} />
+              <Button
+                label="Add to inventory"
+                block
+                className="mt-2"
+                onPress={handleManualAdd}
+              />
             </View>
           </View>
         </KeyboardAvoidingView>
@@ -1037,9 +1183,15 @@ function ListControl({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      className="h-[52px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3"
+      className="h-[52px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3 shadow-slate-800 shadow-sm"
     >
-      <MaterialCommunityIcons name={icon} size={18} color={COLORS.textSecondary} />
+      <View className="h-8 w-8 items-center justify-center rounded-md bg-secondary-tint">
+        <MaterialCommunityIcons
+          name={icon}
+          size={17}
+          color={COLORS.secondaryDark}
+        />
+      </View>
       <View className="flex-1">
         <Text variant="micro" tone="soft">
           {caption}
@@ -1048,7 +1200,11 @@ function ListControl({
           {value}
         </Text>
       </View>
-      <MaterialCommunityIcons name="chevron-down" size={18} color={COLORS.textSecondary} />
+      <MaterialCommunityIcons
+        name="chevron-down"
+        size={18}
+        color={COLORS.textSecondary}
+      />
     </Pressable>
   );
 }
@@ -1057,5 +1213,9 @@ function ListControl({
 function shortDate(iso: string): string {
   const d = new Date(`${iso}T00:00:00`);
   if (Number.isNaN(d.getTime())) return iso;
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }

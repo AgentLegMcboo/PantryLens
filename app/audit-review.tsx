@@ -391,7 +391,7 @@ export default function AuditReviewScreen() {
                       <ItemThumb
                         imageUrl={line.imageUrl}
                         category={line.category}
-                        tone={status === 'missing' ? 'critical' : 'brand'}
+                        tone={status === 'missing' ? 'critical' : 'secondary'}
                       />
 
                       <View className="flex-1">

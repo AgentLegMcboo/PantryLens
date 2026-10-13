@@ -157,6 +157,7 @@ export default function RootLayout() {
         <Stack.Screen name="expiring-soon" options={{ title: 'Expiring Soon', presentation: 'card' }} />
         <Stack.Screen name="reports" options={{ title: 'Reports', presentation: 'card' }} />
         <Stack.Screen name="team" options={{ title: 'Team', presentation: 'card' }} />
+        <Stack.Screen name="member" options={{ title: 'Member', presentation: 'card' }} />
         <Stack.Screen name="ready-boxes" options={{ title: 'Ready to go', presentation: 'card' }} />
         {/* Full-bleed camera, so no header and no cream background behind it. */}
         <Stack.Screen
