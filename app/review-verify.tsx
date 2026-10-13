@@ -24,6 +24,8 @@ import {
   usePantryStore,
 } from '../lib/store';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
+import { useAccessibilityStore } from '../lib/accessibility';
+import { windowEndISO } from '../lib/expiry';
 import { log } from '../lib/log';
 
 /**
@@ -94,6 +96,7 @@ export default function ReviewVerifyScreen() {
     currentScan,
     setCurrentScan,
   } = usePantryStore();
+  const seniorMode = useAccessibilityStore((s) => s.seniorMode);
 
   /**
    * Where this whole intake is going.
@@ -839,7 +842,7 @@ export default function ReviewVerifyScreen() {
       {/* Everything found in THIS photo, as a strip right under it. Tap one to
           bring it into the footer. Replaces the long list of item cards. */}
       {/* Fixed height, empty or not, so the photo above never resizes. */}
-      <View style={{ height: 52 }}>
+      <View style={{ height: 58 }}>
         {photoItems.length === 0 ? (
           <Text variant="micro" tone="soft" className="px-gutter pt-4">
             Nothing found in this photo yet.
@@ -848,7 +851,7 @@ export default function ReviewVerifyScreen() {
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
-          contentContainerClassName="items-center gap-2 px-gutter py-2.5"
+          contentContainerClassName="items-center gap-2 px-gutter py-2"
           style={{ flexGrow: 0 }}
         >
           {photoItems.map((item) => {
@@ -864,7 +867,7 @@ export default function ReviewVerifyScreen() {
                 }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: current }}
-                className="max-w-[170px] flex-row items-center gap-1.5 rounded-full border px-3 py-1.5"
+                className="min-h-[44px] max-w-[190px] flex-row items-center gap-1.5 rounded-lg border px-3 py-2"
                 style={{
                   borderColor: current ? COLORS.primary : COLORS.borderSoft,
                   backgroundColor: current ? COLORS.surfaceContainer : COLORS.cardSurface,
@@ -872,7 +875,7 @@ export default function ReviewVerifyScreen() {
               >
                 <MaterialCommunityIcons
                   name={checked ? 'check-circle' : flagged ? 'alert-circle' : 'circle-outline'}
-                  size={15}
+                  size={16}
                   color={checked ? COLORS.statusGood : flagged ? COLORS.statusWarning : COLORS.borderStrong}
                 />
                 <Text variant="label" numberOfLines={1} className={current ? 'font-bold' : 'font-semibold'}>
@@ -903,17 +906,28 @@ export default function ReviewVerifyScreen() {
                 tone={damaged ? 'critical' : 'secondary'}
               />
               <View className="flex-1 gap-1.5">
-                {/* Edits in place: it looks like the item's name, not a form box. */}
-                <TextInput
-                  value={selectedItem.name ?? ''}
-                  placeholder="Name this item"
-                  placeholderTextColor={COLORS.textSecondary}
-                  onChangeText={(txt) => updateItemAtIndex(selectedIndex, { name: txt })}
-                  multiline
-                  blurOnSubmit
-                  className="p-0 text-[17px] font-bold leading-[22px] text-ink"
-                  style={{ paddingTop: 0, paddingBottom: 0, textAlignVertical: 'top' }}
-                />
+                {/* Visibly editable input so volunteers know they can tap to fix the item name directly. */}
+                <View className="flex-row items-center gap-2 rounded-md border border-hairline bg-canvas px-2.5 py-1.5">
+                  <TextInput
+                    value={selectedItem.name ?? ''}
+                    placeholder="Tap to name this item"
+                    placeholderTextColor={COLORS.textSecondary}
+                    onChangeText={(txt) => updateItemAtIndex(selectedIndex, { name: txt })}
+                    multiline
+                    blurOnSubmit
+                    maxFontSizeMultiplier={2.2}
+                    accessibilityLabel="Item name"
+                    className="flex-1 p-0 font-bold text-ink"
+                    style={{
+                      paddingTop: 0,
+                      paddingBottom: 0,
+                      textAlignVertical: 'top',
+                      fontSize: seniorMode ? 20 : 17,
+                      lineHeight: seniorMode ? 26 : 22,
+                    }}
+                  />
+                  <MaterialCommunityIcons name="pencil-outline" size={16} color={COLORS.textSecondary} />
+                </View>
                 <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1">
                   <Text variant="micro" tone={isLowConf ? 'warn' : 'soft'} className="font-semibold">
                     {selectedItem.resolvedBy === 'barcode'
@@ -935,12 +949,12 @@ export default function ReviewVerifyScreen() {
                     hitSlop={8}
                     accessibilityRole="button"
                     accessibilityLabel={`Category ${selectedItem.category}. Tap to change.`}
-                    className="flex-row items-center gap-0.5"
+                    className="flex-row items-center gap-1 rounded-md bg-subtle px-2 py-1"
                   >
-                    <Text variant="micro" className="font-bold capitalize">
+                    <Text variant="label" className="font-bold capitalize">
                       {selectedItem.category ?? 'unknown'}
                     </Text>
-                    <MaterialCommunityIcons name="chevron-down" size={13} color={COLORS.textSecondary} />
+                    <MaterialCommunityIcons name="chevron-down" size={15} color={COLORS.textSecondary} />
                   </Pressable>
                   <Text variant="micro" tone="soft">·</Text>
                   <Text variant="micro" tone={damaged ? 'critical' : 'soft'} className="font-semibold">
@@ -963,9 +977,9 @@ export default function ReviewVerifyScreen() {
                   setMoreOpen(true);
                 }}
                 accessibilityRole="button"
-                className="h-11 flex-1 flex-row items-center justify-center gap-1.5 rounded-md bg-subtle"
+                className="h-12 flex-1 flex-row items-center justify-center gap-1.5 rounded-md bg-subtle"
               >
-                <MaterialCommunityIcons name="tune-variant" size={16} color={COLORS.textPrimary} />
+                <MaterialCommunityIcons name="tune-variant" size={18} color={COLORS.textPrimary} />
                 <Text variant="label" className="font-bold">
                   Details
                 </Text>
@@ -1131,10 +1145,10 @@ function PhotoArrow({
       hitSlop={6}
       accessibilityRole="button"
       accessibilityLabel={label ?? (icon === 'chevron-left' ? 'Previous photo' : 'Next photo')}
-      className={dark ? 'h-11 w-10 items-center justify-center rounded-md bg-subtle' : 'h-9 w-9 items-center justify-center'}
+      className={dark ? 'h-12 w-12 items-center justify-center rounded-md bg-subtle' : 'h-11 w-11 items-center justify-center'}
       style={{ opacity: disabled ? 0.35 : 1 }}
     >
-      <MaterialCommunityIcons name={icon} size={22} color={dark ? COLORS.textPrimary : '#FFFFFF'} />
+      <MaterialCommunityIcons name={icon} size={24} color={dark ? COLORS.textPrimary : '#FFFFFF'} />
     </Pressable>
   );
 }
@@ -1171,6 +1185,17 @@ function ItemEditor({
   onClose: () => void;
 }) {
   const isLowConf = (item.confidence ?? 1) < 0.7;
+  const confirmRemove = () => {
+    cueWarn();
+    Alert.alert(
+      'Remove this item?',
+      `Take "${item.name?.trim() || 'Unnamed item'}" out of this scan?`,
+      [
+        { text: 'Keep item', style: 'cancel' },
+        { text: 'Remove', style: 'destructive', onPress: onRemove },
+      ],
+    );
+  };
 
   if (compact) {
     return (
@@ -1186,33 +1211,42 @@ function ItemEditor({
               tone={isLowConf ? 'warn' : 'good'}
             />
           )}
-          <View className="flex-row items-center gap-5">
+          <View className="flex-row items-center gap-4">
             {verified && (
               <Pressable
                 onPress={onUndoConfirm}
                 hitSlop={8}
+                accessibilityRole="button"
                 accessibilityLabel="Undo confirm"
-                className="flex-row items-center gap-1"
+                className="min-h-[44px] flex-row items-center gap-1 px-2"
               >
-                <MaterialCommunityIcons name="undo-variant" size={16} color={COLORS.primaryDark} />
-                <Text variant="micro" tone="brand" className="font-bold">
+                <MaterialCommunityIcons name="undo-variant" size={17} color={COLORS.primaryDark} />
+                <Text variant="label" tone="brand" className="font-bold">
                   Undo confirm
                 </Text>
               </Pressable>
             )}
             <Pressable
-              onPress={onRemove}
+              onPress={confirmRemove}
               hitSlop={8}
+              accessibilityRole="button"
               accessibilityLabel="Remove this item"
-              className="flex-row items-center gap-1"
+              className="min-h-[44px] flex-row items-center gap-1 px-2"
             >
               <MaterialCommunityIcons name="trash-can-outline" size={18} color={COLORS.statusCritical} />
-              <Text variant="micro" tone="critical" className="font-bold">
+              <Text variant="label" tone="critical" className="font-bold">
                 Remove
               </Text>
             </Pressable>
           </View>
         </View>
+
+        <Input
+          label="Item name"
+          placeholder="e.g. Canned Black Beans"
+          value={item.name ?? ''}
+          onChangeText={(txt) => onChange({ name: txt })}
+        />
 
         {describeTags(item.diet_tags ?? []) ? (
           <View className="flex-row gap-2 rounded-md bg-subtle px-3 py-2">
@@ -1223,8 +1257,6 @@ function ItemEditor({
           </View>
         ) : null}
 
-        {/* The footer already edits the name; only a box drawn by hand gets the
-            AI identify option here. */}
         {item.drawnByHand && (
           <Button
             label={item.name?.trim() ? 'Identify again with AI' : 'Identify with AI'}
@@ -1281,25 +1313,45 @@ function ItemEditor({
           )}
         </View>
 
-        <View className="flex-row items-end gap-3">
-          <View className="flex-1">
-            <Input
-              label="Expires"
-              placeholder="YYYY-MM-DD"
-              value={item.expiration || ''}
-              onChangeText={(txt) => onChange({ expiration: txt })}
-            />
+        <View className="gap-2">
+          <View className="flex-row items-end gap-3">
+            <View className="flex-1">
+              <Input
+                label="Expires"
+                placeholder="YYYY-MM-DD"
+                value={item.expiration || ''}
+                onChangeText={(txt) => onChange({ expiration: txt })}
+              />
+            </View>
+            {item.resolvedBy !== 'barcode' && (
+              <Button
+                label="Barcode"
+                variant="secondary"
+                size="compact"
+                className="mb-1"
+                icon={<MaterialCommunityIcons name="barcode-scan" size={17} color={COLORS.textPrimary} />}
+                onPress={onBarcode}
+              />
+            )}
           </View>
-          {item.resolvedBy !== 'barcode' && (
-            <Button
-              label="Barcode"
-              variant="secondary"
-              size="compact"
-              className="mb-1"
-              icon={<MaterialCommunityIcons name="barcode-scan" size={17} color={COLORS.textPrimary} />}
-              onPress={onBarcode}
-            />
-          )}
+          <View className="flex-row flex-wrap gap-2">
+            {[
+              { label: '+3 mos', days: 90 },
+              { label: '+6 mos', days: 180 },
+              { label: '+1 yr', days: 365 },
+              { label: '+2 yrs', days: 730 },
+            ].map((preset) => {
+              const iso = windowEndISO(preset.days);
+              return (
+                <Chip
+                  key={preset.label}
+                  label={preset.label}
+                  selected={item.expiration === iso}
+                  onPress={() => onChange({ expiration: iso })}
+                />
+              );
+            })}
+          </View>
         </View>
       </View>
     );

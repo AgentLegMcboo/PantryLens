@@ -244,17 +244,47 @@ export default function PackingChecklistScreen() {
       </FadeInUp>
 
       {plan.packingChecklist.map((group, groupIndex) => {
+        const groupKeys = group.items.map((item, i) => `${group.category}-${item.id}-${i}`);
+        const groupAllChecked = groupKeys.length > 0 && groupKeys.every(k => !!checked[k]);
+
         return (
           <FadeInUp key={group.category} index={groupIndex + 1}>
             <Card className="gap-1">
               <View className="mb-2 flex-row items-center gap-3">
                 <CategoryIcon category={group.category} />
-                <Text variant="heading" className="flex-1 capitalize">
-                  {group.category}
-                </Text>
-                <Text variant="micro" tone="soft">
-                  {group.allocatedCount} total · {group.neededPerBox} per box
-                </Text>
+                <View className="flex-1">
+                  <Text variant="heading" className="capitalize">
+                    {group.category}
+                  </Text>
+                  <Text variant="micro" tone="soft">
+                    {group.allocatedCount} total · {group.neededPerBox} per box
+                  </Text>
+                </View>
+                {groupKeys.length > 1 && (
+                  <Pressable
+                    onPress={() => {
+                      cueTap();
+                      setChecked(prev => {
+                        const next = { ...prev };
+                        for (const k of groupKeys) next[k] = !groupAllChecked;
+                        return next;
+                      });
+                    }}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel={groupAllChecked ? `Uncheck all ${group.category}` : `Check all ${group.category}`}
+                    className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-subtle px-3 py-1.5"
+                  >
+                    <MaterialCommunityIcons
+                      name={groupAllChecked ? 'check-all' : 'playlist-check'}
+                      size={16}
+                      color={groupAllChecked ? COLORS.statusGood : COLORS.primaryDark}
+                    />
+                    <Text variant="micro" tone={groupAllChecked ? 'good' : 'brand'} className="font-bold">
+                      {groupAllChecked ? 'All picked' : 'Check all'}
+                    </Text>
+                  </Pressable>
+                )}
               </View>
 
               {group.items.map((item, i) => {
@@ -272,17 +302,17 @@ export default function PackingChecklistScreen() {
                     onPress={() => toggle(key)}
                     accessibilityRole="checkbox"
                     accessibilityState={{ checked: isChecked }}
-                    // 56px so it can be hit while holding a tin.
-                    className="min-h-[56px] flex-row items-center gap-3 py-2"
-                    style={RULE_BELOW}
+                    // 60px so it can be hit easily while holding a tin.
+                    className="min-h-[60px] flex-row items-center gap-3 py-2.5"
+                    style={i < group.items.length - 1 ? RULE_BELOW : undefined}
                   >
                     <MaterialCommunityIcons
                       name={isChecked ? 'check-circle' : 'circle-outline'}
-                      size={28}
+                      size={30}
                       color={isChecked ? COLORS.statusGood : COLORS.borderStrong}
                     />
 
-                    <View className="flex-1">
+                    <View className="flex-1 gap-1">
                       <Text
                         variant="body"
                         tone={isChecked ? 'soft' : 'default'}
@@ -292,11 +322,25 @@ export default function PackingChecklistScreen() {
                         {item.name}
                       </Text>
                       {(place || item.expiration) && (
-                        <Text variant="micro" tone="soft" className="mt-0.5">
-                          {[place, item.expiration && `expires ${item.expiration}`]
-                            .filter(Boolean)
-                            .join(' · ')}
-                        </Text>
+                        <View className="flex-row flex-wrap items-center gap-2">
+                          {place && (
+                            <View className="flex-row items-center gap-1 rounded bg-secondary-tint px-2 py-0.5">
+                              <MaterialCommunityIcons
+                                name="map-marker-outline"
+                                size={13}
+                                color={COLORS.secondaryDark}
+                              />
+                              <Text variant="micro" className="font-bold" style={{ color: COLORS.secondaryDark }}>
+                                {place}
+                              </Text>
+                            </View>
+                          )}
+                          {item.expiration && (
+                            <Text variant="micro" tone="soft">
+                              Expires {item.expiration}
+                            </Text>
+                          )}
+                        </View>
                       )}
                     </View>
 
@@ -304,13 +348,15 @@ export default function PackingChecklistScreen() {
 
                     {/* The count is what the volunteer is actually reading off
                         this row, so it gets to be the biggest thing on it. */}
-                    <Text
-                      variant="title"
-                      tone={isChecked ? 'soft' : 'default'}
-                      className="min-w-[32px] text-right"
-                    >
-                      {item.count}
-                    </Text>
+                    <View className="min-w-[44px] items-end">
+                      <Text
+                        variant="title"
+                        tone={isChecked ? 'soft' : 'default'}
+                        className="font-bold"
+                      >
+                        ×{item.count}
+                      </Text>
+                    </View>
                   </Pressable>
                 );
               })}
@@ -321,6 +367,18 @@ export default function PackingChecklistScreen() {
 
       <FadeInUp index={plan.packingChecklist.length + 1}>
         <View className="gap-3">
+          {allDone && (
+            <View
+              className="flex-row items-center gap-3 rounded-lg border px-4 py-3"
+              style={{ backgroundColor: '#EEF4E9', borderColor: COLORS.statusGood }}
+            >
+              <MaterialCommunityIcons name="check-decagram" size={24} color={COLORS.statusGood} />
+              <Text variant="label" className="flex-1 font-bold" style={{ color: '#2E5128' }}>
+                Trolley full! All {total} items picked for {plan.achievableBoxes}{' '}
+                {plan.achievableBoxes === 1 ? 'box' : 'boxes'}.
+              </Text>
+            </View>
+          )}
           <Button
             label={allDone ? 'Finish and update the shelf' : `${total - doneCount} still to pick`}
             block

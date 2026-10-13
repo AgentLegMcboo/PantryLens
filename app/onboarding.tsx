@@ -23,6 +23,7 @@ import { BrandMark } from '../components/brand-mark';
 import { BoxesMock, CameraMock, ScanMock } from '../components/onboarding-mocks';
 import { Button, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
+import { useAccessibilityStore } from '../lib/accessibility';
 import { cueSuccess, cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
 
@@ -71,6 +72,7 @@ export default function OnboardingScreen() {
   const completeOnboarding = usePantryStore(state => state.completeOnboarding);
   // Signed in only when the intro is replayed in development.
   const signedIn = usePantryStore(state => !!state.session);
+  const { seniorMode, toggleSeniorMode } = useAccessibilityStore();
   const [page, setPage] = useState(0);
 
   const isLast = page === PHASES.length - 1;
@@ -113,13 +115,50 @@ export default function OnboardingScreen() {
         <View className="flex-row items-center justify-between px-gutter pt-2">
           <BrandMark />
 
-          {!isLast && (
-            <Pressable onPress={skip} hitSlop={10} className="px-2 py-2">
-              <Text variant="label" tone="soft" className="font-semibold">
-                Skip
+          <View className="flex-row items-center gap-2">
+            <Pressable
+              onPress={() => {
+                cueTap();
+                toggleSeniorMode();
+              }}
+              hitSlop={8}
+              accessibilityRole="switch"
+              accessibilityState={{ checked: seniorMode }}
+              accessibilityLabel="Large text mode for older volunteers"
+              className="h-12 flex-row items-center gap-1.5 rounded-lg border px-3"
+              style={{
+                backgroundColor: seniorMode ? COLORS.primary : COLORS.cardSurface,
+                borderColor: seniorMode ? COLORS.primaryDeep : COLORS.borderStrong,
+              }}
+            >
+              <MaterialCommunityIcons
+                name="format-size"
+                size={19}
+                color={seniorMode ? COLORS.textOnPrimary : COLORS.textPrimary}
+              />
+              <Text
+                variant="micro"
+                className="font-bold"
+                style={{ color: seniorMode ? COLORS.textOnPrimary : COLORS.textPrimary }}
+              >
+                {seniorMode ? 'Large text ON' : 'Large text'}
               </Text>
             </Pressable>
-          )}
+
+            {!isLast && (
+              <Pressable
+                onPress={skip}
+                hitSlop={10}
+                accessibilityRole="button"
+                accessibilityLabel="Skip introduction"
+                className="h-12 items-center justify-center px-3"
+              >
+                <Text variant="label" tone="soft" className="font-semibold">
+                  Skip
+                </Text>
+              </Pressable>
+            )}
+          </View>
         </View>
 
         <ScrollView
@@ -134,32 +173,27 @@ export default function OnboardingScreen() {
             const Mock = phase.Mock;
             return (
               <View key={phase.key} style={{ width: SCREEN_W }} className="flex-1 px-gutter">
-                <View className="min-h-[280px] flex-1 items-center justify-center">
-                  <View className="absolute h-[280px] w-[280px] rounded-2xl border border-hairline/40 bg-card opacity-70" />
+                <View className="min-h-[260px] flex-1 items-center justify-center">
+                  <View className="absolute h-[268px] w-[268px] rounded-2xl border border-hairline/40 bg-card opacity-70" />
                   <Mock />
                 </View>
 
-                <View className="pb-4">
-                  {/* Every nested span carries its own lineHeight. `Text`
-                      defaults to the `body` variant and its 22px line box, and a
-                      large headline dropped into that gets clipped — which is
-                      exactly what happened to "Photograph what just came in."
-                      Sizing up here means sizing the line box up with it.
-                      Set in the app's sans like every other screen; the serif is
-                      kept for the wordmark only. */}
+                <View className="pb-3">
                   <Text
+                    variant="display"
                     style={{
-                      fontSize: 30,
-                      lineHeight: 37,
+                      fontSize: seniorMode ? 33 : 30,
+                      lineHeight: seniorMode ? 40 : 37,
                       fontWeight: '700',
                       letterSpacing: -0.5,
                       color: COLORS.textPrimary,
                     }}
                   >
                     <Text
+                      variant="display"
                       style={{
-                        fontSize: 30,
-                        lineHeight: 37,
+                        fontSize: seniorMode ? 33 : 30,
+                        lineHeight: seniorMode ? 40 : 37,
                         fontWeight: '700',
                         color: COLORS.primaryLight,
                       }}
@@ -168,7 +202,7 @@ export default function OnboardingScreen() {
                     </Text>
                     {phase.title}
                   </Text>
-                  <Text variant="body" tone="soft" className="mt-3 pr-2">
+                  <Text variant="body" tone="soft" className="mt-2.5 pr-2">
                     {phase.body}
                   </Text>
                 </View>
@@ -177,11 +211,16 @@ export default function OnboardingScreen() {
           })}
         </ScrollView>
 
-        <View className="gap-4 px-gutter pb-2">
-          <View className="flex-row items-center gap-1.5">
-            {PHASES.map((p, i) => (
-              <Dot key={p.key} active={i === page} />
-            ))}
+        <View className="gap-3.5 px-gutter pb-2">
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-1.5">
+              {PHASES.map((p, i) => (
+                <Dot key={p.key} active={i === page} />
+              ))}
+            </View>
+            <Text variant="micro" tone="soft" className="font-semibold">
+              Step {page + 1} of {PHASES.length}
+            </Text>
           </View>
 
           <Button
@@ -198,7 +237,7 @@ export default function OnboardingScreen() {
           />
 
           <Text variant="micro" tone="soft" className="text-center">
-            Built for small food pantries. Your inventory stays with your pantry.
+            Built for community food pantries &amp; volunteer teams.
           </Text>
         </View>
       </SafeAreaView>

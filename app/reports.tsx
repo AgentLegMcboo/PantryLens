@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { COLORS, RULE_BELOW } from '../constants/theme';
-import { FadeInUp } from '../components/motion';
+import { AnimatedCounter, FadeInUp } from '../components/motion';
 import {
   Badge,
   Button,
@@ -150,42 +150,59 @@ export default function ReportsScreen() {
       {/* The headline pair. Food out and food wasted are the two numbers, and
           they belong side by side — one is only meaningful against the other. */}
       <FadeInUp index={1}>
-        <Card className="flex-row items-center">
-          <View className="flex-1">
-            <Text variant="headline" tone="good">
-              {givenUnits}
-            </Text>
-            <Text variant="micro" tone="soft" className="mt-1">
-              units given out
-            </Text>
+        <Card className="gap-4 p-5">
+          <View className="flex-row items-center">
+            <View className="flex-1">
+              <AnimatedCounter
+                value={givenUnits}
+                style={{
+                  fontSize: 36,
+                  lineHeight: 42,
+                  fontWeight: '800',
+                  color: COLORS.statusGood,
+                }}
+              />
+              <Text variant="label" tone="soft" className="mt-1 font-semibold">
+                units given to families
+              </Text>
+            </View>
+
+            <View className="h-12 w-px bg-hairline" />
+
+            <View className="flex-1 pl-5">
+              <AnimatedCounter
+                value={wastedUnits}
+                style={{
+                  fontSize: 36,
+                  lineHeight: 42,
+                  fontWeight: '800',
+                  color: COLORS.statusCritical,
+                }}
+              />
+              <Text variant="label" tone="soft" className="mt-1 font-semibold">
+                units thrown away
+              </Text>
+            </View>
           </View>
 
-          <View className="h-10 w-px bg-hairline" />
-
-          <View className="flex-1 pl-5">
-            <Text variant="headline" tone="critical">
-              {wastedUnits}
-            </Text>
-            <Text variant="micro" tone="soft" className="mt-1">
-              units thrown away
-            </Text>
-          </View>
+          {rescuedPct !== null && (
+            <View className="gap-2 pt-1">
+              <View className="h-3 flex-row overflow-hidden rounded-md bg-muted">
+                <View className="bg-good" style={{ flex: Math.max(0.01, givenUnits) }} />
+                <View className="bg-critical" style={{ flex: Math.max(0, wastedUnits) }} />
+              </View>
+              <View className="flex-row items-center justify-between">
+                <Text variant="label" tone="good" className="font-bold">
+                  {rescuedPct}% reached households
+                </Text>
+                <Text variant="micro" tone="soft">
+                  {100 - rescuedPct}% lost to expiry/damage
+                </Text>
+              </View>
+            </View>
+          )}
         </Card>
       </FadeInUp>
-
-      {rescuedPct !== null && (
-        <FadeInUp index={2}>
-          <View className="gap-2 px-1">
-            <View className="h-2 flex-row overflow-hidden rounded-sm bg-muted">
-              <View className="bg-good" style={{ flex: givenUnits }} />
-              <View className="bg-critical" style={{ flex: wastedUnits }} />
-            </View>
-            <Text variant="micro" tone="soft">
-              {rescuedPct}% of everything that left the shelf reached a household.
-            </Text>
-          </View>
-        </FadeInUp>
-      )}
 
       {waitingBoxes > 0 && (
         <FadeInUp index={2}>
@@ -197,17 +214,38 @@ export default function ReportsScreen() {
       )}
 
       <FadeInUp index={3}>
-        <Card className="flex-row items-center">
+        <Card className="flex-row items-center p-5">
           <View className="flex-1">
-            <Text variant="heading">{receivedUnits}</Text>
-            <Text variant="micro" tone="soft" className="mt-1">
+            <AnimatedCounter
+              value={receivedUnits}
+              style={{
+                fontSize: 28,
+                lineHeight: 34,
+                fontWeight: '800',
+                color: COLORS.textPrimary,
+              }}
+            />
+            <Text variant="label" tone="soft" className="mt-1 font-semibold">
               units taken in
             </Text>
           </View>
           <View className="h-10 w-px bg-hairline" />
           <View className="flex-1 pl-5">
-            <Text variant="heading">{Math.round(receivedLbs)} lb</Text>
-            <Text variant="micro" tone="soft" className="mt-1">
+            <View className="flex-row items-baseline gap-1">
+              <AnimatedCounter
+                value={Math.round(receivedLbs)}
+                style={{
+                  fontSize: 28,
+                  lineHeight: 34,
+                  fontWeight: '800',
+                  color: COLORS.textPrimary,
+                }}
+              />
+              <Text variant="heading" tone="soft" className="font-bold">
+                lb
+              </Text>
+            </View>
+            <Text variant="label" tone="soft" className="mt-1 font-semibold">
               weighed in bulk
             </Text>
           </View>
@@ -221,27 +259,38 @@ export default function ReportsScreen() {
               title="By category"
               subtitle="Where the food went, and where it was lost."
             />
-            {byCategory.map(([category, v], i) => (
-              <View
-                key={category}
-                className="flex-row items-center gap-3 py-3"
-                style={i < byCategory.length - 1 ? RULE_BELOW : undefined}
-              >
-                <CategoryIcon category={category} />
-                <Text variant="body" className="flex-1 capitalize">
-                  {category}
-                </Text>
-                <Text variant="label" tone="good" className="font-bold">
-                  {v.given}
-                </Text>
-                <Text variant="micro" tone="soft">
-                  /
-                </Text>
-                <Text variant="label" tone="critical" className="font-bold">
-                  {v.wasted}
-                </Text>
-              </View>
-            ))}
+            {byCategory.map(([category, v], i) => {
+              const catTotal = v.given + v.wasted;
+              return (
+                <View
+                  key={category}
+                  className="gap-2 py-3"
+                  style={i < byCategory.length - 1 ? RULE_BELOW : undefined}
+                >
+                  <View className="flex-row items-center gap-3">
+                    <CategoryIcon category={category} />
+                    <Text variant="body" className="flex-1 font-semibold capitalize">
+                      {category}
+                    </Text>
+                    <Text variant="label" tone="good" className="font-bold">
+                      {v.given} given
+                    </Text>
+                    <Text variant="micro" tone="soft">
+                      ·
+                    </Text>
+                    <Text variant="label" tone="critical" className="font-bold">
+                      {v.wasted} lost
+                    </Text>
+                  </View>
+                  {catTotal > 0 && (
+                    <View className="h-2 flex-row overflow-hidden rounded-sm bg-muted">
+                      <View className="bg-good" style={{ flex: v.given }} />
+                      <View className="bg-critical" style={{ flex: v.wasted }} />
+                    </View>
+                  )}
+                </View>
+              );
+            })}
           </Card>
         </FadeInUp>
       )}

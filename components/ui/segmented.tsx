@@ -84,12 +84,12 @@ function Tab<T extends string | number>({
         cueTap();
         onPress();
       }}
-      className="min-h-[44px] flex-1"
+      className="min-h-[48px] flex-1"
     >
       <Animated.View
         style={press.style}
         className={cn(
-          'min-h-[44px] flex-1 flex-row items-center justify-center gap-1.5 rounded-md px-3',
+          'min-h-[48px] flex-1 flex-row items-center justify-center gap-1.5 rounded-md px-3',
           // The lip again, so the selected tab reads as raised out of the
           // trough rather than merely tinted.
           active && 'border-b-[3px] border-brand-deep bg-brand',

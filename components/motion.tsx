@@ -15,6 +15,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { COLORS, RADII } from '../constants/theme';
+import { useAccessibilityStore } from '../lib/accessibility';
 import { cuePress, cueTap } from '../lib/feedback';
 import { SPRING_PRESS } from '../lib/motion-physics';
 
@@ -219,6 +220,7 @@ export function AnimatedCounter({
   const latest = React.useRef(0);
   const [display, setDisplay] = React.useState(0);
   const reduceMotion = useReducedMotion();
+  const seniorMode = useAccessibilityStore(s => s.seniorMode);
 
   useEffect(() => {
     // A number is text, so this is the one animation that cannot live on the UI
@@ -248,7 +250,27 @@ export function AnimatedCounter({
     return () => cancelAnimationFrame(frame);
   }, [value, duration, reduceMotion]);
 
-  return <Text style={style}>{display}</Text>;
+  const flat = StyleSheet.flatten(style) || {};
+  const baseFontSize = typeof flat.fontSize === 'number' ? flat.fontSize : undefined;
+  const baseLineHeight = typeof flat.lineHeight === 'number' ? flat.lineHeight : undefined;
+  const scaledStyle: TextStyle =
+    seniorMode && baseFontSize
+      ? {
+          fontSize: Math.round(baseFontSize * 1.16),
+          lineHeight: baseLineHeight
+            ? Math.round(baseLineHeight * 1.16)
+            : Math.round(baseFontSize * 1.16 * 1.18),
+        }
+      : {};
+
+  return (
+    <Text
+      maxFontSizeMultiplier={2.2}
+      style={[{ fontVariant: ['tabular-nums'] }, style, scaledStyle]}
+    >
+      {display}
+    </Text>
+  );
 }
 
 /** Slow breathing pulse — for a status that needs attention without nagging. */

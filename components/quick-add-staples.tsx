@@ -1,21 +1,10 @@
 import React, { useState } from "react";
-import {
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  View,
-} from "react-native";
+import { ActivityIndicator, Pressable, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import {
-  COLORS,
-  RULE_ABOVE,
-  RULE_BELOW_FAINT,
-  RULE_ABOVE_FAINT,
-} from "../constants/theme";
+import { COLORS, RULE_ABOVE_FAINT } from "../constants/theme";
 import { cueSuccess, cueTap, cueWarn } from "../lib/feedback";
 import { usePantryStore } from "../lib/store";
-import { Card, CategoryIcon, Text } from "./ui";
+import { Card, CategoryIcon, Sheet, Text } from "./ui";
 
 export interface StapleItem {
   id: string;
@@ -177,150 +166,116 @@ export function QuickAddStaplesModal({
   };
 
   return (
-    <Modal
+    <Sheet
       visible={visible}
-      animationType="slide"
-      transparent
-      onRequestClose={onClose}
+      onClose={onClose}
+      title="One-Tap Quick Add Staples"
+      subtitle="Tap any case or unit button to add food without typing on a keyboard."
     >
-      <View className="flex-1 justify-end bg-black/50">
-        <View className="max-h-[85%] rounded-t-xl bg-canvas" style={RULE_ABOVE}>
-          {/* Header */}
-          <View className="px-5 pb-3.5 pt-4" style={RULE_BELOW_FAINT}>
-            <View className="mb-2 h-1.5 w-12 self-center rounded-md bg-hairline" />
-            <View className="flex-row items-center justify-between">
-              <View className="flex-1 pr-3">
-                <Text variant="title" className="font-bold text-xl">
-                  One-Tap Quick Add Staples
-                </Text>
-                <Text variant="body" tone="soft" className="mt-0.5 text-sm">
-                  Tap any case quantity to add food without typing on a
-                  keyboard.
-                </Text>
-              </View>
-              <Pressable
-                onPress={onClose}
-                accessibilityRole="button"
-                accessibilityLabel="Close quick add"
-                hitSlop={10}
-                className="h-10 w-10 items-center justify-center rounded-lg border border-hairline bg-card"
-              >
-                <MaterialCommunityIcons
-                  name="close"
-                  size={22}
-                  color={COLORS.textPrimary}
-                />
-              </Pressable>
-            </View>
-          </View>
-
-          {/* Toast Banner */}
-          {toastMessage && (
-            <View className="mx-4 mt-3 flex-row items-center gap-2 rounded-lg bg-good/15 border border-good/40 p-3">
-              <MaterialCommunityIcons
-                name="check-circle"
-                size={20}
-                color={COLORS.statusGood}
-              />
-              <Text
-                variant="body"
-                className="flex-1 font-semibold text-sm"
-                style={{ color: "#2B5A24" }}
-              >
-                {toastMessage}
-              </Text>
-            </View>
-          )}
-
-          {/* List of staples */}
-          <ScrollView
-            contentContainerClassName="p-4 gap-3 pb-12"
-            showsVerticalScrollIndicator={false}
+      {/* Toast Banner */}
+      {toastMessage && (
+        <View
+          accessibilityLiveRegion="polite"
+          style={{ backgroundColor: "#EEF4E9", borderColor: COLORS.statusGood }}
+          className="flex-row items-center gap-2 rounded-lg border p-3"
+        >
+          <MaterialCommunityIcons
+            name="check-circle"
+            size={20}
+            color={COLORS.statusGood}
+          />
+          <Text
+            variant="label"
+            className="flex-1 font-semibold"
+            style={{ color: "#2B5A24" }}
           >
-            {TOP_STAPLES.map((staple) => {
-              const currentStock =
-                inventory.find(
-                  (i) =>
-                    i.name.toLowerCase().trim() ===
-                    staple.name.toLowerCase().trim(),
-                )?.count ?? 0;
+            {toastMessage}
+          </Text>
+        </View>
+      )}
 
-              return (
-                <Card key={staple.id} className="gap-3 p-3.5">
-                  <View className="flex-row items-center justify-between p-1">
-                    <View className="flex-1 flex-row items-center gap-3">
-                      <CategoryIcon category={staple.category} size="md" />
-                      <View className="flex-1">
-                        <Text variant="body" className="font-bold text-base">
-                          {staple.name}
-                        </Text>
+      {/* List of staples */}
+      <View className="gap-3 pb-4">
+        {TOP_STAPLES.map((staple) => {
+          const currentStock =
+            inventory.find(
+              (i) =>
+                i.name.toLowerCase().trim() ===
+                staple.name.toLowerCase().trim(),
+            )?.count ?? 0;
+
+          return (
+            <Card key={staple.id} className="gap-3 p-3.5">
+              <View className="flex-row items-center justify-between p-1">
+                <View className="flex-1 flex-row items-center gap-3">
+                  <CategoryIcon category={staple.category} size="md" />
+                  <View className="flex-1">
+                    <Text variant="body" className="font-bold">
+                      {staple.name}
+                    </Text>
+                    <Text variant="label" tone="soft" className="mt-0.5">
+                      {staple.unitDesc} · On shelf:{" "}
+                      <Text variant="label" className="font-bold">
+                        {currentStock} units
+                      </Text>
+                    </Text>
+                  </View>
+                </View>
+              </View>
+
+              {/* One-tap preset buttons */}
+              <View
+                className="flex-row gap-2 pt-2"
+                style={RULE_ABOVE_FAINT}
+              >
+                {staple.presetPacks.map((pack) => {
+                  const isBusy = busyId === `${staple.id}-${pack}`;
+                  const label =
+                    pack === 1
+                      ? "+1"
+                      : pack >= 24
+                        ? `+${pack} Flat`
+                        : pack >= 12
+                          ? `+${pack} Case`
+                          : `+${pack}`;
+
+                  return (
+                    <Pressable
+                      key={pack}
+                      disabled={!!busyId}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Add ${pack} units of ${staple.name}`}
+                      onPress={() => handleQuickAdd(staple, pack)}
+                      style={({ pressed }) => ({
+                        borderBottomWidth: pressed ? 1 : 3,
+                        borderBottomColor: COLORS.borderStrong,
+                        transform: [{ translateY: pressed ? 2 : 0 }],
+                        minHeight: 48,
+                      })}
+                      className="flex-1 items-center justify-center rounded-lg border border-hairline bg-card px-1.5 py-2.5"
+                    >
+                      {isBusy ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={COLORS.primary}
+                        />
+                      ) : (
                         <Text
                           variant="label"
-                          tone="soft"
-                          className="mt-0.5 text-xs"
+                          tone="brand"
+                          className="text-center font-bold"
                         >
-                          {staple.unitDesc} · Currently on shelf:{" "}
-                          <Text className="font-bold">
-                            {currentStock} units
-                          </Text>
+                          {label}
                         </Text>
-                      </View>
-                    </View>
-                  </View>
-
-                  {/* One-tap preset buttons */}
-                  <View
-                    className="flex-row gap-2 pt-1"
-                    style={RULE_ABOVE_FAINT}
-                  >
-                    {staple.presetPacks.map((pack) => {
-                      const isBusy = busyId === `${staple.id}-${pack}`;
-                      const label =
-                        pack === 1
-                          ? "+1 unit"
-                          : pack >= 24
-                            ? `+${pack} (Flat)`
-                            : pack >= 12
-                              ? `+${pack} (Case)`
-                              : `+${pack}`;
-
-                      return (
-                        <Pressable
-                          key={pack}
-                          disabled={!!busyId}
-                          accessibilityRole="button"
-                          accessibilityLabel={`Add ${pack} units of ${staple.name}`}
-                          onPress={() => handleQuickAdd(staple, pack)}
-                          style={({ pressed }) => ({
-                            opacity: pressed ? 0.75 : 1,
-                            minHeight: 48,
-                          })}
-                          className="flex-1 items-center justify-center rounded-lg border border-hairline bg-card py-2.5 px-1 shadow-sm"
-                        >
-                          {isBusy ? (
-                            <ActivityIndicator
-                              size="small"
-                              color={COLORS.primary}
-                            />
-                          ) : (
-                            <Text
-                              variant="label"
-                              tone="brand"
-                              className="font-bold text-sm text-center"
-                            >
-                              {label}
-                            </Text>
-                          )}
-                        </Pressable>
-                      );
-                    })}
-                  </View>
-                </Card>
-              );
-            })}
-          </ScrollView>
-        </View>
+                      )}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            </Card>
+          );
+        })}
       </View>
-    </Modal>
+    </Sheet>
   );
 }

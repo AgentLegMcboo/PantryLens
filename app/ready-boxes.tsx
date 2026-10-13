@@ -110,7 +110,7 @@ export default function ReadyBoxesScreen() {
 
   if (readyBoxes.length === 0) {
     return (
-      <View className="flex-1 justify-center bottom-50 bg-canvas">
+      <View className="flex-1 justify-center bg-canvas">
         <EmptyState
           icon="package-variant-closed"
           title="No boxes waiting"
@@ -237,11 +237,11 @@ export default function ReadyBoxesScreen() {
             hitSlop={10}
             accessibilityRole="button"
             accessibilityLabel={`Name or file ${run.label ?? boxType}`}
-            className="h-9 w-9 items-center justify-center rounded-lg bg-secondary-tint"
+            className="h-12 w-12 items-center justify-center rounded-lg bg-secondary-tint"
           >
             <MaterialCommunityIcons
               name="pencil-outline"
-              size={17}
+              size={20}
               color={COLORS.secondaryDark}
             />
           </Pressable>

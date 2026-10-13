@@ -6,14 +6,13 @@ import {
   Alert,
   FlatList,
   SectionList,
-  KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   TextInput,
   View,
 } from "react-native";
 import { COLORS } from "../../constants/theme";
+import { useAccessibilityStore } from "../../lib/accessibility";
 import { isPastDate, windowEndISO } from "../../lib/expiry";
 import { cueTap, cueWarn } from "../../lib/feedback";
 import { PlacesManager } from "../../components/places-manager";
@@ -189,7 +188,7 @@ const InventoryRow = React.memo(function InventoryRow({
         className={
           isSelected
             ? "mb-2.5 bg-subtle px-4 py-3.5"
-            : "mb-2.5 px-4 py-3.5 shadow-md shadow-black"
+            : "mb-2.5 px-4 py-3.5"
         }
         // A lighter edge than other cards: in a long list a full-strength
         // outline on every row adds up to a lot of lines.
@@ -264,21 +263,25 @@ const InventoryRow = React.memo(function InventoryRow({
               value={item.count}
               min={0}
               onChange={(next) => {
-                const write =
-                  next === 0
-                    ? usePantryStore.getState().deleteItem(item.id)
-                    : usePantryStore
-                        .getState()
-                        .updateItem(item.id, { count: next });
-                // These used to be fired and forgotten, so a rejected write was
-                // an unhandled promise and a silently unchanged shelf.
-                write.catch((err: any) => {
+                // Stepping from 1 to 0 must never silently delete the row:
+                // route through the "Where is it going?" sheet so an accidental
+                // double-tap cannot destroy inventory and a real exit records
+                // whether the item was given out, discarded, or a mistake.
+                if (next === 0) {
                   cueWarn();
-                  Alert.alert(
-                    "Could not save that change",
-                    err?.message ?? "Please try again.",
-                  );
-                });
+                  onSwipeOut(item.id);
+                  return;
+                }
+                usePantryStore
+                  .getState()
+                  .updateItem(item.id, { count: next })
+                  .catch((err: any) => {
+                    cueWarn();
+                    Alert.alert(
+                      "Could not save that change",
+                      err?.message ?? "Please try again.",
+                    );
+                  });
               }}
             />
           )}
@@ -507,15 +510,24 @@ export default function InventoryScreen() {
     dCategory,
   ]);
 
+  const seniorMode = useAccessibilityStore((s) => s.seniorMode);
+  const [selectMode, setSelectMode] = useState(false);
+  const [groupSortSheet, setGroupSortSheet] = useState<"group" | "sort" | null>(
+    null,
+  );
+
   const selectedIds = Object.keys(selected).filter((id) => selected[id]);
-  const picking = selectedIds.length > 0;
+  const picking = selectMode || selectedIds.length > 0;
 
   const toggleSelect = (id: string) => {
     cueTap();
     setSelected((prev) => ({ ...prev, [id]: !prev[id] }));
   };
 
-  const clearSelection = () => setSelected({});
+  const clearSelection = () => {
+    setSelectMode(false);
+    setSelected({});
+  };
 
   /** Applies an action to the picked rows, then leaves picking mode. */
   const runOnSelection = async (
@@ -634,12 +646,34 @@ export default function InventoryScreen() {
     <View className="flex-1 bg-canvas">
       <View className="px-gutter pt-gutter gap-4">
         {!picking && (
-          <View className="flex-row items-center justify-between">
-            <Text variant="headline">Your shelves</Text>
-            <Text variant="label" tone="soft">
-              {inventory.length} products ·{" "}
-              {inventory.reduce((sum, item) => sum + item.count, 0)} units
-            </Text>
+          <View className="flex-row items-center justify-between gap-2">
+            <View className="flex-1">
+              <Text variant="headline">Your shelves</Text>
+              <Text variant="label" tone="soft">
+                {inventory.length} products ·{" "}
+                {inventory.reduce((sum, item) => sum + item.count, 0)} units
+              </Text>
+            </View>
+            {inventory.length > 0 && (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel="Select items to move or take off shelf"
+                onPress={() => {
+                  cueTap();
+                  setSelectMode(true);
+                }}
+                className="min-h-[48px] flex-row items-center gap-1.5 rounded-lg border border-hairline bg-card px-3.5 py-2"
+              >
+                <MaterialCommunityIcons
+                  name="checkbox-multiple-marked-outline"
+                  size={18}
+                  color={COLORS.primary}
+                />
+                <Text variant="label" tone="brand" className="font-bold">
+                  Select
+                </Text>
+              </Pressable>
+            )}
           </View>
         )}
         {picking ? (
@@ -649,6 +683,7 @@ export default function InventoryScreen() {
             <View className="flex-row items-center gap-3">
               <Pressable
                 onPress={clearSelection}
+                accessibilityRole="button"
                 accessibilityLabel="Cancel selection"
                 hitSlop={8}
                 className="h-12 w-12 items-center justify-center rounded-md border-[1.5px] border-outline bg-card"
@@ -661,7 +696,9 @@ export default function InventoryScreen() {
               </Pressable>
 
               <Text variant="heading" className="flex-1">
-                {selectedIds.length} selected
+                {selectedIds.length === 0
+                  ? "Tap items to select"
+                  : `${selectedIds.length} selected`}
               </Text>
 
               <Pressable
@@ -676,11 +713,14 @@ export default function InventoryScreen() {
                         ),
                   );
                 }}
+                accessibilityRole="button"
                 hitSlop={8}
-                className="px-2 py-2"
+                className="min-h-[48px] justify-center px-3 py-2"
               >
                 <Text variant="label" tone="brand" className="font-bold">
-                  {filteredItems.every((i) => selected[i.id]) ? "None" : "All"}
+                  {filteredItems.every((i) => selected[i.id])
+                    ? "Select None"
+                    : "Select All"}
                 </Text>
               </Pressable>
             </View>
@@ -691,6 +731,7 @@ export default function InventoryScreen() {
                   label="Move to"
                   variant="secondary"
                   size="compact"
+                  disabled={selectedIds.length === 0}
                   className="flex-1 justify-center"
                   icon={
                     <MaterialCommunityIcons
@@ -706,6 +747,7 @@ export default function InventoryScreen() {
                 label="Category"
                 variant="secondary"
                 size="compact"
+                disabled={selectedIds.length === 0}
                 className="flex-1 justify-center"
                 icon={
                   <MaterialCommunityIcons
@@ -720,6 +762,7 @@ export default function InventoryScreen() {
                 label="Take off shelf"
                 variant="critical"
                 size="compact"
+                disabled={selectedIds.length === 0}
                 className="flex-1 justify-center"
                 icon={
                   <MaterialCommunityIcons
@@ -733,14 +776,19 @@ export default function InventoryScreen() {
             </View>
           </View>
         ) : (
-          <View className="flex-row items-center gap-3">
-            <View className="h-12 flex-1 flex-row items-center gap-2 rounded-md border-[1.5px] border-outline bg-card px-3">
+          <View className="flex-row items-center gap-2.5">
+            <View
+              style={seniorMode ? { minHeight: 54 } : undefined}
+              className="min-h-[48px] flex-1 flex-row items-center gap-2 rounded-md border-[1.5px] border-outline bg-card px-3"
+            >
               <MaterialCommunityIcons
                 name="magnify"
                 size={20}
                 color={COLORS.textSecondary}
               />
               <TextInput
+                maxFontSizeMultiplier={2.2}
+                style={seniorMode ? { fontSize: 19 } : undefined}
                 className="flex-1 text-body text-ink"
                 placeholder="Search items"
                 value={search}
@@ -748,10 +796,16 @@ export default function InventoryScreen() {
                 placeholderTextColor={COLORS.textSecondary}
               />
               {search ? (
-                <Pressable onPress={() => setSearch("")} hitSlop={8}>
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel="Clear search"
+                  onPress={() => setSearch("")}
+                  hitSlop={8}
+                  className="h-10 w-10 items-center justify-center"
+                >
                   <MaterialCommunityIcons
                     name="close-circle"
-                    size={18}
+                    size={20}
                     color={COLORS.textSecondary}
                   />
                 </Pressable>
@@ -760,19 +814,23 @@ export default function InventoryScreen() {
 
             <Pressable
               onPress={() => setModalVisible(true)}
+              accessibilityRole="button"
               accessibilityLabel="Add an item by hand"
               style={({ pressed }) => ({
                 borderBottomWidth: pressed ? 2 : 4,
                 borderBottomColor: COLORS.primaryDeep,
                 transform: [{ translateY: pressed ? 2 : 0 }],
               })}
-              className="h-12 w-12 items-center justify-center rounded-md bg-brand"
+              className="min-h-[48px] flex-row items-center justify-center gap-1.5 rounded-md bg-brand px-3.5"
             >
               <MaterialCommunityIcons
                 name="plus"
-                size={22}
+                size={20}
                 color={COLORS.textOnPrimary}
               />
+              <Text variant="label" tone="on" className="font-bold">
+                Add
+              </Text>
             </Pressable>
           </View>
         )}
@@ -887,31 +945,28 @@ export default function InventoryScreen() {
         ListHeaderComponent={
           picking ? null : (
             <View className="mb-4 gap-2">
-              {/* Group and sort read as the same kind of control: a plain card
-                  with what it is, what it's set to, and a chevron saying "tap
-                  to change". Sort used to be a beige fill with brand text, which
-                  looked like a highlighter mark rather than a button. */}
+              {/* Group and sort open a clear picker sheet so the chevron-down
+                  icon behaves as a true dropdown rather than forcing volunteers
+                  to cycle through options in a loop. */}
               <View className="flex-row items-center gap-2">
                 <ListControl
                   icon="view-agenda-outline"
                   caption="Group"
                   value={GROUPS.find((g) => g.id === groupBy)?.label ?? ""}
-                  accessibilityLabel={`Grouped ${GROUPS.find((g) => g.id === groupBy)?.label}. Tap to change.`}
+                  accessibilityLabel={`Grouped ${GROUPS.find((g) => g.id === groupBy)?.label}. Tap to choose grouping.`}
                   onPress={() => {
                     cueTap();
-                    const i = GROUPS.findIndex((g) => g.id === groupBy);
-                    setGroupBy(GROUPS[(i + 1) % GROUPS.length].id);
+                    setGroupSortSheet("group");
                   }}
                 />
                 <ListControl
                   icon="swap-vertical"
                   caption="Sort"
                   value={SORTS.find((x) => x.id === sortBy)?.label ?? ""}
-                  accessibilityLabel={`Sorted by ${SORTS.find((x) => x.id === sortBy)?.label}. Tap to change.`}
+                  accessibilityLabel={`Sorted by ${SORTS.find((x) => x.id === sortBy)?.label}. Tap to choose sort order.`}
                   onPress={() => {
                     cueTap();
-                    const i = SORTS.findIndex((x) => x.id === sortBy);
-                    setSortBy(SORTS[(i + 1) % SORTS.length].id);
+                    setGroupSortSheet("sort");
                   }}
                 />
                 {groupBy === "place" && (
@@ -964,6 +1019,64 @@ export default function InventoryScreen() {
           />
         }
       />
+
+      <Sheet
+        visible={groupSortSheet === "group"}
+        onClose={() => setGroupSortSheet(null)}
+        title="Group shelves by"
+        subtitle="Choose how your inventory list is organized."
+      >
+        {GROUPS.map((g, idx) => (
+          <Row
+            key={g.id}
+            icon="view-agenda-outline"
+            label={g.label}
+            divider={idx < GROUPS.length - 1}
+            right={
+              groupBy === g.id ? (
+                <MaterialCommunityIcons
+                  name="check-circle"
+                  size={22}
+                  color={COLORS.primary}
+                />
+              ) : undefined
+            }
+            onPress={() => {
+              setGroupBy(g.id);
+              setGroupSortSheet(null);
+            }}
+          />
+        ))}
+      </Sheet>
+
+      <Sheet
+        visible={groupSortSheet === "sort"}
+        onClose={() => setGroupSortSheet(null)}
+        title="Sort items by"
+        subtitle="Choose which items appear at the top of each section."
+      >
+        {SORTS.map((s, idx) => (
+          <Row
+            key={s.id}
+            icon="swap-vertical"
+            label={s.label}
+            divider={idx < SORTS.length - 1}
+            right={
+              sortBy === s.id ? (
+                <MaterialCommunityIcons
+                  name="check-circle"
+                  size={22}
+                  color={COLORS.primary}
+                />
+              ) : undefined
+            }
+            onPress={() => {
+              setSortBy(s.id);
+              setGroupSortSheet(null);
+            }}
+          />
+        ))}
+      </Sheet>
 
       <Sheet
         visible={managingPlaces}
@@ -1057,101 +1170,102 @@ export default function InventoryScreen() {
         </View>
       </Sheet>
 
-      <Modal
+      <Sheet
         visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
+        onClose={() => setModalVisible(false)}
+        title="Add an item"
+        subtitle="Add food by hand or open common staples."
       >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            setModalVisible(false);
+            setStaplesModalVisible(true);
+          }}
+          className="min-h-[52px] flex-row items-center justify-between rounded-lg border border-outline bg-subtle p-3.5"
         >
-          <View className="flex-1 justify-end bg-black/50">
-            <View className="rounded-t-lg bg-canvas px-gutter pb-10 pt-6 gap-4">
-              <View className="flex-row items-center justify-between">
-                <Text variant="title">Add an item</Text>
-                <Pressable onPress={() => setModalVisible(false)} hitSlop={8}>
-                  <MaterialCommunityIcons
-                    name="close"
-                    size={24}
-                    color={COLORS.textPrimary}
-                  />
-                </Pressable>
-              </View>
-
-              <Pressable
-                onPress={() => {
-                  setModalVisible(false);
-                  setStaplesModalVisible(true);
-                }}
-                className="flex-row items-center justify-between rounded-lg border border-brand/30 bg-brand/5 p-3"
-              >
-                <View className="flex-row items-center gap-2">
-                  <MaterialCommunityIcons
-                    name="lightning-bolt"
-                    size={20}
-                    color={COLORS.primary}
-                  />
-                  <Text variant="label" tone="brand" className="font-bold">
-                    Or tap common staples directly (No typing)
-                  </Text>
-                </View>
-                <Text variant="label" tone="brand" className="font-bold">
-                  Open →
-                </Text>
-              </Pressable>
-
-              <Input
-                label="Name"
-                placeholder="Canned black beans 15 oz"
-                value={newName}
-                onChangeText={setNewName}
-              />
-
-              <View className="gap-2">
-                <Text variant="label" tone="soft">
-                  Category
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {CATEGORIES.filter((c) => c.id !== "all").map((cat) => (
-                    <Chip
-                      key={cat.id}
-                      label={cat.label}
-                      selected={newCat === cat.id}
-                      onPress={() => setNewCat(cat.id as any)}
-                    />
-                  ))}
-                </View>
-              </View>
-
-              <View className="flex-row gap-4">
-                <View className="gap-2">
-                  <Text variant="label" tone="soft">
-                    Quantity
-                  </Text>
-                  <Stepper value={newCount} min={1} onChange={setNewCount} />
-                </View>
-                <View className="flex-1">
-                  <Input
-                    label="Expires (optional)"
-                    placeholder="YYYY-MM-DD"
-                    value={newExp}
-                    onChangeText={setNewExp}
-                  />
-                </View>
-              </View>
-
-              <Button
-                label="Add to inventory"
-                block
-                className="mt-2"
-                onPress={handleManualAdd}
-              />
-            </View>
+          <View className="flex-1 flex-row items-center gap-2.5 pr-2">
+            <MaterialCommunityIcons
+              name="lightning-bolt"
+              size={22}
+              color={COLORS.primary}
+            />
+            <Text variant="label" tone="brand" className="flex-1 font-bold">
+              Or tap common staples directly (No typing)
+            </Text>
           </View>
-        </KeyboardAvoidingView>
-      </Modal>
+          <Text variant="label" tone="brand" className="font-bold">
+            Open →
+          </Text>
+        </Pressable>
+
+        <Input
+          label="Name"
+          placeholder="Canned black beans 15 oz"
+          value={newName}
+          onChangeText={setNewName}
+        />
+
+        <View className="gap-2">
+          <Text variant="label" tone="soft" className="font-semibold">
+            Category
+          </Text>
+          <View className="flex-row flex-wrap gap-2">
+            {CATEGORIES.filter((c) => c.id !== "all").map((cat) => (
+              <Chip
+                key={cat.id}
+                label={cat.label}
+                selected={newCat === cat.id}
+                onPress={() => setNewCat(cat.id as any)}
+              />
+            ))}
+          </View>
+        </View>
+
+        <View className="gap-2">
+          <Text variant="label" tone="soft" className="font-semibold">
+            Quantity
+          </Text>
+          <View className="self-start">
+            <Stepper value={newCount} min={1} onChange={setNewCount} />
+          </View>
+        </View>
+
+        <View className="gap-2">
+          <Input
+            label="Expires (optional)"
+            placeholder="YYYY-MM-DD"
+            value={newExp}
+            onChangeText={setNewExp}
+          />
+          <View className="flex-row flex-wrap gap-2">
+            {[
+              { label: "+3 mos", days: 90 },
+              { label: "+6 mos", days: 180 },
+              { label: "+1 yr", days: 365 },
+              { label: "+2 yrs", days: 730 },
+            ].map((preset) => {
+              const iso = windowEndISO(preset.days);
+              return (
+                <Chip
+                  key={preset.label}
+                  label={preset.label}
+                  selected={newExp === iso}
+                  onPress={() => setNewExp(newExp === iso ? "" : iso)}
+                />
+              );
+            })}
+          </View>
+        </View>
+
+        <Button
+          label="Add to inventory"
+          block
+          disabled={!newName.trim()}
+          className="mt-2"
+          onPress={handleManualAdd}
+        />
+      </Sheet>
 
       <QuickAddStaplesModal
         visible={staplesModalVisible}
@@ -1162,8 +1276,8 @@ export default function InventoryScreen() {
 }
 
 /**
- * A list setting you tap to cycle: what it is (caption), what it's set to
- * (value, bold), and a chevron. Group and Sort share it so they read as a pair.
+ * A list setting that opens a choice sheet: what it is (caption), what it's
+ * set to (value, bold), and a chevron. Group and Sort share it so they read as a pair.
  */
 function ListControl({
   icon,
@@ -1183,7 +1297,7 @@ function ListControl({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      className="h-[52px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3 shadow-slate-800 shadow-sm"
+      className="min-h-[52px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3 py-2"
     >
       <View className="h-8 w-8 items-center justify-center rounded-md bg-secondary-tint">
         <MaterialCommunityIcons

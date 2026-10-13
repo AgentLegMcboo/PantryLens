@@ -45,7 +45,7 @@ export function Chip({
       )}
       {...props}
     >
-      <Text variant="label" tone={selected ? 'on' : 'soft'} className="font-semibold text-sm">
+      <Text variant="label" tone={selected ? 'on' : 'soft'} className="font-semibold">
         {label}
       </Text>
     </Pressable>
@@ -85,7 +85,7 @@ export function Badge({
       style={{ backgroundColor: colors.background }}
     >
       {icon && <MaterialCommunityIcons name={icon} size={15} color={colors.foreground} />}
-      <Text variant="label" style={{ color: colors.foreground }} className="shrink font-semibold text-xs">
+      <Text variant="micro" style={{ color: colors.foreground }} className="shrink font-semibold">
         {label}
       </Text>
     </View>

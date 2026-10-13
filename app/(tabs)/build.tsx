@@ -190,10 +190,15 @@ export default function BuildBoxesScreen() {
               <View className="my-4 h-px bg-white/20" />
 
               <Pressable
-                onPress={() => setBreakdownOpen(true)}
-                className="flex-row items-center justify-between gap-3"
+                onPress={() => {
+                  cueTap();
+                  setBreakdownOpen(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel="See per-category breakdown for this box"
+                className="min-h-[48px] flex-row items-center justify-between gap-3"
               >
-                <Text variant="label" className="flex-1 text-ink-on/85">
+                <Text variant="label" className="flex-1 text-ink-on/90">
                   {isShort ? (
                     <>
                       <Text
@@ -210,16 +215,16 @@ export default function BuildBoxesScreen() {
                     `Enough of everything for ${requestedBoxes}`
                   )}
                 </Text>
-                <View className="flex-row items-center gap-1 rounded-md bg-white/20 px-3 py-1.5">
+                <View className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-white/20 px-3.5 py-2">
                   <Text
                     variant="label"
-                    className="font-bold text-ink-on text-xs"
+                    className="font-bold text-ink-on"
                   >
                     Why
                   </Text>
                   <MaterialCommunityIcons
                     name="chevron-right"
-                    size={14}
+                    size={16}
                     color={COLORS.textOnPrimary}
                   />
                 </View>
@@ -302,11 +307,15 @@ export default function BuildBoxesScreen() {
                   on the shelf but left out of this plan.
                 </Text>
                 {plan.excluded.pastDate.units > 0 && (
-                  <Pressable onPress={() => router.push("/expiring-soon")}>
+                  <Pressable
+                    onPress={() => router.push("/expiring-soon")}
+                    accessibilityRole="button"
+                    className="min-h-[44px] justify-center self-start py-1"
+                  >
                     <Text
-                      variant="micro"
+                      variant="label"
                       tone="brand"
-                      className="font-semibold"
+                      className="font-bold"
                     >
                       Check what is out of date →
                     </Text>
@@ -327,7 +336,7 @@ export default function BuildBoxesScreen() {
               }}
               accessibilityRole="button"
               accessibilityLabel={`Box: ${box.name}. Tap to change.`}
-              className="flex-row items-center gap-3"
+              className="min-h-[52px] flex-row items-center gap-3"
             >
               <View className="h-11 w-11 items-center justify-center rounded-md bg-secondary-tint">
                 <MaterialCommunityIcons
@@ -349,9 +358,11 @@ export default function BuildBoxesScreen() {
                   {describeRules(box.rules)}
                 </Text>
               </View>
-              <Text variant="label" tone="brand" className="font-bold">
-                Change
-              </Text>
+              <View className="rounded-md bg-subtle px-3 py-2">
+                <Text variant="label" tone="brand" className="font-bold">
+                  Change
+                </Text>
+              </View>
             </Pressable>
 
             <View className="flex-row items-center justify-between gap-3">
@@ -449,6 +460,7 @@ export default function BuildBoxesScreen() {
                   onPress={() => router.push("/ready-boxes")}
                   hitSlop={8}
                   accessibilityRole="button"
+                  className="min-h-[48px] justify-center"
                 >
                   <Text variant="label" tone="brand" className="font-bold">
                     Hand out →
@@ -565,13 +577,14 @@ export default function BuildBoxesScreen() {
           if (perBox === 0) return null;
 
           const stock = plan.categoryTotals[cat];
+          const neededTotal = perBox * requestedBoxes;
           const short = plan.shortfallPerCategory[cat];
           const limiting = cat === plan.limitingCategory && short > 0;
 
           return (
             <View
               key={String(cat)}
-              className="flex-row items-center gap-3 rounded-md bg-card px-4 py-3"
+              className="gap-2 rounded-md bg-card px-4 py-3"
               style={{
                 borderWidth: 1.5,
                 borderColor: limiting
@@ -579,29 +592,36 @@ export default function BuildBoxesScreen() {
                   : COLORS.borderSoft,
               }}
             >
-              <CategoryIcon
-                category={String(cat)}
-                tone={limiting ? "critical" : "secondary"}
-              />
-              <View className="flex-1">
-                <Text variant="body" className="font-semibold capitalize">
-                  {String(cat)}
-                </Text>
-                <Text variant="micro" tone="soft" className="mt-0.5">
-                  {perBox} per box · {stock} in stock
-                </Text>
-              </View>
-              {short > 0 ? (
-                <Text variant="label" tone="critical" className="font-bold">
-                  {short} short
-                </Text>
-              ) : (
-                <MaterialCommunityIcons
-                  name="check-circle"
-                  size={20}
-                  color={COLORS.statusGood}
+              <View className="flex-row items-center gap-3">
+                <CategoryIcon
+                  category={String(cat)}
+                  tone={limiting ? "critical" : "secondary"}
                 />
-              )}
+                <View className="flex-1">
+                  <Text variant="body" className="font-semibold capitalize">
+                    {String(cat)}
+                  </Text>
+                  <Text variant="micro" tone="soft" className="mt-0.5">
+                    {perBox} per box · {stock} of {neededTotal} needed in stock
+                  </Text>
+                </View>
+                {short > 0 ? (
+                  <Text variant="label" tone="critical" className="font-bold">
+                    {short} short
+                  </Text>
+                ) : (
+                  <MaterialCommunityIcons
+                    name="check-circle"
+                    size={22}
+                    color={COLORS.statusGood}
+                  />
+                )}
+              </View>
+              <ProgressBar
+                progress={neededTotal > 0 ? Math.min(1, stock / neededTotal) : 1}
+                color={short > 0 ? (limiting ? COLORS.statusCritical : COLORS.statusWarning) : COLORS.statusGood}
+                height={6}
+              />
             </View>
           );
         })}

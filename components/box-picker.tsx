@@ -416,10 +416,11 @@ export function BoxPicker({
           <Pressable
             onPress={() => editTemplate(template)}
             hitSlop={10}
+            accessibilityRole="button"
             accessibilityLabel={`Edit ${template.name}`}
-            className="h-9 w-9 items-center justify-center rounded-lg bg-secondary-tint"
+            className="h-12 w-12 items-center justify-center rounded-lg bg-secondary-tint"
           >
-            <MaterialCommunityIcons name="pencil-outline" size={17} color={COLORS.secondaryDark} />
+            <MaterialCommunityIcons name="pencil-outline" size={20} color={COLORS.secondaryDark} />
           </Pressable>
         }
       />

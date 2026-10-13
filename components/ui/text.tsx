@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { Text as RNText, type TextProps } from 'react-native';
+import { StyleSheet, Text as RNText, type TextProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/cn';
 import { getSeniorTextStyle, useAccessibilityStore } from '../../lib/accessibility';
@@ -47,12 +47,31 @@ export function Text({
   ...props
 }: TextProps & TextVariant) {
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
-  const seniorStyle = seniorMode ? getSeniorTextStyle(variant, tone) : null;
+  const resolvedStyle = React.useMemo(() => {
+    if (!seniorMode) return style;
+    const seniorStyle = getSeniorTextStyle(variant, tone);
+    if (!style) return seniorStyle;
+    const flat = StyleSheet.flatten(style) || {};
+    if (typeof flat.fontSize === 'number') {
+      const scaledSize = Math.round(flat.fontSize * 1.22);
+      const scaledLineHeight =
+        typeof flat.lineHeight === 'number'
+          ? Math.round(flat.lineHeight * 1.22)
+          : Math.round(scaledSize * 1.32);
+      return [
+        seniorStyle,
+        flat,
+        { fontSize: scaledSize, lineHeight: scaledLineHeight },
+      ];
+    }
+    return [flat, seniorStyle, flat.color && tone !== 'soft' ? { color: flat.color } : null];
+  }, [seniorMode, variant, tone, style]);
 
   return (
     <RNText
+      maxFontSizeMultiplier={2.2}
       className={cn(textVariants({ variant, tone }), className)}
-      style={seniorStyle ? [seniorStyle, style] : style}
+      style={resolvedStyle}
       {...props}
     />
   );

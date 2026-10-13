@@ -7,11 +7,13 @@ import Animated, {
   interpolate,
   runOnJS,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 import { COLORS, RADII } from '../constants/theme';
+import { useAccessibilityStore } from '../lib/accessibility';
 import {
   isTooSmall,
   moveBox,
@@ -37,8 +39,8 @@ import type { DetectionBox } from '../lib/scan-normalize';
  * or a different screen.
  */
 
-/** Corner grab area. Comfortably past the 44pt guidance once the halo is counted. */
-const HANDLE = 26;
+/** Corner grab area: 44pt so older volunteer fingers can grab corners reliably. */
+const HANDLE = 44;
 
 export interface OverlayItem {
   id: string;
@@ -130,6 +132,8 @@ function EditableBox({
   onDragStateChange: (dragging: boolean) => void;
 }) {
   const box = item.box!;
+  const reducedMotion = useReducedMotion();
+  const seniorMode = useAccessibilityStore(state => state.seniorMode);
 
   // Live pixel geometry. Seeded from the fractions and written back on release.
   const x = useSharedValue(box.left * frame.width);
@@ -150,7 +154,11 @@ function EditableBox({
 
   useEffect(() => {
     if (item.verified) {
-      glow.value = withTiming(0, { duration: 260 });
+      glow.value = reducedMotion ? 0 : withTiming(0, { duration: 260 });
+      return;
+    }
+    if (reducedMotion) {
+      glow.value = 0.45;
       return;
     }
     glow.value = withRepeat(
@@ -158,7 +166,7 @@ function EditableBox({
       -1,
       true,
     );
-  }, [item.verified, glow]);
+  }, [item.verified, reducedMotion, glow]);
 
   const commit = () => {
     onCommit(toFractions({ x: x.value, y: y.value, w: w.value, h: h.value }, frame));
@@ -230,8 +238,10 @@ function EditableBox({
           }`}
         >
           <View style={[styles.tag, { backgroundColor: accent }]}>
-            {item.verified && <Text style={styles.tagTick}>✓</Text>}
-            <Text style={styles.tagText} numberOfLines={1}>
+            {item.verified && (
+              <Text style={[styles.tagTick, seniorMode && { fontSize: 13 }]}>✓</Text>
+            )}
+            <Text style={[styles.tagText, seniorMode && { fontSize: 14 }]} numberOfLines={1}>
               {item.count > 1 ? `${item.count}× ` : ''}
               {item.label}
             </Text>
@@ -415,18 +425,18 @@ const styles = StyleSheet.create({
 
   tag: {
     position: 'absolute',
-    top: -11,
+    top: -13,
     left: -2,
-    maxWidth: 150,
+    maxWidth: 180,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: RADII.sm,
   },
-  tagText: { fontSize: 10, fontWeight: '700', color: COLORS.textOnPrimary },
-  tagTick: { fontSize: 9, fontWeight: '900', color: COLORS.textOnPrimary },
+  tagText: { fontSize: 12, fontWeight: '700', color: COLORS.textOnPrimary },
+  tagTick: { fontSize: 11, fontWeight: '900', color: COLORS.textOnPrimary },
 
   handleHit: {
     position: 'absolute',
