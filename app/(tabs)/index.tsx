@@ -115,7 +115,7 @@ export default function DashboardScreen() {
   }, [thresholds, plan, targetBoxes]);
 
   return (
-    <Screen contentContainerClassName="gap-5 pb-16">
+    <Screen contentContainerClassName="gap-5">
       {/* ZONE 1: Unified Intake & Shelf Tools — everything a volunteer does when food arrives */}
       <FadeInUp index={0}>
         <View className="gap-3">

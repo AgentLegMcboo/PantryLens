@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, Platform, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { windowEndISO } from '../lib/expiry';
@@ -22,9 +22,18 @@ export function AppHeader({ title }: { title: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
-  const toggleSeniorMode = useAccessibilityStore((state) => state.toggleSeniorMode);
+  const toggleSeniorMode = useAccessibilityStore(
+    (state) => state.toggleSeniorMode,
+  );
 
-  const { settings, inventory, signOut, pantries, switchPantry, setAddingPantry } = usePantryStore();
+  const {
+    settings,
+    inventory,
+    signOut,
+    pantries,
+    switchPantry,
+    setAddingPantry,
+  } = usePantryStore();
   const [switchOpen, setSwitchOpen] = useState(false);
 
   useEffect(() => {
@@ -35,7 +44,7 @@ export function AppHeader({ title }: { title: string }) {
   // never disagrees with the screen it opens.
   const warningStr = windowEndISO(settings.expirationWarningDays);
   const expiringCount = inventory.filter(
-    (i) => !!i.expiration && i.expiration <= warningStr,
+    (i) => i.count > 0 && !!i.expiration && i.expiration <= warningStr,
   ).length;
 
   const close = () => {
@@ -45,10 +54,14 @@ export function AppHeader({ title }: { title: string }) {
 
   const handleSignOut = () => {
     close();
-    Alert.alert('Sign out?', 'You will need to sign in again to reach this pantry.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
-    ]);
+    Alert.alert(
+      'Sign out?',
+      'You will need to sign in again to reach this pantry.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
+      ],
+    );
   };
 
   return (
@@ -58,7 +71,10 @@ export function AppHeader({ title }: { title: string }) {
           onPress={() => {
             offlineQueue.processQueue().then((res) => {
               if (res.processed > 0) {
-                Alert.alert('Sync Complete', `Uploaded ${res.processed} offline change(s).`);
+                Alert.alert(
+                  'Sync Complete',
+                  `Uploaded ${res.processed} offline change(s).`,
+                );
               }
             });
           }}
@@ -144,7 +160,11 @@ export function AppHeader({ title }: { title: string }) {
           badge={expiringCount}
           onPress={() => router.push('/expiring-soon')}
         />
-        <HeaderButton icon="dots-vertical" label="More options" onPress={() => setMenuOpen(true)} />
+        <HeaderButton
+          icon="dots-vertical"
+          label="More options"
+          onPress={() => setMenuOpen(true)}
+        />
       </View>
 
       <Sheet
@@ -154,6 +174,15 @@ export function AppHeader({ title }: { title: string }) {
         subtitle="Reports, settings, team, and pantry switching"
       >
         <View>
+          <Row
+            icon="format-size"
+            label={seniorMode ? 'Large Text Mode: ON' : 'Large Text Mode: OFF'}
+            hint="Bigger fonts and higher contrast for easier reading"
+            onPress={() => {
+              cueTap();
+              toggleSeniorMode();
+            }}
+          />
           <Row
             icon="chart-box-outline"
             label="Reports & Activity"
@@ -273,7 +302,11 @@ function HeaderButton({
       }}
       className="h-12 w-12 items-center justify-center rounded-lg border border-hairline bg-card"
     >
-      <MaterialCommunityIcons name={icon} size={22} color={COLORS.textPrimary} />
+      <MaterialCommunityIcons
+        name={icon}
+        size={22}
+        color={COLORS.textPrimary}
+      />
       {!!badge && badge > 0 && (
         <View className="absolute -right-1 -top-1 min-w-[20px] items-center justify-center rounded-md bg-warn px-1.5 py-0.5">
           <Text variant="micro" tone="on" className="font-bold">
@@ -284,7 +317,6 @@ function HeaderButton({
     </Pressable>
   );
 }
-
 /**
  * The same bar for pushed screens.
  *
@@ -298,15 +330,23 @@ export function StackHeader({
   title,
   onBack,
   right,
+  modal,
 }: {
   title: string;
   onBack: () => void;
   right?: React.ReactNode;
+  /** Presented as a sheet — on iOS that already starts below the status bar. */
+  modal?: boolean;
 }) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={{ paddingTop: insets.top }} className="bg-canvas">
+    <View
+      // An iOS sheet sits below the status bar already; adding the inset again
+      // left a tall empty band above the title.
+      style={{ paddingTop: modal && Platform.OS === "ios" ? 8 : insets.top }}
+      className="bg-canvas"
+    >
       <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
         <Pressable
           accessibilityRole="button"
@@ -317,7 +357,11 @@ export function StackHeader({
           }}
           className="h-12 w-12 items-center justify-center rounded-lg border border-hairline bg-card"
         >
-          <MaterialCommunityIcons name="chevron-left" size={26} color={COLORS.textPrimary} />
+          <MaterialCommunityIcons
+            name="chevron-left"
+            size={26}
+            color={COLORS.textPrimary}
+          />
         </Pressable>
 
         <Text

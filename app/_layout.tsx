@@ -132,6 +132,7 @@ export default function RootLayout() {
             <StackHeader
               title={String(options.title ?? '')}
               onBack={() => navigation.goBack()}
+              modal={options.presentation === 'modal'}
             />
           ),
           contentStyle: {

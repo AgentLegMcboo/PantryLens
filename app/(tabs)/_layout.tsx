@@ -6,10 +6,7 @@ import { COLORS } from '../../constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccessibilityStore } from '../../lib/accessibility';
 import { AppHeader } from '../../components/app-header';
-
-/** Bar height before the home-indicator inset is added. */
-const TAB_BAR_BODY = 64;
-const TAB_BAR_BODY_SENIOR = 74;
+import { SlidingTabBar, TAB_BAR_BODY, TAB_BAR_BODY_SENIOR } from '../../components/sliding-tab-bar';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
@@ -19,9 +16,10 @@ export default function TabLayout() {
   return (
     <View style={{ flex: 1 }}>
       <Tabs
+        // One rounded highlight that slides between tabs; see sliding-tab-bar.tsx.
+        tabBar={(props) => <SlidingTabBar {...props} />}
         screenOptions={{
           tabBarActiveTintColor: COLORS.primary,
-          tabBarActiveBackgroundColor: COLORS.surfaceContainer,
           tabBarInactiveTintColor: seniorMode ? COLORS.textPrimary : COLORS.textSecondary,
           tabBarStyle: {
             // Same cream as every screen — a near-white bar under a cream page drew
@@ -50,7 +48,6 @@ export default function TabLayout() {
             fontWeight: seniorMode ? '700' : '600',
             marginTop: 2,
           },
-          tabBarItemStyle: { borderRadius: 14, marginHorizontal: 5 },
           tabBarIconStyle: { marginTop: 0 },
           // Every tab gets the same custom bar: pantry name, an expiry bell, and
           // an overflow holding settings and sign-out.

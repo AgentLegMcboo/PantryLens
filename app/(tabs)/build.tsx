@@ -143,6 +143,26 @@ export default function BuildBoxesScreen() {
   const isShort = plan.achievableBoxes < requestedBoxes;
   const canPack = plan.achievableBoxes > 0;
 
+  const startPacking = () => {
+    cuePress();
+    router.push({
+      pathname: "/packing-checklist",
+      // The rules travel with the route: a preset used once was never saved
+      // anywhere for the checklist to look up.
+      params: {
+        targetBoxes: requestedBoxes,
+        familySize: packingFamilySize,
+        rules: JSON.stringify(box.rules),
+        boxName: box.name,
+        scales: box.scales ? "1" : "0",
+        // Carried through, or the pick list would recompute without them and
+        // hand a volunteer bread to put in a wheat-free box.
+        excludes: box.excludes.join(","),
+        requires: box.requires.join(","),
+      },
+    });
+  };
+
   return (
     <>
       <Screen>
@@ -228,6 +248,39 @@ export default function BuildBoxesScreen() {
                     color={COLORS.textOnPrimary}
                   />
                 </View>
+              </Pressable>
+
+              {/* The action lives with the answer it acts on. White on the
+                  orange so it's the one thing the eye lands on next. */}
+              <Pressable
+                onPress={canPack ? startPacking : undefined}
+                disabled={!canPack}
+                accessibilityRole="button"
+                accessibilityState={{ disabled: !canPack }}
+                style={({ pressed }) => ({
+                  marginTop: 16,
+                  borderBottomWidth: canPack ? (pressed ? 2 : 4) : 0,
+                  borderBottomColor: "rgba(94,36,17,0.45)",
+                  transform: [{ translateY: pressed && canPack ? 2 : 0 }],
+                })}
+                className={`min-h-[50px] flex-row items-center justify-center gap-2 rounded-lg ${
+                  canPack ? "bg-white" : "bg-white/20"
+                }`}
+              >
+                <MaterialCommunityIcons
+                  name="clipboard-check-outline"
+                  size={19}
+                  color={canPack ? COLORS.primary : COLORS.textOnPrimary}
+                />
+                <Text
+                  variant="body"
+                  className="font-bold tracking-wide"
+                  style={{ color: canPack ? COLORS.primary : COLORS.textOnPrimary }}
+                >
+                  {canPack
+                    ? `Pack ${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? "box" : "boxes"}`
+                    : "Nothing to pack yet"}
+                </Text>
               </Pressable>
             </View>
           </View>
@@ -403,47 +456,6 @@ export default function BuildBoxesScreen() {
               </Text>
             )}
           </Card>
-        </FadeInUp>
-
-        {/* One action. */}
-        <FadeInUp index={2}>
-          <View className="gap-3">
-            <Button
-              label={
-                canPack
-                  ? `Pack ${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? "box" : "boxes"}`
-                  : "Nothing to pack yet"
-              }
-              block
-              disabled={!canPack}
-              icon={
-                <MaterialCommunityIcons
-                  name="clipboard-check-outline"
-                  size={19}
-                  color={COLORS.textOnPrimary}
-                />
-              }
-              onPress={() => {
-                cuePress();
-                router.push({
-                  pathname: "/packing-checklist",
-                  // The rules travel with the route: a preset used once was
-                  // never saved anywhere for the checklist to look up.
-                  params: {
-                    targetBoxes: requestedBoxes,
-                    familySize: packingFamilySize,
-                    rules: JSON.stringify(box.rules),
-                    boxName: box.name,
-                    scales: box.scales ? "1" : "0",
-                    // Carried through, or the pick list would recompute without
-                    // them and hand a volunteer bread to put in a wheat-free box.
-                    excludes: box.excludes.join(","),
-                    requires: box.requires.join(","),
-                  },
-                });
-              }}
-            />
-          </View>
         </FadeInUp>
 
         {/* Boxes already packed: how many are waiting, and where each batch is

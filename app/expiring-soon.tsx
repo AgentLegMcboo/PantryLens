@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
 import { Badge, Button, Card, CategoryIcon, EmptyState, Row, Sheet, Text } from '../components/ui';
@@ -18,6 +19,7 @@ function urgency(days: number) {
 }
 
 export default function ExpiringSoonScreen() {
+  const insets = useSafeAreaInsets();
   const router = useRouter();
   const { inventory, locations, settings, recordExit } = usePantryStore();
   const [exitItem, setExitItem] = useState<InventoryItem | null>(null);
@@ -151,7 +153,8 @@ export default function ExpiringSoonScreen() {
         data={expiring}
         keyExtractor={item => item.id}
         renderItem={renderRow}
-        contentContainerClassName="px-gutter pt-gutter pb-28"
+        contentContainerClassName="px-gutter pt-gutter"
+        contentContainerStyle={{ paddingBottom: 24 + insets.bottom }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           expiring.length > 0 ? (
