@@ -86,6 +86,7 @@ export default function ReviewVerifyScreen() {
   const {
     currentDraft,
     currentScanPhotos,
+    inventory,
     addItems,
     settings,
     locations,
@@ -109,13 +110,39 @@ export default function ReviewVerifyScreen() {
   const [batchLocation, setBatchLocation] = useState<string | null>(null);
 
   /**
+   * Resolves where a scanned item belongs: batch override first, then an
+   * existing shelf item with the same name, then category rules or existing
+   * category peers on the shelves.
+   */
+  const resolveLocationForRow = (row: DraftRow): string | null => {
+    if (batchLocation) return batchLocation;
+    const lower = (row.name ?? '').trim().toLowerCase();
+    if (lower) {
+      const exact = inventory.find(
+        (i) => i.location_id && i.name.trim().toLowerCase() === lower,
+      );
+      if (exact?.location_id) return exact.location_id;
+    }
+    const cat = (row.category ?? 'unknown') as any;
+    const byRule = defaultLocationFor(cat);
+    if (byRule) return byRule;
+    if (cat && cat !== 'unknown') {
+      const peer = inventory.find((i) => i.location_id && i.category === cat);
+      if (peer?.location_id) return peer.location_id;
+    }
+    return null;
+  };
+
+  /**
    * Whether the pantry has told the app what its bins are for.
    *
    * When it has, sorting stops being a step: each item files itself under the
    * place that claims its category, and the batch picker becomes an override for
    * the odd load that all goes one place.
    */
-  const autoFiles = locations.some((l) => l.categories?.length > 0);
+  const autoFiles =
+    locations.some((l) => l.categories?.length > 0) ||
+    inventory.some((i) => !!i.location_id);
 
   const source: 'donation' | 'shelf_audit' =
     params.source === 'shelf_audit' ? 'shelf_audit' : 'donation';
@@ -451,9 +478,8 @@ export default function ReviewVerifyScreen() {
         ...row,
         id: row.id ?? Crypto.randomUUID(),
         // An explicit choice for the batch wins; otherwise each item goes to
-        // whichever bin claims its category. Null when nothing claims it, which
-        // leaves it unfiled rather than guessing.
-        location_id: batchLocation ?? defaultLocationFor((row.category ?? 'unknown') as any),
+        // whichever shelf holds that product or category.
+        location_id: resolveLocationForRow(row),
         source_org: draftSource,
       }));
       await addItems(rows, source, currentScan?.scanId ?? null);
@@ -960,28 +986,79 @@ export default function ReviewVerifyScreen() {
                   <Text variant="micro" tone={damaged ? 'critical' : 'soft'} className="font-semibold">
                     {CONDITION_LABELS[selectedItem.condition || 'ok']}
                   </Text>
+                  {(() => {
+                    const locId = resolveLocationForRow(selectedItem);
+                    const locName = locId ? locations.find((l) => l.id === locId)?.name : null;
+                    if (!locName) return null;
+                    return (
+                      <>
+                        <Text variant="micro" tone="soft">·</Text>
+                        <Pressable
+                          onPress={() => {
+                            cueTap();
+                            setFilingOpen(true);
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Auto-assigned to ${locName}. Tap to change shelf.`}
+                          className="flex-row items-center gap-1 rounded bg-secondary-tint px-1.5 py-0.5"
+                        >
+                          <MaterialCommunityIcons
+                            name="map-marker-outline"
+                            size={12}
+                            color={COLORS.secondaryDark}
+                          />
+                          <Text
+                            variant="micro"
+                            className="font-bold"
+                            style={{ color: COLORS.secondaryDark }}
+                          >
+                            {locName}
+                          </Text>
+                        </Pressable>
+                      </>
+                    );
+                  })()}
                 </View>
               </View>
             </View>
 
-            {/* How many, plus the way into everything else, and paging. */}
+            {/* How many, 1-tap case multipliers, plus the way into everything else, and paging. */}
             <View className="flex-row items-center gap-2">
               <Stepper
                 value={selectedItem.count ?? 1}
                 min={1}
                 onChange={(count) => updateItemAtIndex(selectedIndex, { count })}
               />
+              {[6, 12, 24].map((pack) => (
+                <Pressable
+                  key={pack}
+                  onPress={() => {
+                    cueTap();
+                    updateItemAtIndex(selectedIndex, {
+                      count: (selectedItem.count ?? 1) + pack,
+                    });
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel={`Add ${pack} more units`}
+                  className="h-12 items-center justify-center rounded-md border border-hairline bg-subtle px-2.5"
+                >
+                  <Text variant="micro" tone="brand" className="font-bold">
+                    +{pack}
+                  </Text>
+                </Pressable>
+              ))}
               <Pressable
                 onPress={() => {
                   cueTap();
                   setMoreOpen(true);
                 }}
                 accessibilityRole="button"
-                className="h-12 flex-1 flex-row items-center justify-center gap-1.5 rounded-md bg-subtle"
+                accessibilityLabel="More item details"
+                className="h-12 flex-1 flex-row items-center justify-center gap-1 rounded-md bg-subtle px-2"
               >
                 <MaterialCommunityIcons name="tune-variant" size={18} color={COLORS.textPrimary} />
-                <Text variant="label" className="font-bold">
-                  Details
+                <Text variant="micro" className="font-bold" numberOfLines={1}>
+                  More
                 </Text>
               </Pressable>
               <PhotoArrow

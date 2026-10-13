@@ -330,6 +330,7 @@ export default function InventoryScreen() {
   const {
     inventory,
     locations,
+    defaultLocationFor,
     updateItem,
     deleteItem,
     deleteItems,
@@ -341,6 +342,7 @@ export default function InventoryScreen() {
     useShallow((s) => ({
       inventory: s.inventory,
       locations: s.locations,
+      defaultLocationFor: s.defaultLocationFor,
       updateItem: s.updateItem,
       deleteItem: s.deleteItem,
       deleteItems: s.deleteItems,
@@ -595,8 +597,23 @@ export default function InventoryScreen() {
     ]);
   };
 
+  const resolveManualShelfId = (name: string, cat: typeof newCat): string | null => {
+    const lower = name.trim().toLowerCase();
+    if (lower) {
+      const exact = inventory.find(
+        (i) => i.location_id && i.name.trim().toLowerCase() === lower,
+      );
+      if (exact?.location_id) return exact.location_id;
+    }
+    const byRule = defaultLocationFor(cat);
+    if (byRule) return byRule;
+    const peer = inventory.find((i) => i.location_id && i.category === cat);
+    return peer?.location_id ?? null;
+  };
+
   const handleManualAdd = () => {
     if (!newName.trim()) return;
+    const location_id = resolveManualShelfId(newName, newCat);
     addItems(
       [
         {
@@ -604,6 +621,7 @@ export default function InventoryScreen() {
           category: newCat,
           count: newCount,
           expiration: newExp.trim() || null,
+          location_id,
         },
       ],
       "manual",
@@ -1226,8 +1244,22 @@ export default function InventoryScreen() {
           <Text variant="label" tone="soft" className="font-semibold">
             Quantity
           </Text>
-          <View className="self-start">
+          <View className="flex-row flex-wrap items-center gap-2">
             <Stepper value={newCount} min={1} onChange={setNewCount} />
+            {[
+              { label: "+6 Pack", add: 6 },
+              { label: "+12 Case", add: 12 },
+              { label: "+24 Flat", add: 24 },
+            ].map((preset) => (
+              <Chip
+                key={preset.label}
+                label={preset.label}
+                selected={false}
+                onPress={() =>
+                  setNewCount((c) => (c === 1 ? preset.add : c + preset.add))
+                }
+              />
+            ))}
           </View>
         </View>
 
@@ -1257,6 +1289,28 @@ export default function InventoryScreen() {
             })}
           </View>
         </View>
+
+        {(() => {
+          const locId = resolveManualShelfId(newName, newCat);
+          const locName = locId ? placeNames[locId] : null;
+          if (!locName) return null;
+          return (
+            <View className="flex-row items-center gap-1.5 rounded-md bg-secondary-tint px-3 py-2">
+              <MaterialCommunityIcons
+                name="map-marker-outline"
+                size={16}
+                color={COLORS.secondaryDark}
+              />
+              <Text
+                variant="micro"
+                className="font-bold"
+                style={{ color: COLORS.secondaryDark }}
+              >
+                Auto-filing to {locName}
+              </Text>
+            </View>
+          );
+        })()}
 
         <Button
           label="Add to inventory"
