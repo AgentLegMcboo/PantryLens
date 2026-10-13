@@ -1,14 +1,14 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
-import { Alert, Modal, Pressable, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
-import { cueTap } from '../lib/feedback';
-import { usePantryStore } from '../lib/store';
-import { offlineQueue } from '../lib/offline-queue';
-import { useAccessibilityStore } from '../lib/accessibility';
-import { Text } from './ui/text';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useState, useEffect } from "react";
+import { Alert, Modal, Pressable, View, Platform } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { COLORS } from "../constants/theme";
+import { cueTap } from "../lib/feedback";
+import { usePantryStore } from "../lib/store";
+import { offlineQueue } from "../lib/offline-queue";
+import { useAccessibilityStore } from "../lib/accessibility";
+import { Text } from "./ui/text";
 
 /**
  * The app's top bar.
@@ -19,9 +19,18 @@ export function AppHeader({ title }: { title: string }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
-  const toggleSeniorMode = useAccessibilityStore((state) => state.toggleSeniorMode);
+  const toggleSeniorMode = useAccessibilityStore(
+    (state) => state.toggleSeniorMode,
+  );
 
-  const { settings, inventory, signOut, pantries, switchPantry, setAddingPantry } = usePantryStore();
+  const {
+    settings,
+    inventory,
+    signOut,
+    pantries,
+    switchPantry,
+    setAddingPantry,
+  } = usePantryStore();
   const [switchOpen, setSwitchOpen] = useState(false);
 
   useEffect(() => {
@@ -43,10 +52,14 @@ export function AppHeader({ title }: { title: string }) {
 
   const handleSignOut = () => {
     close();
-    Alert.alert('Sign out?', 'You will need to sign in again to reach this pantry.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
-    ]);
+    Alert.alert(
+      "Sign out?",
+      "You will need to sign in again to reach this pantry.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Sign out", style: "destructive", onPress: () => signOut() },
+      ],
+    );
   };
 
   return (
@@ -56,16 +69,24 @@ export function AppHeader({ title }: { title: string }) {
           onPress={() => {
             offlineQueue.processQueue().then((res) => {
               if (res.processed > 0) {
-                Alert.alert('Sync Complete', `Uploaded ${res.processed} offline change(s).`);
+                Alert.alert(
+                  "Sync Complete",
+                  `Uploaded ${res.processed} offline change(s).`,
+                );
               }
             });
           }}
           className="mx-gutter mt-2 flex-row items-center justify-between rounded-lg border border-amber-300 bg-amber-50 px-3 py-2"
         >
           <View className="flex-row items-center gap-2">
-            <MaterialCommunityIcons name="cloud-sync-outline" size={18} color="#904C00" />
+            <MaterialCommunityIcons
+              name="cloud-sync-outline"
+              size={18}
+              color="#904C00"
+            />
             <Text className="text-xs font-semibold text-amber-900">
-              Offline: {pendingCount} change{pendingCount === 1 ? '' : 's'} waiting to sync
+              Offline: {pendingCount} change{pendingCount === 1 ? "" : "s"}{" "}
+              waiting to sync
             </Text>
           </View>
           <Text className="text-xs font-bold text-amber-800">Sync now →</Text>
@@ -83,27 +104,39 @@ export function AppHeader({ title }: { title: string }) {
             setMenuOpen(true);
           }}
           accessibilityRole="button"
-          accessibilityLabel={`${settings.pantryName || 'PantryLens'}, ${title}. Opens pantry menu.`}
+          accessibilityLabel={`${settings.pantryName || "PantryLens"}, ${title}. Opens pantry menu.`}
           className="mr-auto flex-1 flex-row items-center gap-2.5 py-1.5"
         >
           <View className="h-10 w-10 items-center justify-center rounded-lg bg-brand">
             <Text variant="body" tone="on" className="font-bold text-base">
-              {(settings.pantryName || 'P').trim().charAt(0).toUpperCase()}
+              {(settings.pantryName || "P").trim().charAt(0).toUpperCase()}
             </Text>
           </View>
           <View className="flex-1 gap-0.5">
             <Text variant="micro" tone="soft" className="font-medium">
               {title}
             </Text>
-            <Text variant="body" numberOfLines={1} className="font-bold text-base">
-              {settings.pantryName || 'PantryLens'}
+            <Text
+              variant="body"
+              numberOfLines={1}
+              className="font-bold text-base"
+            >
+              {settings.pantryName || "PantryLens"}
             </Text>
           </View>
         </Pressable>
 
         <HeaderButton
-          icon={seniorMode ? 'format-font-size-decrease' : 'format-font-size-increase'}
-          label={seniorMode ? 'Switch to standard font' : 'Switch to large text for seniors'}
+          icon={
+            seniorMode
+              ? "format-font-size-decrease"
+              : "format-font-size-increase"
+          }
+          label={
+            seniorMode
+              ? "Switch to standard font"
+              : "Switch to large text for seniors"
+          }
           onPress={() => {
             cueTap();
             toggleSeniorMode();
@@ -113,23 +146,36 @@ export function AppHeader({ title }: { title: string }) {
           icon="bell-outline"
           label="Expiring soon"
           badge={expiringCount}
-          onPress={() => router.push('/expiring-soon')}
+          onPress={() => router.push("/expiring-soon")}
         />
-        <HeaderButton icon="dots-vertical" label="More" onPress={() => setMenuOpen(true)} />
+        <HeaderButton
+          icon="dots-vertical"
+          label="More"
+          onPress={() => setMenuOpen(true)}
+        />
       </View>
 
       {/* A sheet rather than a floating popover: anchoring a menu under an icon
           means measuring the icon, and a bottom sheet is easier to hit with a
           thumb anyway. */}
-      <Modal visible={menuOpen} transparent animationType="fade" onRequestClose={close}>
+      <Modal
+        visible={menuOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={close}
+      >
         <Pressable className="flex-1 justify-end bg-black/40" onPress={close}>
-          <Pressable className="rounded-t-xl bg-canvas px-gutter pb-10 pt-4" onPress={() => {}}>
-            <View className="mb-4 h-1.5 w-12 self-center rounded-md bg-hairline" />
+          <Pressable
+            className="rounded-t-xl bg-canvas px-gutter pt-2.5"
+            style={{ paddingBottom: Math.max(insets.bottom, 12) + 4 }}
+            onPress={() => {}}
+          >
+            <View className="mb-1.5 h-1.5 w-12 self-center rounded-md bg-hairline" />
 
             <MenuRow
               icon="format-size"
-              label={seniorMode ? 'Senior Mode: Active' : 'Senior Mode: Off'}
-              hint="Tap to toggle large text & high contrast"
+              label={seniorMode ? "Senior Mode: Active" : "Senior Mode: Off"}
+              hint="Large text and high contrast"
               onPress={() => {
                 cueTap();
                 toggleSeniorMode();
@@ -138,19 +184,19 @@ export function AppHeader({ title }: { title: string }) {
             <MenuRow
               icon="chart-box-outline"
               label="Reports"
-              hint="Food given out, food wasted, and CSV export"
+              hint="Given out, wasted, CSV export"
               onPress={() => {
                 close();
-                router.push('/reports');
+                router.push("/reports");
               }}
             />
             <MenuRow
               icon="cog-outline"
               label="Pantry settings"
-              hint="Box rules, thresholds, feel & sound"
+              hint="Box rules, thresholds, sound"
               onPress={() => {
                 close();
-                router.push('/(tabs)/settings');
+                router.push("/(tabs)/settings");
               }}
             />
             <MenuRow
@@ -158,8 +204,8 @@ export function AppHeader({ title }: { title: string }) {
               label="Switch pantry"
               hint={
                 pantries.length > 1
-                  ? `${pantries.length} pantries · now in ${settings.pantryName || 'this one'}`
-                  : 'You belong to one pantry'
+                  ? `${pantries.length} pantries`
+                  : "You're in one pantry"
               }
               onPress={
                 pantries.length > 1
@@ -185,18 +231,21 @@ export function AppHeader({ title }: { title: string }) {
                       close();
                       switchPantry(p.id);
                     }}
-                    className="ml-[52px] flex-row items-center gap-3 py-2.5"
+                    className="ml-[52px] flex-row items-center gap-3 py-2"
                   >
                     <MaterialCommunityIcons
-                      name={current ? 'check-circle' : 'circle-outline'}
+                      name={current ? "check-circle" : "circle-outline"}
                       size={20}
                       color={current ? COLORS.primary : COLORS.borderStrong}
                     />
                     <View className="flex-1">
-                      <Text variant="body" className={current ? 'font-bold' : 'font-semibold'}>
+                      <Text
+                        variant="heading"
+                        className={current ? "font-bold" : "font-semibold"}
+                      >
                         {p.name}
                       </Text>
-                      <Text variant="micro" tone="soft" className="capitalize">
+                      <Text variant="label" tone="soft" className="capitalize">
                         {p.role}
                       </Text>
                     </View>
@@ -206,23 +255,28 @@ export function AppHeader({ title }: { title: string }) {
             <MenuRow
               icon="plus-circle-outline"
               label="Add or create pantry"
-              hint="Join one with a code, or start a new one"
+              hint="Join with a code or start one"
               onPress={() => {
                 close();
                 setAddingPantry(true);
-                router.push('/pantry-selection');
+                router.push("/pantry-selection");
               }}
             />
             <MenuRow
               icon="account-multiple-outline"
               label="Team"
-              hint={`People in ${settings.pantryName || 'this pantry'} and what they've done`}
+              hint="Members and their activity"
               onPress={() => {
                 close();
-                router.push('/team');
+                router.push("/team");
               }}
             />
-            <MenuRow icon="logout" label="Sign out" tone="critical" onPress={handleSignOut} />
+            <MenuRow
+              icon="logout"
+              label="Sign out"
+              tone="critical"
+              onPress={handleSignOut}
+            />
           </Pressable>
         </Pressable>
       </Modal>
@@ -251,11 +305,15 @@ function HeaderButton({
       }}
       className="h-12 w-12 items-center justify-center rounded-lg bg-card border border-hairline/70"
     >
-      <MaterialCommunityIcons name={icon} size={22} color={COLORS.textPrimary} />
+      <MaterialCommunityIcons
+        name={icon}
+        size={22}
+        color={COLORS.textPrimary}
+      />
       {!!badge && badge > 0 && (
         <View className="absolute -right-1 -top-1 min-w-[20px] items-center justify-center rounded-md bg-warn px-1.5 py-0.5">
           <Text variant="micro" tone="on" className="text-[11px] font-bold">
-            {badge > 99 ? '99+' : badge}
+            {badge > 99 ? "99+" : badge}
           </Text>
         </View>
       )}
@@ -273,40 +331,48 @@ function MenuRow({
   icon: keyof typeof MaterialCommunityIcons.glyphMap;
   label: string;
   hint?: string;
-  tone?: 'critical';
+  tone?: "critical";
   onPress?: () => void;
 }) {
-  const colour = tone === 'critical' ? COLORS.statusCritical : COLORS.textPrimary;
+  const colour =
+    tone === "critical" ? COLORS.statusCritical : COLORS.textPrimary;
   return (
     <Pressable
       disabled={!onPress}
       onPress={onPress}
-      className="flex-row items-center gap-3 py-3.5"
-      accessibilityRole={onPress ? 'button' : undefined}
+      className="flex-row items-center gap-3 py-2"
+      accessibilityRole={onPress ? "button" : undefined}
     >
       <View
         className={`h-10 w-10 items-center justify-center rounded-lg ${
-          tone === 'critical' ? 'bg-subtle' : 'bg-secondary-tint'
+          tone === "critical" ? "bg-subtle" : "bg-secondary-tint"
         }`}
       >
         <MaterialCommunityIcons
           name={icon}
           size={20}
-          color={tone === 'critical' ? colour : COLORS.secondaryDark}
+          color={tone === "critical" ? colour : COLORS.secondaryDark}
         />
       </View>
       <View className="flex-1">
-        <Text variant="body" style={{ color: colour }} className="font-semibold text-base">
+        <Text
+          variant="heading"
+          style={{ color: colour }}
+        >
           {label}
         </Text>
         {hint ? (
-          <Text variant="micro" tone="soft" className="mt-0.5 text-xs">
+          <Text variant="label" tone="soft" numberOfLines={1}>
             {hint}
           </Text>
         ) : null}
       </View>
       {onPress ? (
-        <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
+        <MaterialCommunityIcons
+          name="chevron-right"
+          size={20}
+          color={COLORS.textSecondary}
+        />
       ) : null}
     </Pressable>
   );
@@ -325,15 +391,23 @@ export function StackHeader({
   title,
   onBack,
   right,
+  modal,
 }: {
   title: string;
   onBack: () => void;
   right?: React.ReactNode;
+  /** Presented as a sheet — on iOS that already starts below the status bar. */
+  modal?: boolean;
 }) {
   const insets = useSafeAreaInsets();
 
   return (
-    <View style={{ paddingTop: insets.top }} className="bg-canvas">
+    <View
+      // An iOS sheet sits below the status bar already; adding the inset again
+      // left a tall empty band above the title.
+      style={{ paddingTop: modal && Platform.OS === "ios" ? 8 : insets.top }}
+      className="bg-canvas"
+    >
       <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
         <Pressable
           accessibilityRole="button"
@@ -344,7 +418,11 @@ export function StackHeader({
           }}
           className="h-12 w-12 items-center justify-center rounded-lg border border-hairline bg-card"
         >
-          <MaterialCommunityIcons name="chevron-left" size={26} color={COLORS.textPrimary} />
+          <MaterialCommunityIcons
+            name="chevron-left"
+            size={26}
+            color={COLORS.textPrimary}
+          />
         </Pressable>
 
         <Text

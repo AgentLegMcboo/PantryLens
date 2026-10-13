@@ -79,7 +79,7 @@ export default function DashboardScreen() {
   }, [givable, thresholds]);
 
   return (
-    <Screen contentContainerClassName="gap-5 pb-16">
+    <Screen contentContainerClassName="gap-5">
       {/* 1. Header: Food Bank Identity & Volunteer Greeting */}
       <View className="gap-1.5 pt-1">
 

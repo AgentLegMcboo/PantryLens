@@ -116,9 +116,9 @@ export function AuthLayout({
           className="gap-5"
           style={{
             shadowColor: "#2B2420",
-            shadowOpacity: 0.1,
-            shadowRadius: 18,
-            shadowOffset: { width: 0, height: 14 },
+            shadowOpacity: 0.15,
+            shadowRadius: 10,
+            shadowOffset: { width: 0, height: 1 },
             elevation: 2,
           }}
         >

@@ -845,7 +845,7 @@ export default function InventoryScreen() {
         stickySectionHeadersEnabled={dGroup !== "none"}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        contentContainerClassName="px-gutter pt-4 pb-28"
+        contentContainerClassName="px-gutter pt-4 pb-6"
         renderSectionHeader={({ section }) => {
           if (dGroup === "none" || picking) return null;
           const isCollapsed = !!collapsed[section.id];

@@ -12,7 +12,6 @@ import {
   CategoryIcon,
   Chip,
   Input,
-  Panel,
   Section,
   Stepper,
   Text,
@@ -112,11 +111,8 @@ export default function BulkIntakeScreen() {
   return (
     <KeyboardScreen>
       <FadeInUp index={0}>
-        <Card>
-          <CardHeader
-            title="What did you weigh?"
-            subtitle="One weigh-in per category, the same way you sort into bins."
-          />
+        <Card className="p-4">
+          <CardHeader title="What did you weigh?" className="mb-3" />
           <View className="flex-row flex-wrap gap-2">
             {CATEGORIES.map(cat => (
               <Chip
@@ -134,7 +130,7 @@ export default function BulkIntakeScreen() {
       </FadeInUp>
 
       <FadeInUp index={1}>
-        <Card className="gap-5">
+        <Card className="gap-3 p-4">
           <View className="gap-2">
             <Text variant="label" tone="soft" className="font-semibold">
               Weight at the scale
@@ -154,7 +150,11 @@ export default function BulkIntakeScreen() {
                 keyboardType="decimal-pad"
                 placeholder="0"
                 placeholderTextColor={COLORS.borderStrong}
-                className={`h-16 flex-1 rounded-md border-[1.5px] bg-card px-4 text-[34px] font-bold text-ink ${
+                // An explicit line box and no vertical padding: a fixed-height
+                // field with 34px type and the platform's default padding
+                // clipped the tops and bottoms of the digits.
+                style={{ fontSize: 34, lineHeight: 42, paddingVertical: 0, textAlignVertical: 'center' }}
+                className={`min-h-[64px] flex-1 rounded-md border-[1.5px] bg-card px-4 py-2 font-bold text-ink ${
                   weightFocused ? 'border-brand' : 'border-outline'
                 }`}
               />
@@ -164,7 +164,7 @@ export default function BulkIntakeScreen() {
             </View>
           </View>
 
-          <View className="flex-row items-center gap-3 pt-5" style={RULE_ABOVE}>
+          <View className="flex-row items-center gap-3 pt-3" style={RULE_ABOVE}>
             <View className="flex-1">
               <Text variant="body" className="font-semibold">
                 Estimated units
@@ -178,22 +178,15 @@ export default function BulkIntakeScreen() {
             <Stepper value={estUnits} min={0} onChange={setUnitOverride} />
           </View>
 
-          <Panel className="flex-row gap-3">
-            <MaterialCommunityIcons
-              name="information-outline"
-              size={18}
-              color={COLORS.textSecondary}
-            />
-            <Text variant="micro" tone="soft" className="flex-1">
-              The weight is what gets recorded. The unit count is an estimate so this load still
-              counts toward box building — adjust it if you know better.
-            </Text>
-          </Panel>
+          <Text variant="micro" tone="soft">
+            Weight is what's recorded; units are an estimate for box building — adjust if you
+            know better.
+          </Text>
         </Card>
       </FadeInUp>
 
       <FadeInUp index={2}>
-        <Card className="gap-5">
+        <Card className="gap-4 p-4">
           <CardHeader title="Where it came from" className="mb-0" />
 
           <Input
@@ -239,21 +232,6 @@ export default function BulkIntakeScreen() {
 
       <FadeInUp index={3}>
         <View className="gap-3">
-          <Button
-            label={lbs > 0 ? `Save ${lbs} lb of ${category}` : 'Save this lot'}
-            block
-            loading={saving}
-            disabled={!canSave}
-            icon={
-              <MaterialCommunityIcons
-                name="scale-balance"
-                size={19}
-                color={COLORS.textOnPrimary}
-              />
-            }
-            onPress={handleSave}
-          />
-
           {savedCount > 0 && (
             <View className="flex-row items-center justify-center gap-2">
               <MaterialCommunityIcons
@@ -267,15 +245,33 @@ export default function BulkIntakeScreen() {
             </View>
           )}
 
-          <Button
-            label="Done"
-            variant="secondary"
-            block
-            onPress={() => {
-              cueTap();
-              router.back();
-            }}
-          />
+          {/* One row: Done small on the left, Save wide on the right. They were
+              two full-width, heavily rounded slabs stacked on top of each other. */}
+          <View className="flex-row gap-2.5">
+            <Button
+              label="Done"
+              variant="secondary"
+              className="flex-1 rounded-md"
+              onPress={() => {
+                cueTap();
+                router.back();
+              }}
+            />
+            <Button
+              label={lbs > 0 ? `Save ${lbs} lb` : 'Save'}
+              className="flex-[2] rounded-md"
+              loading={saving}
+              disabled={!canSave}
+              icon={
+                <MaterialCommunityIcons
+                  name="scale-balance"
+                  size={19}
+                  color={COLORS.textOnPrimary}
+                />
+              }
+              onPress={handleSave}
+            />
+          </View>
         </View>
       </FadeInUp>
 
