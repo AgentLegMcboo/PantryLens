@@ -49,7 +49,9 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
     x.value =
       reduceMotion || itemWidth === 0
         ? target
-        : withSpring(target, { damping: 18, stiffness: 220, mass: 0.8 });
+        : // Critically damped: it arrives and stops. A tab switch is the most
+          // frequent thing anyone does here, so no overshoot to wait out.
+          withSpring(target, { dampingRatio: 1, duration: 250 });
   }, [activeIndex, itemWidth, reduceMotion, x]);
 
   const pill = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));

@@ -12,6 +12,7 @@ import {
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, {
   interpolate,
+  ReduceMotion,
   runOnJS,
   useAnimatedScrollHandler,
   useAnimatedStyle,
@@ -26,6 +27,7 @@ import { cn } from '../../lib/cn';
 import { cueTap } from '../../lib/feedback';
 import { DRAG_SLOP, projectDecay, rubberband, SPRING_SHEET } from '../../lib/motion-physics';
 import { Text } from './text';
+import { Tappable } from '../motion';
 
 /**
  * A bottom sheet you can actually grab.
@@ -142,7 +144,15 @@ export function Sheet({
     // exit, then unmount. Spatial consistency — it leaves the way it arrived.
     if (mounted) {
       if (reduceMotion) {
-        setMounted(false);
+        // A quick fade out rather than vanishing: the sheet's reduced-motion
+        // style turns this travel into opacity.
+        translateY.value = withTiming(
+          height.value,
+          { duration: 150, reduceMotion: ReduceMotion.Never },
+          finished => {
+            if (finished) runOnJS(setMounted)(false);
+          },
+        );
         return;
       }
       translateY.value = withSpring(height.value, SPRING_SHEET, finished => {
@@ -160,7 +170,12 @@ export function Sheet({
     if (!visible) return;
     if (first || translateY.value >= measured) {
       translateY.value = measured;
-      translateY.value = reduceMotion ? withTiming(0, { duration: 1 }) : withSpring(0, SPRING_SHEET);
+      // Under reduced motion this travel only drives opacity (see sheetStyle),
+      // so it is a 200ms fade in — forced to run, since Reanimated's default
+      // would snap it and the sheet would pop up instead.
+      translateY.value = reduceMotion
+        ? withTiming(0, { duration: 200, reduceMotion: ReduceMotion.Never })
+        : withSpring(0, SPRING_SHEET);
     }
   };
 
@@ -295,14 +310,14 @@ export function Sheet({
                     </Text>
                   ) : null}
                 </View>
-                <Pressable
+                <Tappable
                   onPress={onClose}
                   hitSlop={10}
                   accessibilityLabel="Close"
                   className="h-9 w-9 items-center justify-center rounded-lg bg-subtle"
                 >
                   <MaterialCommunityIcons name="close" size={18} color={COLORS.textPrimary} />
-                </Pressable>
+                </Tappable>
               </View>
 
               <Animated.ScrollView

@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { Button, Chip, Input, Row, Sheet, Text } from './ui';
 import { BoxRules, usePantryStore } from '../lib/store';
+import { Tappable } from './motion';
 
 /**
  * Adding, naming and stocking the places in a pantry.
@@ -109,7 +110,7 @@ export function PlacesManager() {
             onSubmitEditing={handleAdd}
           />
         </View>
-        <Pressable
+        <Tappable
           onPress={handleAdd}
           accessibilityLabel="Add this place"
           disabled={!newLocation.trim()}
@@ -118,7 +119,7 @@ export function PlacesManager() {
           }`}
         >
           <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
-        </Pressable>
+        </Tappable>
       </View>
 
       <Sheet

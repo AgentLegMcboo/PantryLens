@@ -13,7 +13,9 @@ import {
 import Animated, {
   Easing,
   interpolateColor,
+  ReduceMotion,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -211,9 +213,11 @@ function PhaseTint({ page }: { page: number }) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
+    // A colour cross-fade, not movement, so it plays with reduced motion too.
     progress.value = withTiming(page, {
       duration: 420,
       easing: Easing.out(Easing.quad),
+      reduceMotion: ReduceMotion.Never,
     });
   }, [page, progress]);
 
@@ -230,17 +234,21 @@ function PhaseTint({ page }: { page: number }) {
 
 function Dot({ active }: { active: boolean }) {
   const progress = useSharedValue(active ? 1 : 0);
+  const reduceMotion = useReducedMotion();
 
   // Written in an effect, not during render — Reanimated warns about the latter.
   useEffect(() => {
     progress.value = withTiming(active ? 1 : 0, {
       duration: 280,
       easing: Easing.bezier(0.16, 1, 0.3, 1),
+      reduceMotion: ReduceMotion.Never,
     });
   }, [active, progress]);
 
+  // With reduced motion the dot doesn't stretch; it takes its size at once and
+  // only the brightness fades.
   const style = useAnimatedStyle(() => ({
-    width: 7 + progress.value * 19,
+    width: reduceMotion ? (active ? 26 : 7) : 7 + progress.value * 19,
     opacity: 0.3 + progress.value * 0.7,
   }));
 

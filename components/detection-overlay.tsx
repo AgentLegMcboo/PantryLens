@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Image, LayoutChangeEvent, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import Animated, {
-  type SharedValue,
   Easing,
   interpolate,
   runOnJS,
+  type SharedValue,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
@@ -137,6 +138,7 @@ function EditableBox({
   const w = useSharedValue(box.width * frame.width);
   const h = useSharedValue(box.height * frame.height);
   const glow = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
 
   // Re-seeded when the frame is measured, or when the parent moves the box for
   // some other reason. Without this a layout change strands the box off-screen.
@@ -153,12 +155,18 @@ function EditableBox({
       glow.value = withTiming(0, { duration: 260 });
       return;
     }
+    // Reduced motion: a steady bright halo instead of a breathing one. The
+    // colour still says "needs checking"; it just doesn't pulse.
+    if (reduceMotion) {
+      glow.value = 1;
+      return;
+    }
     glow.value = withRepeat(
       withTiming(1, { duration: 1400, easing: Easing.inOut(Easing.quad) }),
       -1,
       true,
     );
-  }, [item.verified, glow]);
+  }, [item.verified, glow, reduceMotion]);
 
   const commit = () => {
     onCommit(toFractions({ x: x.value, y: y.value, w: w.value, h: h.value }, frame));
@@ -198,7 +206,7 @@ function EditableBox({
 
   const haloStyle = useAnimatedStyle(() => ({
     opacity: item.verified ? 0 : interpolate(glow.value, [0, 1], [0.25, 0.75]),
-    transform: [{ scale: interpolate(glow.value, [0, 1], [1, 1.045]) }],
+    transform: reduceMotion ? [] : [{ scale: interpolate(glow.value, [0, 1], [1, 1.045]) }],
   }));
 
   const accent = item.verified

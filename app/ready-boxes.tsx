@@ -1,10 +1,10 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { COLORS } from "../constants/theme";
 import { FolderChips, FolderManager } from "../components/box-folders";
-import { FadeInUp, ProgressBar } from "../components/motion";
+import { FadeInUp, ProgressBar, Tappable } from "../components/motion";
 import {
   Button,
   Card,
@@ -225,7 +225,7 @@ export default function ReadyBoxesScreen() {
             </Text>
           </View>
 
-          <Pressable
+          <Tappable
             onPress={() => {
               cueTap();
               setEditing({
@@ -244,7 +244,7 @@ export default function ReadyBoxesScreen() {
               size={17}
               color={COLORS.secondaryDark}
             />
-          </Pressable>
+          </Tappable>
         </View>
 
         <View className="gap-1.5">
@@ -314,7 +314,7 @@ export default function ReadyBoxesScreen() {
               <Text variant="headline" className="flex-1">
                 {waiting} {waiting === 1 ? "box" : "boxes"} ready to go
               </Text>
-              <Pressable
+              <Tappable
                 onPress={() => {
                   cueTap();
                   setFoldersOpen(true);
@@ -331,7 +331,7 @@ export default function ReadyBoxesScreen() {
                 <Text variant="micro" tone="brand" className="font-bold">
                   Folders
                 </Text>
-              </Pressable>
+              </Tappable>
             </View>
             <Text variant="body" tone="soft" className="mt-1">
               Tap “Hand out 1” as each family collects a box. Use the pencil to
@@ -346,7 +346,7 @@ export default function ReadyBoxesScreen() {
               <View className="gap-gap">{section.runs.map(renderRun)}</View>
             ) : (
               <View className="gap-3">
-                <Pressable
+                <Tappable
                   onPress={() => {
                     cueTap();
                     setCollapsed((prev) => ({
@@ -381,7 +381,7 @@ export default function ReadyBoxesScreen() {
                   <Text variant="micro" tone="soft" className="font-semibold">
                     {section.runs.reduce((sum, r) => sum + leftIn(r), 0)} left
                   </Text>
-                </Pressable>
+                </Tappable>
                 {!collapsed[section.id] && (
                   <View className="gap-gap">{section.runs.map(renderRun)}</View>
                 )}

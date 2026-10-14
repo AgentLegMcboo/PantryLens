@@ -85,27 +85,6 @@ export const FONTS = {
 } as const;
 
 /**
- * The shared card treatment for screens still written in StyleSheet.
- *
- * Mirrors `cardShadow` + the border in components/ui/card.tsx so a screen that
- * has not been ported does not look like it came from a different app. A
- * visible warm edge does the defining; the shadow only lifts the card slightly
- * off the page — white on cream is 1.08:1, so an edge is the only thing that
- * can actually delineate one.
- */
-export const CARD_ELEVATION = {
-  borderWidth: 1,
-  // Match the shared card's light outline.
-  borderBottomWidth: 1,
-  borderColor: COLORS.borderSoft,
-  shadowColor: COLORS.shadow,
-  shadowOpacity: 0.07,
-  shadowRadius: 8,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 2,
-} as const;
-
-/**
  * One-sided rules, as style objects.
  *
  * The className pairs (`border-b border-hairline`, `border-t border-hairline`)

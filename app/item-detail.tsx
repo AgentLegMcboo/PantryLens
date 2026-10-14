@@ -2,10 +2,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import { KeyboardScreen } from '../components/keyboard-screen';
-import { FadeInUp } from '../components/motion';
+import { FadeInUp, Tappable } from '../components/motion';
 import {
   Button,
   Card,
@@ -228,7 +228,7 @@ export default function ItemDetailScreen() {
       <FadeInUp index={0}>
         <Card className="gap-5">
           <View className="flex-row items-center gap-4">
-            <Pressable
+            <Tappable
               onPress={handlePhotoPress}
               disabled={photoBusy}
               accessibilityLabel={item.image_url ? 'Change the photo' : 'Add a photo'}
@@ -252,7 +252,7 @@ export default function ItemDetailScreen() {
                   />
                 )}
               </View>
-            </Pressable>
+            </Tappable>
             <View className="flex-1">
               <Input
                 label="What is it?"

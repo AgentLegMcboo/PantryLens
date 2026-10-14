@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert, Pressable, ScrollView, View } from 'react-native';
+import { Alert, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BrandMark } from '../components/brand-mark';
 import { Button, Card, Input, Segmented, Text } from '../components/ui';
@@ -10,6 +10,7 @@ import { COLORS, RULE_BELOW_FAINT } from '../constants/theme';
 import { cueSuccess } from '../lib/feedback';
 import { ACTIVE_PANTRY_KEY, usePantryStore } from '../lib/store';
 import { supabase } from '../lib/supabase';
+import { Tappable } from '../components/motion';
 
 export default function PantrySelectionScreen() {
   const router = useRouter();
@@ -97,7 +98,7 @@ export default function PantrySelectionScreen() {
         {/* Back only when adding another pantry. Someone with no pantry yet
             has nowhere to go back to — the root gate keeps them here. */}
         {adding ? (
-          <Pressable
+          <Tappable
             accessibilityRole="button"
             accessibilityLabel="Back to your pantry"
             onPress={() => {
@@ -111,12 +112,12 @@ export default function PantrySelectionScreen() {
             <Text variant="body" className="font-semibold">
               Back
             </Text>
-          </Pressable>
+          </Tappable>
         ) : (
           <BrandMark />
         )}
 
-        <Pressable
+        <Tappable
           accessibilityRole="button"
           accessibilityLabel="Sign out"
           onPress={() => {
@@ -130,7 +131,7 @@ export default function PantrySelectionScreen() {
           <Text variant="label" tone="critical" className="font-medium text-sm">
             Sign out
           </Text>
-        </Pressable>
+        </Tappable>
       </View>
 
       <ScrollView

@@ -1,10 +1,11 @@
 import * as React from 'react';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { Pressable, View, type PressableProps } from 'react-native';
+import { View, type PressableProps, type StyleProp, type ViewStyle } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
 import { cueTap } from '../../lib/feedback';
+import { Tappable } from '../motion';
 
 /**
  * Selectable pill — category filters, family sizes, condition, source.
@@ -20,14 +21,15 @@ export function Chip({
   className,
   onPress,
   ...props
-}: Omit<PressableProps, 'children'> & {
+}: Omit<PressableProps, 'children' | 'style'> & {
+  style?: StyleProp<ViewStyle>;
   label: string;
   selected?: boolean;
   /** Fill when selected: terracotta by default, or the green secondary. */
   tone?: 'brand' | 'secondary';
 }) {
   return (
-    <Pressable
+    <Tappable
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
       onPress={(e) => {
@@ -48,7 +50,7 @@ export function Chip({
       <Text variant="label" tone={selected ? 'on' : 'soft'} className="font-semibold text-sm">
         {label}
       </Text>
-    </Pressable>
+    </Tappable>
   );
 }
 

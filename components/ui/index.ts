@@ -1,5 +1,5 @@
 export { Text } from './text';
-export { Card, CardHeader, Panel, cardShadow } from './card';
+export { Card, CardHeader, Panel, cardRing, cardShadow, cardSurface } from './card';
 export { Button } from './button';
 export { Screen, Section } from './screen';
 export { Chip, Badge } from './chip';
@@ -9,4 +9,4 @@ export { Input } from './input';
 export { EmptyState } from './empty-state';
 export { Row, Toggle } from './row';
 export { Segmented } from './segmented';
-export { CategoryIcon, ItemThumb, CATEGORY_ICONS, categoryIcon } from './category-icon';
+export { CategoryIcon, ItemThumb, ImageEdge, CATEGORY_ICONS, categoryIcon } from './category-icon';

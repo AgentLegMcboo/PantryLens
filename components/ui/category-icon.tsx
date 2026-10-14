@@ -121,13 +121,43 @@ export function ItemThumb({
   }
 
   return (
-    <Image
-      source={{ uri: imageUrl }}
-      accessibilityIgnoresInvertColors
-      resizeMode="cover"
-      // The subtle fill shows through while a remote pack shot loads, so the row
-      // does not jump from empty space to picture.
-      className={cn('rounded-md bg-subtle', SIZES[size].box, className)}
+    <View className={cn('rounded-md', SIZES[size].box, className)}>
+      <Image
+        source={{ uri: imageUrl }}
+        accessibilityIgnoresInvertColors
+        resizeMode="cover"
+        // The subtle fill shows through while a remote pack shot loads, so the
+        // row does not jump from empty space to picture.
+        className="h-full w-full rounded-md bg-subtle"
+      />
+      <ImageEdge radius={8} />
+    </View>
+  );
+}
+
+/**
+ * A hairline drawn just inside a photo's edge.
+ *
+ * Pack shots are mostly white, and on a white card the picture had no edge at
+ * all. Pure black at 10% rather than a palette colour, because a tinted line
+ * shows as a coloured fringe on the image. An overlay, not a border, so the
+ * photo keeps its full size. Put it last inside a box the same size as the
+ * image, with the image's corner radius.
+ */
+export function ImageEdge({ radius }: { radius: number }) {
+  return (
+    <View
+      pointerEvents="none"
+      style={{
+        position: 'absolute',
+        top: 0,
+        right: 0,
+        bottom: 0,
+        left: 0,
+        borderRadius: radius,
+        borderWidth: 1,
+        borderColor: 'rgba(0, 0, 0, 0.1)',
+      }}
     />
   );
 }

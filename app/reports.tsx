@@ -1,13 +1,13 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { COLORS, RULE_ABOVE, RULE_BELOW } from "../constants/theme";
 import {
   ExitChart,
   GIVEN_COLOUR,
   WASTED_COLOUR,
 } from "../components/exit-chart";
-import { AnimatedCounter, FadeInUp } from "../components/motion";
+import { AnimatedCounter, FadeInUp, Tappable } from "../components/motion";
 import { categoryIcon } from "../components/ui/category-icon";
 import { Card, EmptyState, Screen, Segmented, Text } from "../components/ui";
 import { cueTap } from "../lib/feedback";
@@ -368,7 +368,7 @@ export default function ReportsScreen() {
                   ))}
                 </View>
                 {byCategory.length > 5 && (
-                  <Pressable
+                  <Tappable
                     onPress={() => setShowAllCategories((open) => !open)}
                     className="mt-3 self-start py-1"
                   >
@@ -377,7 +377,7 @@ export default function ReportsScreen() {
                         ? "Show fewer"
                         : `Show all ${byCategory.length}`}
                     </Text>
-                  </Pressable>
+                  </Tappable>
                 )}
               </Card>
             </FadeInUp>
@@ -447,14 +447,14 @@ export default function ReportsScreen() {
             {exports.map((x) => {
               const off = busy || x.disabled;
               return (
-                <Pressable
+                <Tappable
                   key={x.key}
                   onPress={off ? undefined : x.run}
                   disabled={off}
                   accessibilityRole="button"
                   accessibilityState={{ disabled: off }}
                   className="w-[48.5%] flex-row items-center gap-2 rounded-md bg-subtle px-3 py-3"
-                  style={{ opacity: off ? 0.45 : 1 }}
+                  style={{ opacity: off ? 0.4 : 1 }}
                 >
                   <MaterialCommunityIcons
                     name={x.icon}
@@ -468,7 +468,7 @@ export default function ReportsScreen() {
                   >
                     {x.label}
                   </Text>
-                </Pressable>
+                </Tappable>
               );
             })}
           </View>

@@ -1,9 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { COLORS, RULE_BELOW } from '../constants/theme';
 import { type BoxFolderKind, usePantryStore } from '../lib/store';
 import { Button, Chip, Input, Row, Text } from './ui';
+import { Tappable } from './motion';
 
 /**
  * Folders for boxes: choosing one, and managing them.
@@ -73,7 +74,7 @@ function AddFolderField({
           onSubmitEditing={add}
         />
       </View>
-      <Pressable
+      <Tappable
         onPress={add}
         disabled={!name.trim() || busy}
         accessibilityRole="button"
@@ -83,16 +84,16 @@ function AddFolderField({
         }`}
       >
         <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
-      </Pressable>
+      </Tappable>
       {onCancel ? (
-        <Pressable
+        <Tappable
           onPress={onCancel}
           accessibilityRole="button"
           accessibilityLabel="Cancel"
           className="h-12 w-12 items-center justify-center rounded-md bg-subtle"
         >
           <MaterialCommunityIcons name="close" size={20} color={COLORS.textPrimary} />
-        </Pressable>
+        </Tappable>
       ) : null}
     </View>
   );

@@ -1,6 +1,17 @@
+import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { NavigationContext } from 'expo-router/react-navigation';
-import { Image, Pressable, PressableProps, StyleSheet, Text, TextStyle, View, ViewStyle } from 'react-native';
+import {
+  Image,
+  Pressable,
+  PressableProps,
+  StyleProp,
+  StyleSheet,
+  Text,
+  TextStyle,
+  View,
+  ViewStyle,
+} from 'react-native';
 import Animated, {
   Easing,
   interpolate,
@@ -35,6 +46,11 @@ import { SPRING_PRESS } from '../lib/motion-physics';
 
 const EASE_OUT = Easing.bezier(0.16, 1, 0.3, 1);
 
+/** How far a pressed button, chip or tile dips. One value, app-wide. */
+export const PRESS_SCALE = 0.96;
+/** The gentler dip for a full-width row, where 0.96 would read as a lurch. */
+export const PRESS_SCALE_ROW = 0.985;
+
 /**
  * The press response every tappable surface shares.
  *
@@ -50,7 +66,7 @@ const EASE_OUT = Easing.bezier(0.16, 1, 0.3, 1);
  * inside useAnimatedStyle — the earlier version did the latter, which rebuilds
  * the animation on every evaluation instead of running one.
  */
-export function usePressScale(scaleTo = 0.97) {
+export function usePressScale(scaleTo = PRESS_SCALE) {
   const scale = useSharedValue(1);
   const reduceMotion = useReducedMotion();
 
@@ -78,7 +94,7 @@ export function PressableScale({
   children,
   onPress,
   style,
-  scaleTo = 0.97,
+  scaleTo = PRESS_SCALE,
   cue = 'tap',
   disabled,
   ...rest
@@ -106,12 +122,56 @@ export function PressableScale({
   );
 }
 
+// Not registered with cssInterop: like Reanimated's own Animated.View, it hands
+// `className` straight through to the Pressable inside, which NativeWind already
+// knows. Registering it as well resolved the classes twice and lost layout —
+// the header's `flex-1` stopped applying.
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
+/**
+ * A Pressable that dips when pressed — drop it in wherever `<Pressable>` was.
+ *
+ * Most of the app's tappable things answered the finger with a haptic and
+ * nothing the eye could see. Same props and same `className` as Pressable, so
+ * swapping one for the other changes nothing else; only a function `style` is
+ * not supported. Disabled controls never dip.
+ */
+export function Tappable({
+  scaleTo = PRESS_SCALE,
+  style,
+  disabled,
+  onPressIn,
+  onPressOut,
+  ...rest
+}: Omit<PressableProps, 'style'> & {
+  className?: string;
+  style?: StyleProp<ViewStyle>;
+  scaleTo?: number;
+}) {
+  const press = usePressScale(scaleTo);
+  return (
+    <AnimatedPressable
+      {...rest}
+      disabled={disabled}
+      onPressIn={(e) => {
+        if (!disabled) press.onPressIn();
+        onPressIn?.(e);
+      }}
+      onPressOut={(e) => {
+        press.onPressOut();
+        onPressOut?.(e);
+      }}
+      style={[style, press.style]}
+    />
+  );
+}
+
 /** Content that eases up into place. Stagger with `index` for list entrances. */
 export function FadeInUp({
   children,
   index = 0,
-  distance = 14,
-  duration = 420,
+  distance = 12,
+  duration = 300,
   style,
 }: {
   children: React.ReactNode;
@@ -141,10 +201,17 @@ export function FadeInUp({
     (quick = false) => {
       // Cap the stagger so a long list never leaves the last row waiting. With
       // motion reduced the stagger goes too: a cascade is itself movement.
-      const delay = reduceMotion ? 0 : Math.min(index * (quick ? 35 : 55), quick ? 180 : 400);
-      const length = reduceMotion ? 160 : quick ? Math.min(duration, 280) : duration;
+      const delay = reduceMotion ? 0 : Math.min(index * (quick ? 25 : 100), quick ? 100 : 400);
+      const length = reduceMotion ? 160 : quick ? Math.min(duration, 220) : duration;
       if (timer.current) clearTimeout(timer.current);
-      progress.value = withDelay(delay, withTiming(1, { duration: length, easing: EASE_OUT }));
+      // `Never`, because with reduced motion on there is no travel left to
+      // remove — the transform is already gone below — and Reanimated's default
+      // would otherwise snap the fade too, so the content would pop in.
+      progress.value = withDelay(
+        delay,
+        withTiming(1, { duration: length, easing: EASE_OUT, reduceMotion: ReduceMotion.Never }),
+        ReduceMotion.Never,
+      );
       timer.current = setTimeout(() => setSettled(true), delay + length + 60);
     },
     [index, duration, progress, reduceMotion],
@@ -251,6 +318,61 @@ export function AnimatedCounter({
   return <Text style={style}>{display}</Text>;
 }
 
+/**
+ * An icon that cross-fades to another on an occasional state change — copy to
+ * copied, say. The new one grows in from a quarter size as the old one shrinks
+ * out, over 300ms. It starts in its current state without animating, so only a
+ * real change plays. With reduced motion it is the fade alone.
+ *
+ * For occasional swaps only. A tab or a row's icon changes instantly.
+ */
+export function CrossFadeIcon({
+  active,
+  icon,
+  activeIcon,
+  size,
+  color,
+  activeColor = color,
+}: {
+  active: boolean;
+  icon: keyof typeof MaterialCommunityIcons.glyphMap;
+  activeIcon: keyof typeof MaterialCommunityIcons.glyphMap;
+  size: number;
+  color: string;
+  activeColor?: string;
+}) {
+  const p = useSharedValue(active ? 1 : 0);
+  const reduceMotion = useReducedMotion();
+
+  useEffect(() => {
+    p.value = withTiming(active ? 1 : 0, {
+      duration: 300,
+      easing: Easing.bezier(0.2, 0, 0, 1),
+      reduceMotion: ReduceMotion.Never,
+    });
+  }, [active, p]);
+
+  const outgoing = useAnimatedStyle(() => ({
+    opacity: 1 - p.value,
+    transform: reduceMotion ? [] : [{ scale: interpolate(p.value, [0, 1], [1, 0.25]) }],
+  }));
+  const incoming = useAnimatedStyle(() => ({
+    opacity: p.value,
+    transform: reduceMotion ? [] : [{ scale: interpolate(p.value, [0, 1], [0.25, 1]) }],
+  }));
+
+  return (
+    <View style={{ width: size, height: size }}>
+      <Animated.View style={[StyleSheet.absoluteFill, outgoing]}>
+        <MaterialCommunityIcons name={icon} size={size} color={color} />
+      </Animated.View>
+      <Animated.View style={[StyleSheet.absoluteFill, incoming]}>
+        <MaterialCommunityIcons name={activeIcon} size={size} color={activeColor} />
+      </Animated.View>
+    </View>
+  );
+}
+
 /** Slow breathing pulse — for a status that needs attention without nagging. */
 export function Pulse({ children, active = true }: { children: React.ReactNode; active?: boolean }) {
   const pulse = useSharedValue(0);
@@ -291,18 +413,26 @@ export function ProgressBar({
   height?: number;
 }) {
   const width = useSharedValue(0);
+  const fade = useSharedValue(0);
   const reduceMotion = useReducedMotion();
 
   useEffect(() => {
     const target = Math.max(0, Math.min(1, progress));
-    // The bar still fills — a progress bar that appears already full says
-    // nothing — it just stops crawling in from a delay.
-    width.value = reduceMotion
-      ? withTiming(target, { duration: 160 })
-      : withDelay(120, withTiming(target, { duration: 800, easing: EASE_OUT }));
-  }, [progress, width, reduceMotion]);
+    if (reduceMotion) {
+      // No growing bar — that is movement. The fill is set where it belongs
+      // and fades in, which keeps the reading without the travel.
+      width.value = target;
+      fade.value = withTiming(1, { duration: 200, reduceMotion: ReduceMotion.Never });
+      return;
+    }
+    fade.value = 1;
+    width.value = withDelay(120, withTiming(target, { duration: 800, easing: EASE_OUT }));
+  }, [progress, width, fade, reduceMotion]);
 
-  const animatedStyle = useAnimatedStyle(() => ({ width: `${width.value * 100}%` }));
+  const animatedStyle = useAnimatedStyle(() => ({
+    width: `${width.value * 100}%`,
+    opacity: fade.value,
+  }));
 
   return (
     <View style={[styles.progressTrack, { height, borderRadius: height }]}>

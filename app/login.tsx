@@ -1,10 +1,11 @@
 import { Link } from 'expo-router';
 import React, { useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { AuthLayout } from '../components/auth-layout';
 import { Button, Input, Text } from '../components/ui';
 import { OAuthCancelled, signInWithGoogle } from '../lib/auth';
 import { supabase } from '../lib/supabase';
+import { Tappable } from '../components/motion';
 
 export default function LoginScreen() {
   const [email, setEmail] = useState('');
@@ -55,11 +56,11 @@ export default function LoginScreen() {
             New here?
           </Text>
           <Link href="/sign-up" asChild>
-            <Pressable hitSlop={8}>
+            <Tappable hitSlop={8}>
               <Text variant="label" tone="brand" className="font-bold">
                 Create an account
               </Text>
-            </Pressable>
+            </Tappable>
           </Link>
         </>
       }

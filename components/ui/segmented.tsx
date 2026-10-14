@@ -36,7 +36,7 @@ export function Segmented<T extends string | number>({
   className?: string;
 }) {
   return (
-    <View className={cn('flex-row gap-1 rounded-lg bg-subtle p-1', className)}>
+    <View className={cn('flex-row gap-1 rounded-[12px] bg-subtle p-1', className)}>
       {options.map(option => (
         <Tab
           key={String(option.value)}
@@ -68,7 +68,7 @@ function Tab<T extends string | number>({
   disabled?: boolean;
   onPress: () => void;
 }) {
-  const press = usePressScale(0.96);
+  const press = usePressScale();
 
   return (
     <Pressable

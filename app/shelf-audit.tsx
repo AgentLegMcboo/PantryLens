@@ -2,10 +2,10 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useState } from 'react';
-import { Alert, Image, Pressable, View } from 'react-native';
+import { Alert, Image, View } from 'react-native';
 import { COLORS, RULE_BELOW } from '../constants/theme';
-import { FadeInUp } from '../components/motion';
-import { Button, Card, CardHeader, EmptyState, Panel, Row, Screen, Text } from '../components/ui';
+import { FadeInUp, PRESS_SCALE_ROW, Tappable } from '../components/motion';
+import { Button, Card, CardHeader, EmptyState, ImageEdge, Panel, Row, Screen, Text } from '../components/ui';
 import { processImageScan, ScanError } from '../lib/ai_vision';
 import type { CountedRow } from '../lib/audit';
 import { startScan, uploadScanPhotos } from '../lib/scan-history';
@@ -197,7 +197,8 @@ export default function ShelfAuditScreen() {
             const items = inventory.filter(x => x.location_id === place.id);
             const units = items.reduce((sum, x) => sum + x.count, 0);
             return (
-              <Pressable
+              <Tappable
+                scaleTo={PRESS_SCALE_ROW}
                 key={place.id}
                 accessibilityRole="radio"
                 accessibilityState={{ selected: active }}
@@ -231,7 +232,7 @@ export default function ShelfAuditScreen() {
                         }`}
                   </Text>
                 </View>
-              </Pressable>
+              </Tappable>
             );
           })}
         </Card>
@@ -239,7 +240,7 @@ export default function ShelfAuditScreen() {
 
       <FadeInUp index={1}>
         {shots.length === 0 ? (
-          <Pressable onPress={handleTakePhoto}>
+          <Tappable scaleTo={PRESS_SCALE_ROW} onPress={handleTakePhoto}>
             <View className="h-56 items-center justify-center rounded-lg border-2 border-dashed border-brand-light bg-subtle px-8">
               <MaterialCommunityIcons name="camera-outline" size={40} color={COLORS.primaryLight} />
               <Text variant="heading" className="mt-3">
@@ -249,25 +250,26 @@ export default function ShelfAuditScreen() {
                 Overlapping shots — left, middle, right — so nothing between them is missed.
               </Text>
             </View>
-          </Pressable>
+          </Tappable>
         ) : (
           <View className="flex-row flex-wrap gap-3">
             {shots.map((shot, i) => (
               <View key={`${shot.uri}-${i}`} className="aspect-square w-[30%]">
                 <Image source={{ uri: shot.uri }} className="h-full w-full rounded-md bg-muted" />
-                <Pressable
+                <ImageEdge radius={8} />
+                <Tappable
                   onPress={() => removeShot(i)}
                   hitSlop={8}
                   accessibilityLabel={`Remove photo ${i + 1}`}
                   className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-md bg-ink"
                 >
                   <MaterialCommunityIcons name="close" size={14} color={COLORS.textOnPrimary} />
-                </Pressable>
+                </Tappable>
               </View>
             ))}
 
             {!atLimit && (
-              <Pressable
+              <Tappable
                 onPress={handleTakePhoto}
                 accessibilityLabel="Take another photo"
                 className="aspect-square w-[30%] items-center justify-center rounded-md border-2 border-dashed border-brand-light bg-subtle"
@@ -277,7 +279,7 @@ export default function ShelfAuditScreen() {
                   size={24}
                   color={COLORS.primaryLight}
                 />
-              </Pressable>
+              </Tappable>
             )}
           </View>
         )}

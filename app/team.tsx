@@ -1,10 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, RefreshControl, View } from 'react-native';
+import { ActivityIndicator, Alert, RefreshControl, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { COLORS } from '../constants/theme';
-import { FadeInUp } from '../components/motion';
+import { CrossFadeIcon, FadeInUp, Tappable } from '../components/motion';
 import { Badge, Card, CardHeader, EmptyState, Row, Screen, Text } from '../components/ui';
 import { cueSuccess } from '../lib/feedback';
 import {
@@ -122,7 +122,7 @@ export default function TeamScreen() {
                 title="Invite code"
                 subtitle="New volunteers enter this when they sign up. Everyone joins as a volunteer."
               />
-              <Pressable
+              <Tappable
                 onPress={copyInvite}
                 accessibilityRole="button"
                 accessibilityLabel="Copy the invite code"
@@ -131,12 +131,15 @@ export default function TeamScreen() {
                 <Text variant="heading" className="flex-1 font-bold tracking-wider">
                   {settings.inviteCode}
                 </Text>
-                <MaterialCommunityIcons
-                  name={copied ? 'check' : 'content-copy'}
+                <CrossFadeIcon
+                  active={copied}
+                  icon="content-copy"
+                  activeIcon="check"
                   size={20}
-                  color={copied ? COLORS.statusGood : COLORS.primaryDark}
+                  color={COLORS.primaryDark}
+                  activeColor={COLORS.statusGood}
                 />
-              </Pressable>
+              </Tappable>
             </Card>
           </FadeInUp>
         ) : null}

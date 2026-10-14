@@ -12,11 +12,7 @@ import {
 } from "../../lib/diet";
 import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
 import { BoxPicker, type BoxSelection } from "../../components/box-picker";
-import {
-  AnimatedCounter,
-  FadeInUp,
-  ProgressBar,
-} from "../../components/motion";
+import { AnimatedCounter, FadeInUp, PRESS_SCALE_ROW, ProgressBar, Tappable } from "../../components/motion";
 import {
   Button,
   Card,
@@ -209,7 +205,8 @@ export default function BuildBoxesScreen() {
 
               <View className="my-4 h-px bg-white/20" />
 
-              <Pressable
+              <Tappable
+                scaleTo={PRESS_SCALE_ROW}
                 onPress={() => setBreakdownOpen(true)}
                 className="flex-row items-center justify-between gap-3"
               >
@@ -243,7 +240,7 @@ export default function BuildBoxesScreen() {
                     color={COLORS.textOnPrimary}
                   />
                 </View>
-              </Pressable>
+              </Tappable>
 
               {/* The action lives with the answer it acts on. White on the
                   orange so it's the one thing the eye lands on next. */}
@@ -355,7 +352,7 @@ export default function BuildBoxesScreen() {
                   on the shelf but left out of this plan.
                 </Text>
                 {plan.excluded.pastDate.units > 0 && (
-                  <Pressable onPress={() => router.push("/expiring-soon")}>
+                  <Tappable onPress={() => router.push("/expiring-soon")}>
                     <Text
                       variant="micro"
                       tone="brand"
@@ -363,7 +360,7 @@ export default function BuildBoxesScreen() {
                     >
                       Check what is out of date →
                     </Text>
-                  </Pressable>
+                  </Tappable>
                 )}
               </View>
             </Panel>
@@ -373,7 +370,7 @@ export default function BuildBoxesScreen() {
         {/* What's being packed, then how many and for whom. */}
         <FadeInUp index={1}>
           <Card className="gap-4">
-            <Pressable
+            <Tappable
               onPress={() => {
                 cueTap();
                 setPickerOpen(true);
@@ -405,7 +402,7 @@ export default function BuildBoxesScreen() {
               <Text variant="label" tone="brand" className="font-bold">
                 Change
               </Text>
-            </Pressable>
+            </Tappable>
 
             <View className="flex-row items-center justify-between gap-3">
               <Text variant="body" className="flex-1 font-semibold">
@@ -457,7 +454,7 @@ export default function BuildBoxesScreen() {
                 Packed boxes
               </Text>
               {readyBoxes.length > 0 && (
-                <Pressable
+                <Tappable
                   onPress={() => router.push("/ready-boxes")}
                   hitSlop={8}
                   accessibilityRole="button"
@@ -465,7 +462,7 @@ export default function BuildBoxesScreen() {
                   <Text variant="label" tone="brand" className="font-bold">
                     Hand out →
                   </Text>
-                </Pressable>
+                </Tappable>
               )}
             </View>
 

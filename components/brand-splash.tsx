@@ -10,6 +10,8 @@ import Animated, {
   useAnimatedStyle,
   useSharedValue,
   withDelay,
+  ReduceMotion,
+  useReducedMotion,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
@@ -62,12 +64,17 @@ export function BrandSplash({
   // One clock drives the whole sequence; each element reads its own slice of it.
   const t = useSharedValue(0);
   const exit = useSharedValue(0);
+  // With reduced motion the sequence keeps its fades and drops every spin,
+  // sweep, slide and fall — so the clock below is forced to run (Reanimated's
+  // default would jump it to the end) and each style checks this flag.
+  const reduceMotion = useReducedMotion();
 
   const play = useCallback(() => {
     t.value = 0;
     t.value = withTiming(1, {
       duration: INTRO_MS,
       easing: Easing.out(Easing.cubic),
+      reduceMotion: ReduceMotion.Never,
     });
     // A single tick as the mark lands — the app announcing itself, once.
     setTimeout(() => cueTap(), 330);
@@ -92,7 +99,7 @@ export function BrandSplash({
     const leave = () => {
       exit.value = withTiming(
         1,
-        { duration: 460, easing: Easing.in(Easing.cubic) },
+        { duration: 460, easing: Easing.in(Easing.cubic), reduceMotion: ReduceMotion.Never },
         (finished) => {
           if (finished) runOnJS(onDone)();
         },
@@ -111,19 +118,21 @@ export function BrandSplash({
   const root = useAnimatedStyle(() => ({
     opacity: 1 - exit.value,
     // Pushes past the viewer on the way out rather than just fading.
-    transform: [{ scale: 1 + exit.value * 0.14 }],
+    transform: reduceMotion ? [] : [{ scale: 1 + exit.value * 0.14 }],
   }));
 
   const mark = useAnimatedStyle(() => {
     const p = interpolate(t.value, [0, 0.42], [0, 1], "clamp");
     return {
       opacity: interpolate(p, [0, 0.35], [0, 1], "clamp"),
-      transform: [
-        // Slight overshoot then settle — a spring re-targeted every frame just
-        // smears the motion, so the pop is baked into the curve instead.
-        { scale: interpolate(p, [0, 0.75, 1], [0.6, 1.07, 1]) },
-        { rotate: `${(1 - p) * -35}deg` },
-      ],
+      transform: reduceMotion
+        ? []
+        : [
+            // Slight overshoot then settle — a spring re-targeted every frame
+            // just smears the motion, so the pop is baked into the curve.
+            { scale: interpolate(p, [0, 0.75, 1], [0.6, 1.07, 1]) },
+            { rotate: `${(1 - p) * -35}deg` },
+          ],
     };
   });
 
@@ -132,7 +141,7 @@ export function BrandSplash({
     const p = interpolate(t.value, [0.22, 0.72], [0, 1], "clamp");
     return {
       transform: [{ translateX: -W + p * W * 2.2 }, { rotate: "18deg" }],
-      opacity: interpolate(p, [0, 0.15, 0.85, 1], [0, 0.9, 0.9, 0]),
+      opacity: reduceMotion ? 0 : interpolate(p, [0, 0.15, 0.85, 1], [0, 0.9, 0.9, 0]),
     };
   });
 
@@ -140,13 +149,16 @@ export function BrandSplash({
     const p = interpolate(t.value, [0.5, 0.86], [0, 1], "clamp");
     return {
       opacity: p,
-      transform: [{ translateY: (1 - p) * 14 }],
+      transform: reduceMotion ? [] : [{ translateY: (1 - p) * 14 }],
     };
   });
 
   const tag = useAnimatedStyle(() => {
     const p = interpolate(t.value, [0.68, 1], [0, 1], "clamp");
-    return { opacity: p * 0.85, transform: [{ translateY: (1 - p) * 10 }] };
+    return {
+      opacity: p * 0.85,
+      transform: reduceMotion ? [] : [{ translateY: (1 - p) * 10 }],
+    };
   });
 
   return (
@@ -163,9 +175,9 @@ export function BrandSplash({
       {/* Pantry goods drifting down behind the mark. Kept faint — they should
           register as depth and movement, not as objects competing with the logo. */}
       <View style={styles.fallLayer} pointerEvents="none">
-        {FALLING.map((cfg, i) => (
-          <FallingItem key={i} cfg={cfg} />
-        ))}
+        {/* Falling is the motion itself, so with reduced motion it isn't drawn. */}
+        {!reduceMotion &&
+          FALLING.map((cfg, i) => <FallingItem key={i} cfg={cfg} />)}
       </View>
 
       <View style={styles.center}>

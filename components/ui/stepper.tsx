@@ -70,7 +70,7 @@ function StepButton({
   disabled: boolean;
   onPress: () => void;
 }) {
-  const press = usePressScale(0.9);
+  const press = usePressScale();
 
   return (
     <Pressable
@@ -87,7 +87,7 @@ function StepButton({
     >
       <Animated.View
         style={press.style}
-        className={cn('h-12 w-12 items-center justify-center', disabled && 'opacity-35')}
+        className={cn('h-12 w-12 items-center justify-center', disabled && 'opacity-40')}
       >
         <MaterialCommunityIcons name={icon} size={18} color={COLORS.textPrimary} />
       </Animated.View>

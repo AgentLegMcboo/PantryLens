@@ -2,10 +2,10 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Alert, View } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
-import { FadeInUp } from "../../components/motion";
+import { FadeInUp, Tappable } from "../../components/motion";
 import {
   Button,
   Card,
@@ -156,7 +156,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             {/* The assumption behind every "stopping boxes going out" figure,
                 said out loud. It was the number 12, hardcoded, and a pantry
                 reading these amounts had no way to know what they were for. */}
-            <Pressable
+            <Tappable
               onPress={() => router.push("/(tabs)/settings")}
               accessibilityRole="button"
               className="mt-3 flex-row items-center gap-2"
@@ -171,7 +171,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                 {settings.boxTarget === 1 ? "" : "es"} of {settings.defaultFamilySize}
                 . Change that in Settings.
               </Text>
-            </Pressable>
+            </Tappable>
           </View>
         </FadeInUp>
 
@@ -224,11 +224,11 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
               }
               onPress={handleCopy}
             />
-            <Pressable onPress={() => setFlyerOpen(true)} className="self-start px-1 py-2">
+            <Tappable onPress={() => setFlyerOpen(true)} className="self-start px-1 py-2">
               <Text variant="label" tone="brand" className="font-semibold">
                 See exactly what gets copied
               </Text>
-            </Pressable>
+            </Tappable>
           </View>
         </FadeInUp>
       </Screen>
@@ -245,7 +245,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
           </Text>
         </Panel>
         {!dropoff && (
-          <Pressable
+          <Tappable
             onPress={() => {
               setFlyerOpen(false);
               router.push("/(tabs)/settings");
@@ -261,7 +261,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             <Text variant="micro" tone="brand" className="flex-1 font-semibold">
               Add your drop-off location and hours in Settings so donors know where to go.
             </Text>
-          </Pressable>
+          </Tappable>
         )}
         <Button
           label={copied ? "Copied" : "Copy it"}

@@ -1,14 +1,16 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import React, { useState, useEffect } from "react";
-import { Alert, Modal, Pressable, View, Platform } from "react-native";
+import { Alert, View, Platform } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { COLORS } from "../constants/theme";
 import { cueTap } from "../lib/feedback";
 import { usePantryStore } from "../lib/store";
 import { offlineQueue } from "../lib/offline-queue";
 import { useAccessibilityStore } from "../lib/accessibility";
+import { Sheet } from "./ui/sheet";
 import { Text } from "./ui/text";
+import { Tappable, PRESS_SCALE_ROW } from "./motion";
 
 /**
  * The app's top bar.
@@ -65,7 +67,8 @@ export function AppHeader({ title }: { title: string }) {
   return (
     <View style={{ paddingTop: insets.top }} className="bg-canvas">
       {pendingCount > 0 && (
-        <Pressable
+        <Tappable
+          scaleTo={PRESS_SCALE_ROW}
           onPress={() => {
             offlineQueue.processQueue().then((res) => {
               if (res.processed > 0) {
@@ -90,7 +93,7 @@ export function AppHeader({ title }: { title: string }) {
             </Text>
           </View>
           <Text className="text-xs font-bold text-amber-800">Sync now →</Text>
-        </Pressable>
+        </Tappable>
       )}
 
       <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
@@ -98,14 +101,15 @@ export function AppHeader({ title }: { title: string }) {
             an identity you recognise at a glance, and the whole thing is the
             tap target for switching or signing out — which is what a volunteer
             who belongs to two pantries reaches for. */}
-        <Pressable
+        <Tappable
+          scaleTo={PRESS_SCALE_ROW}
           onPress={() => {
             cueTap();
             setMenuOpen(true);
           }}
           accessibilityRole="button"
           accessibilityLabel={`${settings.pantryName || "PantryLens"}, ${title}. Opens pantry menu.`}
-          className="mr-auto flex-1 flex-row items-center gap-2.5 py-1.5"
+          className="flex-1 flex-row items-center gap-2.5 py-1.5"
         >
           <View className="h-10 w-10 items-center justify-center rounded-lg bg-brand">
             <Text variant="body" tone="on" className="font-bold text-base">
@@ -124,162 +128,159 @@ export function AppHeader({ title }: { title: string }) {
               {settings.pantryName || "PantryLens"}
             </Text>
           </View>
-        </Pressable>
+        </Tappable>
 
-        <HeaderButton
-          icon={
-            seniorMode
-              ? "format-font-size-decrease"
-              : "format-font-size-increase"
-          }
-          label={
-            seniorMode
-              ? "Switch to standard font"
-              : "Switch to large text for seniors"
-          }
-          onPress={() => {
-            cueTap();
-            toggleSeniorMode();
-          }}
-        />
-        <HeaderButton
-          icon="bell-outline"
-          label="Expiring soon"
-          badge={expiringCount}
-          onPress={() => router.push("/expiring-soon")}
-        />
-        <HeaderButton
-          icon="dots-vertical"
-          label="More"
-          onPress={() => setMenuOpen(true)}
-        />
+        {/* Grouped and pushed right as one block, so the buttons sit on the
+            right edge whatever the title beside them does. */}
+        <View className="ml-auto flex-row items-center gap-2.5">
+          <HeaderButton
+            icon={
+              seniorMode
+                ? "format-font-size-decrease"
+                : "format-font-size-increase"
+            }
+            label={
+              seniorMode
+                ? "Switch to standard font"
+                : "Switch to large text for seniors"
+            }
+            onPress={() => {
+              cueTap();
+              toggleSeniorMode();
+            }}
+          />
+          <HeaderButton
+            icon="bell-outline"
+            label="Expiring soon"
+            badge={expiringCount}
+            onPress={() => router.push("/expiring-soon")}
+          />
+          <HeaderButton
+            icon="dots-vertical"
+            label="More"
+            onPress={() => setMenuOpen(true)}
+          />
+        </View>
       </View>
 
       {/* A sheet rather than a floating popover: anchoring a menu under an icon
           means measuring the icon, and a bottom sheet is easier to hit with a
           thumb anyway. */}
-      <Modal
+      <Sheet
         visible={menuOpen}
-        transparent
-        animationType="fade"
-        onRequestClose={close}
+        title={settings.pantryName || "Menu"}
+        onClose={close}
       >
-        <Pressable className="flex-1 justify-end bg-black/40" onPress={close}>
-          <Pressable
-            className="rounded-t-xl bg-canvas px-gutter pt-2.5"
-            style={{ paddingBottom: Math.max(insets.bottom, 12) + 4 }}
-            onPress={() => {}}
-          >
-            <View className="mb-1.5 h-1.5 w-12 self-center rounded-md bg-hairline" />
-
-            <MenuRow
-              icon="format-size"
-              label={seniorMode ? "Senior Mode: Active" : "Senior Mode: Off"}
-              hint="Large text and high contrast"
-              onPress={() => {
-                cueTap();
-                toggleSeniorMode();
-              }}
-            />
-            <MenuRow
-              icon="chart-box-outline"
-              label="Reports"
-              hint="Given out, wasted, CSV export"
-              onPress={() => {
-                close();
-                router.push("/reports");
-              }}
-            />
-            <MenuRow
-              icon="cog-outline"
-              label="Pantry settings"
-              hint="Box rules, thresholds, sound"
-              onPress={() => {
-                close();
-                router.push("/(tabs)/settings");
-              }}
-            />
-            <MenuRow
-              icon="swap-horizontal"
-              label="Switch pantry"
-              hint={
-                pantries.length > 1
-                  ? `${pantries.length} pantries`
-                  : "You're in one pantry"
-              }
-              onPress={
-                pantries.length > 1
-                  ? () => {
-                      cueTap();
-                      setSwitchOpen((open) => !open);
-                    }
-                  : undefined
-              }
-            />
-            {/* The list opens in place under the row, so switching is two taps
-                and never leaves the menu for a separate screen. */}
-            {switchOpen &&
-              pantries.map((p) => {
-                const current = p.id === settings.pantryId;
-                return (
-                  <Pressable
-                    key={p.id}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: current }}
-                    onPress={() => {
-                      cueTap();
-                      close();
-                      switchPantry(p.id);
-                    }}
-                    className="ml-[52px] flex-row items-center gap-3 py-2"
-                  >
-                    <MaterialCommunityIcons
-                      name={current ? "check-circle" : "circle-outline"}
-                      size={20}
-                      color={current ? COLORS.primary : COLORS.borderStrong}
-                    />
-                    <View className="flex-1">
-                      <Text
-                        variant="heading"
-                        className={current ? "font-bold" : "font-semibold"}
-                      >
-                        {p.name}
-                      </Text>
-                      <Text variant="label" tone="soft" className="capitalize">
-                        {p.role}
-                      </Text>
-                    </View>
-                  </Pressable>
-                );
-              })}
-            <MenuRow
-              icon="plus-circle-outline"
-              label="Add or create pantry"
-              hint="Join with a code or start one"
-              onPress={() => {
-                close();
-                setAddingPantry(true);
-                router.push("/pantry-selection");
-              }}
-            />
-            <MenuRow
-              icon="account-multiple-outline"
-              label="Team"
-              hint="Members and their activity"
-              onPress={() => {
-                close();
-                router.push("/team");
-              }}
-            />
-            <MenuRow
-              icon="logout"
-              label="Sign out"
-              tone="critical"
-              onPress={handleSignOut}
-            />
-          </Pressable>
-        </Pressable>
-      </Modal>
+        {/* One child, so the sheet's own gap doesn't space the rows out. */}
+        <View>
+          <MenuRow
+            icon="format-size"
+            label={seniorMode ? "Senior Mode: Active" : "Senior Mode: Off"}
+            hint="Large text and high contrast"
+            onPress={() => {
+              cueTap();
+              toggleSeniorMode();
+            }}
+          />
+          <MenuRow
+            icon="chart-box-outline"
+            label="Reports"
+            hint="Given out, wasted, CSV export"
+            onPress={() => {
+              close();
+              router.push("/reports");
+            }}
+          />
+          <MenuRow
+            icon="cog-outline"
+            label="Pantry settings"
+            hint="Box rules, thresholds, sound"
+            onPress={() => {
+              close();
+              router.push("/(tabs)/settings");
+            }}
+          />
+          <MenuRow
+            icon="swap-horizontal"
+            label="Switch pantry"
+            hint={
+              pantries.length > 1
+                ? `${pantries.length} pantries`
+                : "You're in one pantry"
+            }
+            onPress={
+              pantries.length > 1
+                ? () => {
+                    cueTap();
+                    setSwitchOpen((open) => !open);
+                  }
+                : undefined
+            }
+          />
+          {/* The list opens in place under the row, so switching is two taps
+              and never leaves the menu for a separate screen. */}
+          {switchOpen &&
+            pantries.map((p) => {
+              const current = p.id === settings.pantryId;
+              return (
+                <Tappable
+                  scaleTo={PRESS_SCALE_ROW}
+                  key={p.id}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: current }}
+                  onPress={() => {
+                    cueTap();
+                    close();
+                    switchPantry(p.id);
+                  }}
+                  className="ml-[52px] flex-row items-center gap-3 py-2"
+                >
+                  <MaterialCommunityIcons
+                    name={current ? "check-circle" : "circle-outline"}
+                    size={20}
+                    color={current ? COLORS.primary : COLORS.borderStrong}
+                  />
+                  <View className="flex-1">
+                    <Text
+                      variant="heading"
+                      className={current ? "font-bold" : "font-semibold"}
+                    >
+                      {p.name}
+                    </Text>
+                    <Text variant="label" tone="soft" className="capitalize">
+                      {p.role}
+                    </Text>
+                  </View>
+                </Tappable>
+              );
+            })}
+          <MenuRow
+            icon="plus-circle-outline"
+            label="Add or create pantry"
+            hint="Join with a code or start one"
+            onPress={() => {
+              close();
+              setAddingPantry(true);
+              router.push("/pantry-selection");
+            }}
+          />
+          <MenuRow
+            icon="account-multiple-outline"
+            label="Team"
+            hint="Members and their activity"
+            onPress={() => {
+              close();
+              router.push("/team");
+            }}
+          />
+          <MenuRow
+            icon="logout"
+            label="Sign out"
+            tone="critical"
+            onPress={handleSignOut}
+          />
+        </View>
+      </Sheet>
     </View>
   );
 }
@@ -296,7 +297,7 @@ function HeaderButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <Tappable
       accessibilityRole="button"
       accessibilityLabel={badge ? `${label}, ${badge} items` : label}
       onPress={() => {
@@ -317,7 +318,7 @@ function HeaderButton({
           </Text>
         </View>
       )}
-    </Pressable>
+    </Tappable>
   );
 }
 
@@ -337,7 +338,8 @@ function MenuRow({
   const colour =
     tone === "critical" ? COLORS.statusCritical : COLORS.textPrimary;
   return (
-    <Pressable
+    <Tappable
+      scaleTo={PRESS_SCALE_ROW}
       disabled={!onPress}
       onPress={onPress}
       className="flex-row items-center gap-3 py-2"
@@ -374,7 +376,7 @@ function MenuRow({
           color={COLORS.textSecondary}
         />
       ) : null}
-    </Pressable>
+    </Tappable>
   );
 }
 
@@ -409,7 +411,7 @@ export function StackHeader({
       className="bg-canvas"
     >
       <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
-        <Pressable
+        <Tappable
           accessibilityRole="button"
           accessibilityLabel="Go back"
           onPress={() => {
@@ -423,7 +425,7 @@ export function StackHeader({
             size={26}
             color={COLORS.textPrimary}
           />
-        </Pressable>
+        </Tappable>
 
         <Text
           variant="headline"

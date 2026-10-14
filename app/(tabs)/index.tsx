@@ -3,8 +3,8 @@ import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { COLORS } from '../../constants/theme';
-import { AnimatedCounter, FadeInUp } from '../../components/motion';
-import { Card, Screen, Text, CategoryIcon } from '../../components/ui';
+import { AnimatedCounter, FadeInUp, PRESS_SCALE, Tappable } from '../../components/motion';
+import { Card, cardShadow, Screen, Text, CategoryIcon } from '../../components/ui';
 import { buildStockUnits } from '../../lib/allocation';
 import { isExpiringSoon } from '../../lib/expiry';
 import { InventoryItem, usePantryStore } from '../../lib/store';
@@ -110,10 +110,11 @@ export default function DashboardScreen() {
               router.push('/log-donation');
             }}
             style={({ pressed }) => ({
+              ...cardShadow,
               opacity: pressed ? 0.9 : 1,
-              transform: [{ scale: pressed ? 0.99 : 1 }],
+              transform: [{ scale: pressed ? PRESS_SCALE : 1 }],
             })}
-            className="min-h-[72px] flex-row items-center justify-between rounded-xl bg-brand p-5 shadow-sm"
+            className="min-h-[72px] flex-row items-center justify-between rounded-lg bg-brand p-5"
           >
             <View className="flex-1 flex-row items-center gap-4">
               <View className="h-12 w-12 items-center justify-center rounded-lg bg-white/20">
@@ -139,9 +140,10 @@ export default function DashboardScreen() {
               setStaplesModalVisible(true);
             }}
             style={({ pressed }) => ({
-              opacity: pressed ? 0.9 : 1,
+              ...cardShadow,
+              transform: [{ scale: pressed ? PRESS_SCALE : 1 }],
             })}
-            className="flex-row items-center justify-between rounded-xl border border-hairline bg-card p-4 shadow-sm"
+            className="flex-row items-center justify-between rounded-lg border border-hairline bg-card p-4"
           >
             <View className="flex-1 flex-row items-center gap-3">
               <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
@@ -289,7 +291,7 @@ export default function DashboardScreen() {
                   Items Running Low
                 </Text>
               </View>
-              <Pressable
+              <Tappable
                 onPress={() => {
                   cueTap();
                   router.push('/(tabs)/needs');
@@ -299,7 +301,7 @@ export default function DashboardScreen() {
                 <Text variant="label" tone="brand" className="font-bold">
                   See All Needs →
                 </Text>
-              </Pressable>
+              </Tappable>
             </View>
 
             <Text variant="body" tone="soft">

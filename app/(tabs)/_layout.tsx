@@ -64,8 +64,8 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Home',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="home-variant-outline" size={size} color={color} />
+            tabBarIcon: ({ focused, color, size }) => (
+              <MaterialCommunityIcons name={focused ? "home-variant" : "home-variant-outline"} size={size} color={color} />
             ),
           }}
         />
@@ -73,8 +73,8 @@ export default function TabLayout() {
           name="inventory"
           options={{
             title: 'Inventory',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="format-list-bulleted" size={size} color={color} />
+            tabBarIcon: ({ focused, color, size }) => (
+              <MaterialCommunityIcons name={focused ? "clipboard-list" : "clipboard-list-outline"} size={size} color={color} />
             ),
           }}
         />
@@ -82,8 +82,8 @@ export default function TabLayout() {
           name="build"
           options={{
             title: 'Build',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="package-variant-closed" size={size} color={color} />
+            tabBarIcon: ({ focused, color, size }) => (
+              <MaterialCommunityIcons name={focused ? "cube" : "cube-outline"} size={size} color={color} />
             ),
           }}
         />
@@ -91,8 +91,8 @@ export default function TabLayout() {
           name="needs"
           options={{
             title: 'Needs',
-            tabBarIcon: ({ color, size }) => (
-              <MaterialCommunityIcons name="bullhorn-outline" size={size} color={color} />
+            tabBarIcon: ({ focused, color, size }) => (
+              <MaterialCommunityIcons name={focused ? "bullhorn" : "bullhorn-outline"} size={size} color={color} />
             ),
           }}
         />

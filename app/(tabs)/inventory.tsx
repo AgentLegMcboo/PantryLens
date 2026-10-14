@@ -6,8 +6,6 @@ import {
   Alert,
   FlatList,
   SectionList,
-  KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
   TextInput,
@@ -25,7 +23,7 @@ import Animated, {
 import type { SwipeableMethods } from "react-native-gesture-handler/lib/typescript/components/ReanimatedSwipeable/ReanimatedSwipeableProps";
 import {
   Button,
-  Card,
+  cardShadow,
   Chip,
   EmptyState,
   Input,
@@ -43,6 +41,7 @@ import {
   usePantryStore,
 } from "../../lib/store";
 import { QuickAddStaplesModal } from "../../components/quick-add-staples";
+import { Tappable, PRESS_SCALE_ROW } from "../../components/motion";
 
 /**
  * The shelf, as a list.
@@ -142,6 +141,9 @@ const SORTS = [
  * the others, so that cost followed the volunteer around the whole app. Now a
  * row only re-renders when its own props change.
  */
+const ROW_EDGE = { borderWidth: 1, borderColor: "rgba(224,205,187,0.7)" } as const;
+const SELECTED_EDGE = { borderWidth: 1, borderColor: COLORS.primary } as const;
+
 const InventoryRow = React.memo(function InventoryRow({
   item,
   picking,
@@ -169,8 +171,15 @@ const InventoryRow = React.memo(function InventoryRow({
   // Both keep it out of the boxes, so both get the red treatment.
   const blocked = damaged || pastDate;
 
+  // Deliberately cheap. This row can exist hundreds of times over, so it uses
+  // a plain Pressable with an instant dip (no per-row animation driver) and a
+  // flat bordered surface (no blurred shadow — layered blur on every row was
+  // what made scrolling this list drag, on Android most of all).
   const row = (
     <Pressable
+      style={({ pressed }) =>
+        pressed ? { transform: [{ scale: PRESS_SCALE_ROW }] } : undefined
+      }
       // In picking mode a tap picks; otherwise it opens. A long press starts
       // picking from anywhere, which is the gesture people already expect from
       // a photo library.
@@ -185,17 +194,15 @@ const InventoryRow = React.memo(function InventoryRow({
       {/* One line per product: picture, name with what's worth knowing
           under it, and the count on the right. Expiry only when there is
           one — "No expiry recorded" on every tin of soap was just noise. */}
-      <Card
+      <View
         className={
           isSelected
-            ? "mb-2.5 bg-subtle px-4 py-3.5"
-            : "mb-2.5 px-4 py-3.5 shadow-md shadow-black"
+            ? "mb-2.5 rounded-lg bg-subtle px-4 py-3.5"
+            : "mb-2.5 rounded-lg bg-card px-4 py-3.5"
         }
         // A lighter edge than other cards: in a long list a full-strength
         // outline on every row adds up to a lot of lines.
-        style={{
-          borderColor: isSelected ? COLORS.primary : "rgba(224,205,187,0.6)",
-        }}
+        style={isSelected ? SELECTED_EDGE : ROW_EDGE}
       >
         <View className="flex-row items-center gap-3.5">
           {picking && (
@@ -283,7 +290,7 @@ const InventoryRow = React.memo(function InventoryRow({
             />
           )}
         </View>
-      </Card>
+      </View>
     </Pressable>
   );
 
@@ -647,7 +654,7 @@ export default function InventoryScreen() {
              wants once they have already chosen what they are acting on. */
           <View className="gap-3">
             <View className="flex-row items-center gap-3">
-              <Pressable
+              <Tappable
                 onPress={clearSelection}
                 accessibilityLabel="Cancel selection"
                 hitSlop={8}
@@ -658,13 +665,13 @@ export default function InventoryScreen() {
                   size={22}
                   color={COLORS.textPrimary}
                 />
-              </Pressable>
+              </Tappable>
 
               <Text variant="heading" className="flex-1">
                 {selectedIds.length} selected
               </Text>
 
-              <Pressable
+              <Tappable
                 onPress={() => {
                   cueTap();
                   const all = filteredItems.every((i) => selected[i.id]);
@@ -682,7 +689,7 @@ export default function InventoryScreen() {
                 <Text variant="label" tone="brand" className="font-bold">
                   {filteredItems.every((i) => selected[i.id]) ? "None" : "All"}
                 </Text>
-              </Pressable>
+              </Tappable>
             </View>
 
             <View className="flex-row gap-2">
@@ -748,13 +755,13 @@ export default function InventoryScreen() {
                 placeholderTextColor={COLORS.textSecondary}
               />
               {search ? (
-                <Pressable onPress={() => setSearch("")} hitSlop={8}>
+                <Tappable onPress={() => setSearch("")} hitSlop={8}>
                   <MaterialCommunityIcons
                     name="close-circle"
                     size={18}
                     color={COLORS.textSecondary}
                   />
-                </Pressable>
+                </Tappable>
               ) : null}
             </View>
 
@@ -778,7 +785,8 @@ export default function InventoryScreen() {
         )}
 
         {!picking && flaggedCount > 0 && (
-          <Pressable
+          <Tappable
+            scaleTo={PRESS_SCALE_ROW}
             onPress={() => {
               cueTap();
               setOnlyFlagged((v) => !v);
@@ -809,7 +817,7 @@ export default function InventoryScreen() {
             >
               {onlyFlagged ? "Show all" : "Show them"}
             </Text>
-          </Pressable>
+          </Tappable>
         )}
 
         {!picking && (
@@ -915,7 +923,7 @@ export default function InventoryScreen() {
                   }}
                 />
                 {groupBy === "place" && (
-                  <Pressable
+                  <Tappable
                     onPress={() => {
                       cueTap();
                       setManagingPlaces(true);
@@ -930,7 +938,7 @@ export default function InventoryScreen() {
                       size={22}
                       color={COLORS.secondaryDark}
                     />
-                  </Pressable>
+                  </Tappable>
                 )}
               </View>
             </View>
@@ -1057,101 +1065,82 @@ export default function InventoryScreen() {
         </View>
       </Sheet>
 
-      <Modal
+      <Sheet
         visible={modalVisible}
-        animationType="slide"
-        transparent
-        onRequestClose={() => setModalVisible(false)}
+        title="Add an item"
+        onClose={() => setModalVisible(false)}
       >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === "ios" ? "padding" : undefined}
-        >
-          <View className="flex-1 justify-end bg-black/50">
-            <View className="rounded-t-lg bg-canvas px-gutter pb-10 pt-6 gap-4">
-              <View className="flex-row items-center justify-between">
-                <Text variant="title">Add an item</Text>
-                <Pressable onPress={() => setModalVisible(false)} hitSlop={8}>
-                  <MaterialCommunityIcons
-                    name="close"
-                    size={24}
-                    color={COLORS.textPrimary}
-                  />
-                </Pressable>
-              </View>
+        <View className="gap-4">
+      <Tappable
+        onPress={() => {
+          setModalVisible(false);
+          setStaplesModalVisible(true);
+        }}
+        className="flex-row items-center justify-between rounded-lg border border-brand/30 bg-brand/5 p-3"
+      >
+        <View className="flex-row items-center gap-2">
+          <MaterialCommunityIcons
+            name="lightning-bolt"
+            size={20}
+            color={COLORS.primary}
+          />
+          <Text variant="label" tone="brand" className="font-bold">
+            Or tap common staples directly (No typing)
+          </Text>
+        </View>
+        <Text variant="label" tone="brand" className="font-bold">
+          Open →
+        </Text>
+      </Tappable>
 
-              <Pressable
-                onPress={() => {
-                  setModalVisible(false);
-                  setStaplesModalVisible(true);
-                }}
-                className="flex-row items-center justify-between rounded-lg border border-brand/30 bg-brand/5 p-3"
-              >
-                <View className="flex-row items-center gap-2">
-                  <MaterialCommunityIcons
-                    name="lightning-bolt"
-                    size={20}
-                    color={COLORS.primary}
-                  />
-                  <Text variant="label" tone="brand" className="font-bold">
-                    Or tap common staples directly (No typing)
-                  </Text>
-                </View>
-                <Text variant="label" tone="brand" className="font-bold">
-                  Open →
-                </Text>
-              </Pressable>
+      <Input
+        label="Name"
+        placeholder="Canned black beans 15 oz"
+        value={newName}
+        onChangeText={setNewName}
+      />
 
-              <Input
-                label="Name"
-                placeholder="Canned black beans 15 oz"
-                value={newName}
-                onChangeText={setNewName}
-              />
+      <View className="gap-2">
+        <Text variant="label" tone="soft">
+          Category
+        </Text>
+        <View className="flex-row flex-wrap gap-2">
+          {CATEGORIES.filter((c) => c.id !== "all").map((cat) => (
+            <Chip
+              key={cat.id}
+              label={cat.label}
+              selected={newCat === cat.id}
+              onPress={() => setNewCat(cat.id as any)}
+            />
+          ))}
+        </View>
+      </View>
 
-              <View className="gap-2">
-                <Text variant="label" tone="soft">
-                  Category
-                </Text>
-                <View className="flex-row flex-wrap gap-2">
-                  {CATEGORIES.filter((c) => c.id !== "all").map((cat) => (
-                    <Chip
-                      key={cat.id}
-                      label={cat.label}
-                      selected={newCat === cat.id}
-                      onPress={() => setNewCat(cat.id as any)}
-                    />
-                  ))}
-                </View>
-              </View>
+      <View className="flex-row gap-4">
+        <View className="gap-2">
+          <Text variant="label" tone="soft">
+            Quantity
+          </Text>
+          <Stepper value={newCount} min={1} onChange={setNewCount} />
+        </View>
+        <View className="flex-1">
+          <Input
+            label="Expires (optional)"
+            placeholder="YYYY-MM-DD"
+            value={newExp}
+            onChangeText={setNewExp}
+          />
+        </View>
+      </View>
 
-              <View className="flex-row gap-4">
-                <View className="gap-2">
-                  <Text variant="label" tone="soft">
-                    Quantity
-                  </Text>
-                  <Stepper value={newCount} min={1} onChange={setNewCount} />
-                </View>
-                <View className="flex-1">
-                  <Input
-                    label="Expires (optional)"
-                    placeholder="YYYY-MM-DD"
-                    value={newExp}
-                    onChangeText={setNewExp}
-                  />
-                </View>
-              </View>
-
-              <Button
-                label="Add to inventory"
-                block
-                className="mt-2"
-                onPress={handleManualAdd}
-              />
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      <Button
+        label="Add to inventory"
+        block
+        className="mt-2"
+        onPress={handleManualAdd}
+      />
+        </View>
+      </Sheet>
 
       <QuickAddStaplesModal
         visible={staplesModalVisible}
@@ -1179,11 +1168,12 @@ function ListControl({
   accessibilityLabel: string;
 }) {
   return (
-    <Pressable
+    <Tappable
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      className="h-[52px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3 shadow-slate-800 shadow-sm"
+      className="h-[52px] flex-1 flex-row items-center gap-2 rounded-[19px] border border-hairline bg-card px-3"
+      style={cardShadow}
     >
       <View className="h-8 w-8 items-center justify-center rounded-md bg-secondary-tint">
         <MaterialCommunityIcons
@@ -1205,7 +1195,7 @@ function ListControl({
         size={18}
         color={COLORS.textSecondary}
       />
-    </Pressable>
+    </Tappable>
   );
 }
 

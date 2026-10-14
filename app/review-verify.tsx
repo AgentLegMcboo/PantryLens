@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RULE_ABOVE } from '../constants/theme';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
@@ -25,6 +25,7 @@ import {
 } from '../lib/store';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
+import { Tappable } from '../components/motion';
 
 /**
  * Confirming what the scanner found, against the photo it found it in.
@@ -724,7 +725,7 @@ export default function ReviewVerifyScreen() {
             {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
           </Text>
           {locations.length > 0 && (
-            <Pressable
+            <Tappable
               onPress={() => {
                 cueTap();
                 setFilingOpen(true);
@@ -742,7 +743,7 @@ export default function ReviewVerifyScreen() {
                     : 'Unfiled'}
               </Text>
               <MaterialCommunityIcons name="chevron-down" size={15} color={COLORS.textSecondary} />
-            </Pressable>
+            </Tappable>
           )}
         </View>
         <View className="h-1.5 overflow-hidden rounded-sm bg-muted">
@@ -787,7 +788,7 @@ export default function ReviewVerifyScreen() {
               ) : (
                 <View />
               )}
-              <Pressable
+              <Tappable
                 onPress={() => {
                   cueTap();
                   setDrawMode((m) => !m);
@@ -802,7 +803,7 @@ export default function ReviewVerifyScreen() {
                 <Text variant="micro" className="font-bold text-white">
                   {drawMode ? 'Cancel' : 'Add missed'}
                 </Text>
-              </Pressable>
+              </Tappable>
             </View>
             {currentScanPhotos.length > 1 && !drawMode && (
               <View className="absolute bottom-2 left-2 flex-row items-center rounded-full bg-black/55">
@@ -856,7 +857,7 @@ export default function ReviewVerifyScreen() {
             const flagged = !checked && ((item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition));
             const current = item.uid === selectedId;
             return (
-              <Pressable
+              <Tappable
                 key={item.uid}
                 onPress={() => {
                   cueTap();
@@ -878,7 +879,7 @@ export default function ReviewVerifyScreen() {
                 <Text variant="label" numberOfLines={1} className={current ? 'font-bold' : 'font-semibold'}>
                   {item.name?.trim() || 'Unnamed'}
                 </Text>
-              </Pressable>
+              </Tappable>
             );
           })}
         </ScrollView>
@@ -924,7 +925,7 @@ export default function ReviewVerifyScreen() {
                   </Text>
                   <Text variant="micro" tone="soft">·</Text>
                   {/* Category cycles on tap; the full list is under details. */}
-                  <Pressable
+                  <Tappable
                     onPress={() => {
                       cueTap();
                       const i = CATEGORIES.indexOf(selectedItem.category as string);
@@ -941,7 +942,7 @@ export default function ReviewVerifyScreen() {
                       {selectedItem.category ?? 'unknown'}
                     </Text>
                     <MaterialCommunityIcons name="chevron-down" size={13} color={COLORS.textSecondary} />
-                  </Pressable>
+                  </Tappable>
                   <Text variant="micro" tone="soft">·</Text>
                   <Text variant="micro" tone={damaged ? 'critical' : 'soft'} className="font-semibold">
                     {CONDITION_LABELS[selectedItem.condition || 'ok']}
@@ -957,7 +958,7 @@ export default function ReviewVerifyScreen() {
                 min={1}
                 onChange={(count) => updateItemAtIndex(selectedIndex, { count })}
               />
-              <Pressable
+              <Tappable
                 onPress={() => {
                   cueTap();
                   setMoreOpen(true);
@@ -969,7 +970,7 @@ export default function ReviewVerifyScreen() {
                 <Text variant="label" className="font-bold">
                   Details
                 </Text>
-              </Pressable>
+              </Tappable>
               <PhotoArrow
                 icon="chevron-left"
                 dark
@@ -1122,7 +1123,7 @@ function PhotoArrow({
   label?: string;
 }) {
   return (
-    <Pressable
+    <Tappable
       onPress={() => {
         cueTap();
         onPress();
@@ -1132,10 +1133,10 @@ function PhotoArrow({
       accessibilityRole="button"
       accessibilityLabel={label ?? (icon === 'chevron-left' ? 'Previous photo' : 'Next photo')}
       className={dark ? 'h-11 w-10 items-center justify-center rounded-md bg-subtle' : 'h-9 w-9 items-center justify-center'}
-      style={{ opacity: disabled ? 0.35 : 1 }}
+      style={{ opacity: disabled ? 0.4 : 1 }}
     >
       <MaterialCommunityIcons name={icon} size={22} color={dark ? COLORS.textPrimary : '#FFFFFF'} />
-    </Pressable>
+    </Tappable>
   );
 }
 
@@ -1188,7 +1189,7 @@ function ItemEditor({
           )}
           <View className="flex-row items-center gap-5">
             {verified && (
-              <Pressable
+              <Tappable
                 onPress={onUndoConfirm}
                 hitSlop={8}
                 accessibilityLabel="Undo confirm"
@@ -1198,9 +1199,9 @@ function ItemEditor({
                 <Text variant="micro" tone="brand" className="font-bold">
                   Undo confirm
                 </Text>
-              </Pressable>
+              </Tappable>
             )}
-            <Pressable
+            <Tappable
               onPress={onRemove}
               hitSlop={8}
               accessibilityLabel="Remove this item"
@@ -1210,7 +1211,7 @@ function ItemEditor({
               <Text variant="micro" tone="critical" className="font-bold">
                 Remove
               </Text>
-            </Pressable>
+            </Tappable>
           </View>
         </View>
 
@@ -1326,7 +1327,7 @@ function ItemEditor({
           {/* Up here, well away from the confirm bar, so undoing is always
               deliberate and never the side effect of tapping quickly. */}
           {verified && (
-            <Pressable
+            <Tappable
               onPress={onUndoConfirm}
               hitSlop={8}
               accessibilityLabel="Undo confirm"
@@ -1336,18 +1337,18 @@ function ItemEditor({
               <Text variant="micro" tone="brand" className="font-bold">
                 Undo confirm
               </Text>
-            </Pressable>
+            </Tappable>
           )}
-          <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove this item">
+          <Tappable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove this item">
             <MaterialCommunityIcons
               name="trash-can-outline"
               size={20}
               color={COLORS.textSecondary}
             />
-          </Pressable>
-          <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
+          </Tappable>
+          <Tappable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
             <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
-          </Pressable>
+          </Tappable>
         </View>
       </View>
 

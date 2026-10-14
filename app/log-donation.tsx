@@ -14,6 +14,7 @@ import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { startScan, uploadScanPhotos } from '../lib/scan-history';
 import { SOURCE_ORG_LABELS, type SourceOrg, usePantryStore } from '../lib/store';
+import { PRESS_SCALE, Tappable } from '../components/motion';
 
 /**
  * Photographing a donation — the camera IS the screen.
@@ -197,11 +198,11 @@ export default function LogDonationScreen() {
         </Text>
         <Button label="Allow the camera" onPress={requestPermission} />
         <Button label="Choose from library instead" variant="ghost" onPress={handlePickFromLibrary} />
-        <Pressable onPress={() => router.back()} hitSlop={10} className="mt-2">
+        <Tappable onPress={() => router.back()} hitSlop={10} className="mt-2">
           <Text variant="label" className="font-semibold text-white/70">
             Go back
           </Text>
-        </Pressable>
+        </Tappable>
       </View>
     );
   }
@@ -270,14 +271,14 @@ export default function LogDonationScreen() {
             {shots.map((shot, i) => (
               <View key={`${shot.uri}-${i}`}>
                 <Image source={{ uri: shot.uri }} className="h-16 w-16 rounded-lg border-2 border-white" />
-                <Pressable
+                <Tappable
                   onPress={() => removeShot(i)}
                   hitSlop={8}
                   accessibilityLabel={`Remove photo ${i + 1}`}
                   className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full bg-black"
                 >
                   <MaterialCommunityIcons name="close" size={14} color="#FFFFFF" />
-                </Pressable>
+                </Tappable>
               </View>
             ))}
           </ScrollView>
@@ -293,7 +294,7 @@ export default function LogDonationScreen() {
           {SOURCES.map((src) => {
             const on = sourceOrg === src;
             return (
-              <Pressable
+              <Tappable
                 key={src}
                 onPress={() => {
                   cueTap();
@@ -307,7 +308,7 @@ export default function LogDonationScreen() {
                 <Text variant="label" className={on ? 'font-bold text-ink' : 'font-semibold text-white'}>
                   {SOURCE_ORG_LABELS[src]}
                 </Text>
-              </Pressable>
+              </Tappable>
             );
           })}
         </ScrollView>
@@ -330,7 +331,7 @@ export default function LogDonationScreen() {
               disabled={atLimit || busy}
               accessibilityRole="button"
               accessibilityLabel="Take photo"
-              style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.93 : 1 }] })}
+              style={({ pressed }) => ({ transform: [{ scale: pressed ? PRESS_SCALE : 1 }] })}
               className="h-[74px] w-[74px] items-center justify-center rounded-full border-4 border-white"
             >
               <View
@@ -345,7 +346,7 @@ export default function LogDonationScreen() {
               </View>
             </Pressable>
 
-            <Pressable
+            <Tappable
               onPress={handleDetectItems}
               disabled={shots.length === 0 || isAnalyzing}
               accessibilityRole="button"
@@ -369,7 +370,7 @@ export default function LogDonationScreen() {
                   Detect {shots.length}
                 </Text>
               )}
-            </Pressable>
+            </Tappable>
           </View>
         </View>
       </View>
@@ -391,7 +392,7 @@ function RoundButton({
   disabled?: boolean;
 }) {
   return (
-    <Pressable
+    <Tappable
       onPress={onPress}
       disabled={disabled}
       hitSlop={6}
@@ -400,11 +401,11 @@ function RoundButton({
       className="h-12 w-12 items-center justify-center rounded-full"
       style={{
         backgroundColor: active ? COLORS.textOnPrimary : GLASS,
-        opacity: disabled ? 0.45 : 1,
+        opacity: disabled ? 0.4 : 1,
       }}
     >
       <MaterialCommunityIcons name={icon} size={22} color={active ? COLORS.textPrimary : '#FFFFFF'} />
-    </Pressable>
+    </Tappable>
   );
 }
 
