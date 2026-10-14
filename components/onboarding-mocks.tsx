@@ -241,7 +241,7 @@ export function CameraMock() {
           <View className="items-center pb-2">
             <View className="rounded-full px-3 py-1" style={{ backgroundColor: glass }}>
               <Text variant="micro" className="font-semibold text-white">
-                2 of 6 · a big pile reads better in sections
+                2 of 6 · shoot big piles in sections
               </Text>
             </View>
           </View>

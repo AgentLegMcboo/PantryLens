@@ -193,13 +193,13 @@ export default function LogDonationScreen() {
         <Text variant="title" className="text-center text-white">
           Camera access needed
         </Text>
-        <Text variant="body" className="text-center text-white/75">
+        <Text variant="body" className="text-center" style={{ color: "rgba(255,255,255,0.75)" }}>
           PantryLens reads donation labels from photos. Nothing is saved until you check every line.
         </Text>
         <Button label="Allow the camera" onPress={requestPermission} />
         <Button label="Choose from library instead" variant="ghost" onPress={handlePickFromLibrary} />
         <Tappable onPress={() => router.back()} hitSlop={10} className="mt-2">
-          <Text variant="label" className="font-semibold text-white/70">
+          <Text variant="label" className="font-semibold" style={{ color: "rgba(255,255,255,0.7)" }}>
             Go back
           </Text>
         </Tappable>

@@ -281,7 +281,7 @@ export default function BarcodeScanScreen() {
                 <Text variant="label" className="mt-5 text-center text-white">
                   {busy ? 'Looking it up…' : 'Hold one barcode steady'}
                 </Text>
-                <Text variant="micro" className="mt-2 px-gutter text-center text-white/70">
+                <Text variant="micro" className="mt-2 px-gutter text-center" style={{ color: "rgba(255,255,255,0.7)" }}>
                   Keep all the bars visible. Move back a little if blurry.
                 </Text>
               </>

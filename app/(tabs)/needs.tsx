@@ -7,7 +7,6 @@ import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
 import { FadeInUp, ProgressBar, Tappable } from "../../components/motion";
 import {
-  Badge,
   Button,
   Card,
   CategoryIcon,
@@ -200,31 +199,36 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
           </View>
         </FadeInUp>
 
-        {/* Tighter than the page rhythm: these are one list, not separate blocks. */}
-        <View className="gap-2.5">
+        {/* One list. Each card: what, a hint of what counts, and how many
+            more — the number is the thing a donor acts on, so it gets the
+            weight; the bar and one line of counts sit under it. Red (number
+            and bar) marks the category holding up boxes. */}
+        <View className="gap-3">
           {deficits.map((item, i) => {
             const isLimiting = item.reason === "Stopping boxes going out";
+            const accent = isLimiting ? COLORS.statusCritical : COLORS.primary;
             return (
               <FadeInUp key={item.category} index={i + 1}>
-                <Card className="gap-3 p-4">
-                  <View className="flex-row items-start gap-3.5">
+                <Card className="gap-3.5 p-4">
+                  <View className="flex-row items-center gap-3">
                     <CategoryIcon
                       category={item.category}
-                      size="md"
                       tone={isLimiting ? "critical" : "brand"}
                     />
                     <View className="flex-1">
-                      <View className="flex-row items-center justify-between gap-2">
-                        <Text variant="heading" className="font-bold capitalize">
-                          {item.category}
-                        </Text>
-                        <Badge
-                          label={`Need ${item.deficit} more`}
-                          tone={isLimiting ? "critical" : "warn"}
-                        />
-                      </View>
-                      <Text variant="label" tone="soft" className="mt-1">
+                      <Text variant="heading" className="font-bold capitalize">
+                        {item.category}
+                      </Text>
+                      <Text variant="label" tone="soft" numberOfLines={1}>
                         {EXAMPLES[item.category] ?? "Any shelf-stable items"}
+                      </Text>
+                    </View>
+                    <View className="items-end">
+                      <Text variant="title" className="font-bold" style={{ color: accent }}>
+                        +{item.deficit}
+                      </Text>
+                      <Text variant="micro" tone="soft">
+                        needed
                       </Text>
                     </View>
                   </View>
@@ -235,16 +239,10 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                       color={isLimiting ? COLORS.statusCritical : COLORS.primaryLight}
                       height={6}
                     />
-                    <View className="flex-row items-center justify-between">
-                      <Text variant="micro" tone="soft" className="font-semibold">
-                        {item.current} usable on shelf · goal {item.goal}
-                      </Text>
-                      {isLimiting && (
-                        <Text variant="micro" tone="critical" className="font-bold">
-                          Stopping boxes going out
-                        </Text>
-                      )}
-                    </View>
+                    <Text variant="micro" tone="soft">
+                      {item.current} of {item.goal} on the shelf
+                      {isLimiting ? " · holding up boxes" : ""}
+                    </Text>
                   </View>
                 </Card>
               </FadeInUp>
@@ -257,7 +255,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             <View className="flex-row gap-2.5">
               <View className="flex-1">
                 <Button
-                  label="Share with donors"
+                  label="Share"
                   block
                   icon={
                     <MaterialCommunityIcons

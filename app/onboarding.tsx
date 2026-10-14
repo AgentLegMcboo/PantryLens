@@ -74,7 +74,7 @@ export default function OnboardingScreen() {
   const completeOnboarding = usePantryStore(state => state.completeOnboarding);
   // Signed in only when the intro is replayed in development.
   const signedIn = usePantryStore(state => !!state.session);
-  const { seniorMode, toggleSeniorMode } = useAccessibilityStore();
+  const seniorMode = useAccessibilityStore(s => s.seniorMode);
   const [page, setPage] = useState(0);
 
   const isLast = page === PHASES.length - 1;
@@ -117,50 +117,19 @@ export default function OnboardingScreen() {
         <View className="flex-row items-center justify-between px-gutter pt-2">
           <BrandMark />
 
-          <View className="flex-row items-center gap-2">
+          {!isLast && (
             <Pressable
-              onPress={() => {
-                cueTap();
-                toggleSeniorMode();
-              }}
-              hitSlop={8}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: seniorMode }}
-              accessibilityLabel="Large text mode for older volunteers"
-              className="h-12 flex-row items-center gap-1.5 rounded-lg border px-3"
-              style={{
-                backgroundColor: seniorMode ? COLORS.primary : COLORS.cardSurface,
-                borderColor: seniorMode ? COLORS.primaryDeep : COLORS.borderStrong,
-              }}
+              onPress={skip}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Skip introduction"
+              className="h-12 items-center justify-center px-3"
             >
-              <MaterialCommunityIcons
-                name="format-size"
-                size={19}
-                color={seniorMode ? COLORS.textOnPrimary : COLORS.textPrimary}
-              />
-              <Text
-                variant="micro"
-                className="font-bold"
-                style={{ color: seniorMode ? COLORS.textOnPrimary : COLORS.textPrimary }}
-              >
-                {seniorMode ? 'Large text ON' : 'Large text'}
+              <Text variant="label" tone="soft" className="font-semibold">
+                Skip
               </Text>
             </Pressable>
-
-            {!isLast && (
-              <Pressable
-                onPress={skip}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Skip introduction"
-                className="h-12 items-center justify-center px-3"
-              >
-                <Text variant="label" tone="soft" className="font-semibold">
-                  Skip
-                </Text>
-              </Pressable>
-            )}
-          </View>
+          )}
         </View>
 
         <ScrollView
@@ -214,15 +183,10 @@ export default function OnboardingScreen() {
         </ScrollView>
 
         <View className="gap-3.5 px-gutter pb-2">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-1.5">
-              {PHASES.map((p, i) => (
-                <Dot key={p.key} active={i === page} />
-              ))}
-            </View>
-            <Text variant="micro" tone="soft" className="font-semibold">
-              Step {page + 1} of {PHASES.length}
-            </Text>
+          <View className="flex-row items-center gap-1.5">
+            {PHASES.map((p, i) => (
+              <Dot key={p.key} active={i === page} />
+            ))}
           </View>
 
           <Button

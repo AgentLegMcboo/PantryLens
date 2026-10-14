@@ -99,11 +99,11 @@ export function getSeniorTextStyle(variant?: string | null, tone?: string | null
     style.fontWeight = fontWeight;
   }
 
-  // High contrast enhancement for senior eyes
+  // High contrast for senior eyes: soft grey becomes crisp charcoal. Default
+  // text is left alone — it is already ink, and forcing a colour here
+  // overrode white text set by className (the Build hero went black).
   if (tone === 'soft') {
-    style.color = '#2B2420'; // crisp charcoal instead of light grey
-  } else if (!tone || tone === 'default') {
-    style.color = '#1A1412';
+    style.color = '#2B2420';
   }
 
   return style;

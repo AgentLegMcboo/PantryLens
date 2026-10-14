@@ -12,7 +12,13 @@ import {
 } from "../../lib/diet";
 import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
 import { BoxPicker, type BoxSelection } from "../../components/box-picker";
-import { AnimatedCounter, FadeInUp, PRESS_SCALE_ROW, ProgressBar, Tappable } from "../../components/motion";
+import {
+  AnimatedCounter,
+  FadeInUp,
+  PRESS_SCALE_ROW,
+  ProgressBar,
+  Tappable,
+} from "../../components/motion";
 import {
   Button,
   Card,
@@ -166,15 +172,9 @@ export default function BuildBoxesScreen() {
         <FadeInUp index={0}>
           <View
             className="overflow-hidden rounded-lg"
-            style={{
-              borderBottomWidth: 6,
-              borderBottomColor: COLORS.primaryDeep,
-              shadowColor: COLORS.shadow,
-              shadowOpacity: 0.18,
-              shadowRadius: 14,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 4,
-            }}
+            // A soft warm lift. The old 6px bottom lip rendered as a separate
+            // dark band under the card on Android.
+            style={{ boxShadow: "0 4px 18px 0 rgba(107, 74, 47, 0.22)" }}
           >
             <LinearGradient
               colors={["#B0512F", "#9C4226"]}
@@ -184,7 +184,7 @@ export default function BuildBoxesScreen() {
             />
 
             <View className="p-card">
-              <Text variant="label" className="text-ink-on/70">
+              <Text variant="label" tone="on" className="font-semibold" style={{ opacity: 0.9 }}>
                 You can pack right now
               </Text>
 
@@ -215,7 +215,7 @@ export default function BuildBoxesScreen() {
                 accessibilityLabel="See per-category breakdown for this box"
                 className="min-h-[48px] flex-row items-center justify-between gap-3"
               >
-                <Text variant="label" className="flex-1 text-ink-on/90">
+                <Text variant="label" tone="on" className="flex-1" style={{ opacity: 0.92 }}>
                   {isShort ? (
                     <>
                       <Text
@@ -233,10 +233,7 @@ export default function BuildBoxesScreen() {
                   )}
                 </Text>
                 <View className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-white/20 px-3.5 py-2">
-                  <Text
-                    variant="label"
-                    className="font-bold text-ink-on"
-                  >
+                  <Text variant="label" className="font-bold text-ink-on">
                     Why
                   </Text>
                   <MaterialCommunityIcons
@@ -272,7 +269,9 @@ export default function BuildBoxesScreen() {
                 <Text
                   variant="body"
                   className="font-bold tracking-wide"
-                  style={{ color: canPack ? COLORS.primary : COLORS.textOnPrimary }}
+                  style={{
+                    color: canPack ? COLORS.primary : COLORS.textOnPrimary,
+                  }}
                 >
                   {canPack
                     ? `Pack ${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? "box" : "boxes"}`
@@ -362,11 +361,7 @@ export default function BuildBoxesScreen() {
                     accessibilityRole="button"
                     className="min-h-[44px] justify-center self-start py-1"
                   >
-                    <Text
-                      variant="label"
-                      tone="brand"
-                      className="font-bold"
-                    >
+                    <Text variant="label" tone="brand" className="font-bold">
                       Check what is out of date →
                     </Text>
                   </Tappable>
@@ -408,11 +403,9 @@ export default function BuildBoxesScreen() {
                   {describeRules(box.rules)}
                 </Text>
               </View>
-              <View className="rounded-md bg-subtle px-3 py-2">
-                <Text variant="label" tone="brand" className="font-bold">
-                  Change
-                </Text>
-              </View>
+              <Text variant="label" tone="brand" className="font-bold">
+                Change
+              </Text>
             </Tappable>
 
             <View className="flex-row items-center justify-between gap-3">
@@ -627,8 +620,16 @@ export default function BuildBoxesScreen() {
                 )}
               </View>
               <ProgressBar
-                progress={neededTotal > 0 ? Math.min(1, stock / neededTotal) : 1}
-                color={short > 0 ? (limiting ? COLORS.statusCritical : COLORS.statusWarning) : COLORS.statusGood}
+                progress={
+                  neededTotal > 0 ? Math.min(1, stock / neededTotal) : 1
+                }
+                color={
+                  short > 0
+                    ? limiting
+                      ? COLORS.statusCritical
+                      : COLORS.statusWarning
+                    : COLORS.statusGood
+                }
                 height={6}
               />
             </View>

@@ -126,7 +126,7 @@ function SwipeAction({ translation }: { translation: SharedValue<number> }) {
 }
 
 const SORTS = [
-  { id: "expiration", label: "Expiring first" },
+  { id: "expiration", label: "Expiry" },
   { id: "oldest", label: "Oldest" },
   { id: "count", label: "Most stock" },
   { id: "name", label: "A–Z" },
