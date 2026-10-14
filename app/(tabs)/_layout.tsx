@@ -1,19 +1,17 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
-import { StyleSheet, View } from 'react-native';
+import { View } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { usePantryStore } from '../../lib/store';
+import { useAccessibilityStore } from '../../lib/accessibility';
 import { AppHeader } from '../../components/app-header';
-import { SlidingTabBar, TAB_BAR_BODY } from '../../components/sliding-tab-bar';
-
+import { SlidingTabBar, TAB_BAR_BODY, TAB_BAR_BODY_SENIOR } from '../../components/sliding-tab-bar';
 
 export default function TabLayout() {
   const insets = useSafeAreaInsets();
-  // Was hardcoded to "Grace Community Pantry", so every pantry in the world was
-  // greeted by name — someone else's.
-  const pantryName = usePantryStore((state) => state.settings.pantryName);
+  const seniorMode = useAccessibilityStore((state) => state.seniorMode);
+  const barBodyHeight = seniorMode ? TAB_BAR_BODY_SENIOR : TAB_BAR_BODY;
 
   return (
     <View style={{ flex: 1 }}>
@@ -22,7 +20,7 @@ export default function TabLayout() {
         tabBar={(props) => <SlidingTabBar {...props} />}
         screenOptions={{
           tabBarActiveTintColor: COLORS.primary,
-          tabBarInactiveTintColor: COLORS.textSecondary,
+          tabBarInactiveTintColor: seniorMode ? COLORS.textPrimary : COLORS.textSecondary,
           tabBarStyle: {
             // Same cream as every screen — a near-white bar under a cream page drew
             // a hard horizontal seam. Separation comes from the shadow instead.
@@ -37,7 +35,7 @@ export default function TabLayout() {
             shadowRadius: 10,
             shadowOffset: { width: 0, height: -3 },
             elevation: 0,
-            height: TAB_BAR_BODY + insets.bottom,
+            height: barBodyHeight + insets.bottom,
             // Sits lower and tighter. The full safe-area inset was being used as
             // padding, which floated the icons well above the home indicator and
             // made the bar look twice as tall as it needed to be — a slim margin
@@ -46,8 +44,8 @@ export default function TabLayout() {
             paddingTop: 6,
           },
           tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: '600',
+            fontSize: seniorMode ? 15 : 12,
+            fontWeight: seniorMode ? '700' : '600',
             marginTop: 2,
           },
           tabBarIconStyle: { marginTop: 0 },
@@ -65,7 +63,11 @@ export default function TabLayout() {
           options={{
             title: 'Home',
             tabBarIcon: ({ focused, color, size }) => (
-              <MaterialCommunityIcons name={focused ? "home-variant" : "home-variant-outline"} size={size} color={color} />
+              <MaterialCommunityIcons
+                name={focused ? "home-variant" : "home-variant-outline"}
+                size={seniorMode ? 28 : size}
+                color={color}
+              />
             ),
           }}
         />
@@ -74,7 +76,11 @@ export default function TabLayout() {
           options={{
             title: 'Inventory',
             tabBarIcon: ({ focused, color, size }) => (
-              <MaterialCommunityIcons name={focused ? "clipboard-list" : "clipboard-list-outline"} size={size} color={color} />
+              <MaterialCommunityIcons
+                name={focused ? "clipboard-list" : "clipboard-list-outline"}
+                size={seniorMode ? 28 : size}
+                color={color}
+              />
             ),
           }}
         />
@@ -83,7 +89,11 @@ export default function TabLayout() {
           options={{
             title: 'Build',
             tabBarIcon: ({ focused, color, size }) => (
-              <MaterialCommunityIcons name={focused ? "cube" : "cube-outline"} size={size} color={color} />
+              <MaterialCommunityIcons
+                name={focused ? "cube" : "cube-outline"}
+                size={seniorMode ? 28 : size}
+                color={color}
+              />
             ),
           }}
         />
@@ -92,7 +102,11 @@ export default function TabLayout() {
           options={{
             title: 'Needs',
             tabBarIcon: ({ focused, color, size }) => (
-              <MaterialCommunityIcons name={focused ? "bullhorn" : "bullhorn-outline"} size={size} color={color} />
+              <MaterialCommunityIcons
+                name={focused ? "bullhorn" : "bullhorn-outline"}
+                size={seniorMode ? 28 : size}
+                color={color}
+              />
             ),
           }}
         />
@@ -113,7 +127,7 @@ export default function TabLayout() {
           position: 'absolute',
           left: 0,
           right: 0,
-          bottom: TAB_BAR_BODY + insets.bottom,
+          bottom: barBodyHeight + insets.bottom,
           height: 10,
         }}
       />

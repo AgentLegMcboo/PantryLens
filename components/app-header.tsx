@@ -1,16 +1,18 @@
-import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
-import React, { useState, useEffect } from "react";
-import { Alert, View, Platform } from "react-native";
-import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { COLORS } from "../constants/theme";
-import { cueTap } from "../lib/feedback";
-import { usePantryStore } from "../lib/store";
-import { offlineQueue } from "../lib/offline-queue";
-import { useAccessibilityStore } from "../lib/accessibility";
-import { Sheet } from "./ui/sheet";
-import { Text } from "./ui/text";
-import { Tappable, PRESS_SCALE_ROW } from "./motion";
+import { MaterialCommunityIcons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
+import React, { useState, useEffect } from 'react';
+import { Alert, Platform, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { COLORS } from '../constants/theme';
+import { windowEndISO } from '../lib/expiry';
+import { cueTap } from '../lib/feedback';
+import { usePantryStore } from '../lib/store';
+import { offlineQueue } from '../lib/offline-queue';
+import { useAccessibilityStore } from '../lib/accessibility';
+import { PRESS_SCALE_ROW, Tappable } from './motion';
+import { Row } from './ui/row';
+import { Sheet } from './ui/sheet';
+import { Text } from './ui/text';
 
 /**
  * The app's top bar.
@@ -39,12 +41,11 @@ export function AppHeader({ title }: { title: string }) {
     return offlineQueue.subscribe((count) => setPendingCount(count));
   }, []);
 
-  // Same window the dashboard and the allocator use, so the badge can never
-  // disagree with the screen it takes you to.
-  const warningLimit = new Date();
-  warningLimit.setDate(new Date().getDate() + settings.expirationWarningDays);
+  // Same ISO window the Expiring Soon screen and dashboard use, so the badge
+  // never disagrees with the screen it opens.
+  const warningStr = windowEndISO(settings.expirationWarningDays);
   const expiringCount = inventory.filter(
-    (i) => !!i.expiration && new Date(i.expiration) <= warningLimit,
+    (i) => i.count > 0 && !!i.expiration && i.expiration <= warningStr,
   ).length;
 
   const close = () => {
@@ -55,11 +56,11 @@ export function AppHeader({ title }: { title: string }) {
   const handleSignOut = () => {
     close();
     Alert.alert(
-      "Sign out?",
-      "You will need to sign in again to reach this pantry.",
+      'Sign out?',
+      'You will need to sign in again to reach this pantry.',
       [
-        { text: "Cancel", style: "cancel" },
-        { text: "Sign out", style: "destructive", onPress: () => signOut() },
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Sign out', style: 'destructive', onPress: () => signOut() },
       ],
     );
   };
@@ -73,30 +74,28 @@ export function AppHeader({ title }: { title: string }) {
             offlineQueue.processQueue().then((res) => {
               if (res.processed > 0) {
                 Alert.alert(
-                  "Sync Complete",
+                  'Sync Complete',
                   `Uploaded ${res.processed} offline change(s).`,
                 );
               }
             });
           }}
-          className="mx-gutter mt-2 flex-row items-center justify-between rounded-lg border border-amber-300 bg-amber-50 px-3 py-2"
+          accessibilityRole="button"
+          className="mx-gutter mt-2 min-h-[48px] flex-row items-center justify-between rounded-lg border border-outline bg-subtle px-3.5 py-2.5"
         >
           <View className="flex-row items-center gap-2">
-            <MaterialCommunityIcons
-              name="cloud-sync-outline"
-              size={18}
-              color="#904C00"
-            />
-            <Text className="text-xs font-semibold text-amber-900">
-              Offline: {pendingCount} change{pendingCount === 1 ? "" : "s"}{" "}
-              waiting to sync
+            <MaterialCommunityIcons name="cloud-sync-outline" size={20} color={COLORS.statusWarning} />
+            <Text variant="micro" className="font-semibold">
+              Offline: {pendingCount} change{pendingCount === 1 ? '' : 's'} waiting to sync
             </Text>
           </View>
-          <Text className="text-xs font-bold text-amber-800">Sync now →</Text>
+          <Text variant="micro" tone="brand" className="font-bold">
+            Sync now →
+          </Text>
         </Tappable>
       )}
 
-      <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
+      <View className="flex-row items-center gap-2 px-gutter pb-0 pt-3">
         {/* The pantry as a pill rather than a bare title: the initial gives it
             an identity you recognise at a glance, and the whole thing is the
             tap target for switching or signing out — which is what a volunteer
@@ -108,24 +107,20 @@ export function AppHeader({ title }: { title: string }) {
             setMenuOpen(true);
           }}
           accessibilityRole="button"
-          accessibilityLabel={`${settings.pantryName || "PantryLens"}, ${title}. Opens pantry menu.`}
-          className="flex-1 flex-row items-center gap-2.5 py-1.5"
+          accessibilityLabel={`${settings.pantryName || 'PantryLens'}, ${title}. Opens pantry menu.`}
+          className="min-h-[48px] flex-1 flex-row items-center gap-2.5 py-1"
         >
-          <View className="h-10 w-10 items-center justify-center rounded-lg bg-brand">
-            <Text variant="body" tone="on" className="font-bold text-base">
-              {(settings.pantryName || "P").trim().charAt(0).toUpperCase()}
+          <View className="h-11 w-11 items-center justify-center rounded-lg bg-brand">
+            <Text variant="body" tone="on" className="font-bold">
+              {(settings.pantryName || 'P').trim().charAt(0).toUpperCase()}
             </Text>
           </View>
           <View className="flex-1 gap-0.5">
-            <Text variant="micro" tone="soft" className="font-medium">
+            <Text variant="micro" tone="soft" className="font-semibold">
               {title}
             </Text>
-            <Text
-              variant="body"
-              numberOfLines={1}
-              className="font-bold text-base"
-            >
-              {settings.pantryName || "PantryLens"}
+            <Text variant="body" numberOfLines={1} className="font-bold">
+              {settings.pantryName || 'PantryLens'}
             </Text>
           </View>
         </Tappable>
@@ -133,74 +128,95 @@ export function AppHeader({ title }: { title: string }) {
         {/* Grouped and pushed right as one block, so the buttons sit on the
             right edge whatever the title beside them does. */}
         <View className="ml-auto flex-row items-center gap-2.5">
-          <HeaderButton
-            icon={
+          {/* Explicit "Aa" text-size toggle so older volunteers immediately recognize
+              what it does and whether Large Text Mode is currently active. */}
+          <Tappable
+            accessibilityRole="button"
+            accessibilityState={{ selected: seniorMode }}
+            accessibilityLabel={
               seniorMode
-                ? "format-font-size-decrease"
-                : "format-font-size-increase"
-            }
-            label={
-              seniorMode
-                ? "Switch to standard font"
-                : "Switch to large text for seniors"
+                ? 'Large text mode is on. Tap for standard text size.'
+                : 'Turn on large text and high contrast mode'
             }
             onPress={() => {
               cueTap();
               toggleSeniorMode();
             }}
-          />
+            className={`h-12 flex-row items-center justify-center gap-1 rounded-lg border px-3 ${
+              seniorMode ? 'border-brand bg-brand' : 'border-hairline bg-card'
+            }`}
+          >
+            <Text
+              variant="label"
+              tone={seniorMode ? 'on' : 'default'}
+              className="font-extrabold"
+            >
+              Aa
+            </Text>
+            <MaterialCommunityIcons
+              name={seniorMode ? 'check' : 'plus'}
+              size={15}
+              color={seniorMode ? COLORS.textOnPrimary : COLORS.primary}
+            />
+          </Tappable>
+
           <HeaderButton
             icon="bell-outline"
             label="Expiring soon"
             badge={expiringCount}
-            onPress={() => router.push("/expiring-soon")}
+            onPress={() => router.push('/expiring-soon')}
           />
           <HeaderButton
             icon="dots-vertical"
-            label="More"
+            label="More options"
             onPress={() => setMenuOpen(true)}
           />
         </View>
       </View>
 
-      {/* A sheet rather than a floating popover: anchoring a menu under an icon
-          means measuring the icon, and a bottom sheet is easier to hit with a
-          thumb anyway. */}
       <Sheet
         visible={menuOpen}
-        title={settings.pantryName || "Menu"}
         onClose={close}
+        title={settings.pantryName || 'Pantry Menu'}
       >
-        {/* One child, so the sheet's own gap doesn't space the rows out. */}
         <View>
-          <MenuRow
+          <Row
             icon="format-size"
-            label={seniorMode ? "Senior Mode: Active" : "Senior Mode: Off"}
+            label={seniorMode ? 'Large Text Mode: ON' : 'Large Text Mode: OFF'}
             hint="Large text and high contrast"
             onPress={() => {
               cueTap();
               toggleSeniorMode();
             }}
           />
-          <MenuRow
+          <Row
             icon="chart-box-outline"
-            label="Reports"
+            label="Reports & Activity"
             hint="Given out, wasted, CSV export"
             onPress={() => {
               close();
-              router.push("/reports");
+              router.push('/reports');
             }}
           />
-          <MenuRow
+          <Row
             icon="cog-outline"
             label="Pantry settings"
             hint="Box rules, thresholds, sound"
             onPress={() => {
               close();
-              router.push("/(tabs)/settings");
+              router.push('/(tabs)/settings');
             }}
           />
-          <MenuRow
+          <Row
+            icon="account-multiple-outline"
+            label="Team"
+            hint="Members and their activity"
+            onPress={() => {
+              close();
+              router.push('/team');
+            }}
+          />
+          <Row
             icon="swap-horizontal"
             label="Switch pantry"
             hint={
@@ -233,10 +249,10 @@ export function AppHeader({ title }: { title: string }) {
                     close();
                     switchPantry(p.id);
                   }}
-                  className="ml-[52px] flex-row items-center gap-3 py-2"
+                  className="ml-[52px] min-h-[48px] flex-row items-center gap-3 py-2.5"
                 >
                   <MaterialCommunityIcons
-                    name={current ? "check-circle" : "circle-outline"}
+                    name={current ? 'check-circle' : 'circle-outline'}
                     size={20}
                     color={current ? COLORS.primary : COLORS.borderStrong}
                   />
@@ -254,29 +270,21 @@ export function AppHeader({ title }: { title: string }) {
                 </Tappable>
               );
             })}
-          <MenuRow
+          <Row
             icon="plus-circle-outline"
             label="Add or create pantry"
             hint="Join with a code or start one"
             onPress={() => {
               close();
               setAddingPantry(true);
-              router.push("/pantry-selection");
+              router.push('/pantry-selection');
             }}
           />
-          <MenuRow
-            icon="account-multiple-outline"
-            label="Team"
-            hint="Members and their activity"
-            onPress={() => {
-              close();
-              router.push("/team");
-            }}
-          />
-          <MenuRow
+          <Row
             icon="logout"
             label="Sign out"
             tone="critical"
+            divider={false}
             onPress={handleSignOut}
           />
         </View>
@@ -304,7 +312,7 @@ function HeaderButton({
         cueTap();
         onPress();
       }}
-      className="h-12 w-12 items-center justify-center rounded-lg bg-card border border-hairline/70"
+      className="h-12 w-12 items-center justify-center rounded-lg border border-hairline bg-card"
     >
       <MaterialCommunityIcons
         name={icon}
@@ -313,73 +321,14 @@ function HeaderButton({
       />
       {!!badge && badge > 0 && (
         <View className="absolute -right-1 -top-1 min-w-[20px] items-center justify-center rounded-md bg-warn px-1.5 py-0.5">
-          <Text variant="micro" tone="on" className="text-[11px] font-bold">
-            {badge > 99 ? "99+" : badge}
+          <Text variant="micro" tone="on" className="font-bold">
+            {badge > 99 ? '99+' : badge}
           </Text>
         </View>
       )}
     </Tappable>
   );
 }
-
-function MenuRow({
-  icon,
-  label,
-  hint,
-  tone,
-  onPress,
-}: {
-  icon: keyof typeof MaterialCommunityIcons.glyphMap;
-  label: string;
-  hint?: string;
-  tone?: "critical";
-  onPress?: () => void;
-}) {
-  const colour =
-    tone === "critical" ? COLORS.statusCritical : COLORS.textPrimary;
-  return (
-    <Tappable
-      scaleTo={PRESS_SCALE_ROW}
-      disabled={!onPress}
-      onPress={onPress}
-      className="flex-row items-center gap-3 py-2"
-      accessibilityRole={onPress ? "button" : undefined}
-    >
-      <View
-        className={`h-10 w-10 items-center justify-center rounded-lg ${
-          tone === "critical" ? "bg-subtle" : "bg-secondary-tint"
-        }`}
-      >
-        <MaterialCommunityIcons
-          name={icon}
-          size={20}
-          color={tone === "critical" ? colour : COLORS.secondaryDark}
-        />
-      </View>
-      <View className="flex-1">
-        <Text
-          variant="heading"
-          style={{ color: colour }}
-        >
-          {label}
-        </Text>
-        {hint ? (
-          <Text variant="label" tone="soft" numberOfLines={1}>
-            {hint}
-          </Text>
-        ) : null}
-      </View>
-      {onPress ? (
-        <MaterialCommunityIcons
-          name="chevron-right"
-          size={20}
-          color={COLORS.textSecondary}
-        />
-      ) : null}
-    </Tappable>
-  );
-}
-
 /**
  * The same bar for pushed screens.
  *

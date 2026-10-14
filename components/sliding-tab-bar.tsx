@@ -9,12 +9,14 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
+import { useAccessibilityStore } from '../lib/accessibility';
 import { cueTap } from '../lib/feedback';
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 /** Bar height before the home-indicator inset is added. */
 export const TAB_BAR_BODY = 64;
+export const TAB_BAR_BODY_SENIOR = 74;
 /** How far the pill sits inside each item, so it reads as a pill, not a cell. */
 const PILL_INSET = 8;
 
@@ -33,6 +35,8 @@ const PILL_INSET = 8;
 export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
+  const seniorMode = useAccessibilityStore((s) => s.seniorMode);
+  const barBodyHeight = seniorMode ? TAB_BAR_BODY_SENIOR : TAB_BAR_BODY;
   const [rowWidth, setRowWidth] = React.useState(0);
 
   const visible = state.routes.filter((route) => {
@@ -59,7 +63,7 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
   return (
     <View
       style={{
-        height: TAB_BAR_BODY + insets.bottom,
+        height: barBodyHeight + insets.bottom,
         paddingBottom: Math.max(insets.bottom, 8),
         paddingTop: 6,
         backgroundColor: COLORS.background,
@@ -92,7 +96,11 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
         {visible.map((route) => {
           const { options } = descriptors[route.key];
           const focused = route.key === activeKey;
-          const color = focused ? COLORS.primary : COLORS.textSecondary;
+          const color = focused
+            ? COLORS.primary
+            : seniorMode
+              ? COLORS.textPrimary
+              : COLORS.textSecondary;
           const label =
             typeof options.tabBarLabel === 'string'
               ? options.tabBarLabel
@@ -120,9 +128,13 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
               accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
               className="flex-1 items-center justify-center gap-0.5"
             >
-              {options.tabBarIcon?.({ focused, color, size: 24 })}
+              {options.tabBarIcon?.({ focused, color, size: seniorMode ? 28 : 24 })}
               <Animated.Text
-                style={{ fontSize: 12, fontWeight: focused ? '700' : '600', color }}
+                style={{
+                  fontSize: seniorMode ? 15 : 12,
+                  fontWeight: focused || seniorMode ? '700' : '600',
+                  color,
+                }}
                 numberOfLines={1}
               >
                 {label}

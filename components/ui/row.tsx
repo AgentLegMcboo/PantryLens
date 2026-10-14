@@ -72,11 +72,11 @@ export function Row({
       ) : null}
 
       <View className="flex-1">
-        <Text variant="body" className="font-semibold text-base" style={{ color: colour }}>
+        <Text variant="body" className="font-semibold" style={{ color: colour }}>
           {label}
         </Text>
         {hint ? (
-          <Text variant="label" tone="soft" className="mt-0.5 text-xs">
+          <Text variant="label" tone="soft" className="mt-0.5">
             {hint}
           </Text>
         ) : null}

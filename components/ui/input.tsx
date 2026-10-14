@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { TextInput, View, type TextInputProps } from 'react-native';
 import { COLORS } from '../../constants/theme';
+import { useAccessibilityStore } from '../../lib/accessibility';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
 
@@ -25,6 +26,7 @@ export function Input({
   hint,
   error,
   className,
+  style,
   onFocus,
   onBlur,
   ...props
@@ -35,6 +37,7 @@ export function Input({
   error?: string | null;
 }) {
   const [focused, setFocused] = React.useState(false);
+  const seniorMode = useAccessibilityStore((state) => state.seniorMode);
   const message = error ?? hint;
 
   return (
@@ -47,6 +50,7 @@ export function Input({
 
       <TextInput
         placeholderTextColor={COLORS.textSecondary}
+        maxFontSizeMultiplier={2.2}
         onFocus={e => {
           setFocused(true);
           onFocus?.(e);
@@ -55,8 +59,12 @@ export function Input({
           setFocused(false);
           onBlur?.(e);
         }}
+        style={[
+          seniorMode ? { fontSize: 19, minHeight: 54 } : undefined,
+          style,
+        ]}
         className={cn(
-          'h-12 rounded-md border-[1.5px] bg-card px-3.5 text-body text-ink',
+          'min-h-[48px] rounded-md border-[1.5px] bg-card px-3.5 text-body text-ink',
           error ? 'border-critical' : focused ? 'border-brand' : 'border-outline',
           className,
         )}

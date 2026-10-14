@@ -17,6 +17,7 @@ import {
   Text,
 } from '../components/ui';
 import { cueSuccess, cueTap } from '../lib/feedback';
+import { windowEndISO } from '../lib/expiry';
 import { Category, SOURCE_ORG_LABELS, SourceOrg, usePantryStore } from '../lib/store';
 
 const CATEGORIES: Category[] = [
@@ -150,6 +151,8 @@ export default function BulkIntakeScreen() {
                 keyboardType="decimal-pad"
                 placeholder="0"
                 placeholderTextColor={COLORS.borderStrong}
+                maxFontSizeMultiplier={2.2}
+                accessibilityLabel="Weight in pounds"
                 // An explicit line box and no vertical padding: a fixed-height
                 // field with 34px type and the platform's default padding
                 // clipped the tops and bottoms of the digits.
@@ -161,6 +164,19 @@ export default function BulkIntakeScreen() {
               <Text variant="title" tone="soft" className="font-bold">
                 lb
               </Text>
+            </View>
+            <View className="mt-1 flex-row flex-wrap gap-2">
+              {[10, 25, 50, 100].map(preset => (
+                <Chip
+                  key={preset}
+                  label={`${preset} lb`}
+                  selected={lbs === preset}
+                  onPress={() => {
+                    setWeight(String(preset));
+                    setUnitOverride(null);
+                  }}
+                />
+              ))}
             </View>
           </View>
 
@@ -189,14 +205,34 @@ export default function BulkIntakeScreen() {
         <Card className="gap-4 p-4">
           <CardHeader title="Where it came from" className="mb-0" />
 
-          <Input
-            label="Earliest expiration in the load"
-            value={expiration}
-            onChangeText={setExpiration}
-            placeholder="MM/YYYY or 2026-09-01"
-            error={expirationInvalid ? 'Could not read that date — try MM/YYYY.' : null}
-            hint="Use the soonest date you spot while sorting, so the whole lot gets pulled in time."
-          />
+          <View className="gap-2">
+            <Input
+              label="Earliest expiration in the load"
+              value={expiration}
+              onChangeText={setExpiration}
+              placeholder="MM/YYYY or 2026-09-01"
+              error={expirationInvalid ? 'Could not read that date — try MM/YYYY.' : null}
+              hint="Use the soonest date you spot while sorting, so the whole lot gets pulled in time."
+            />
+            <View className="flex-row flex-wrap gap-2">
+              {[
+                { label: '+3 mos', days: 90 },
+                { label: '+6 mos', days: 180 },
+                { label: '+1 yr', days: 365 },
+                { label: '+2 yrs', days: 730 },
+              ].map(preset => {
+                const iso = windowEndISO(preset.days);
+                return (
+                  <Chip
+                    key={preset.label}
+                    label={preset.label}
+                    selected={expiration === iso}
+                    onPress={() => setExpiration(iso)}
+                  />
+                );
+              })}
+            </View>
+          </View>
 
           <View className="gap-2">
             <Text variant="label" tone="soft" className="font-semibold">

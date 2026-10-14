@@ -2,11 +2,12 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, View } from "react-native";
+import { Alert, Share, View } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
-import { FadeInUp, Tappable } from "../../components/motion";
+import { FadeInUp, ProgressBar, Tappable } from "../../components/motion";
 import {
+  Badge,
   Button,
   Card,
   CategoryIcon,
@@ -15,7 +16,7 @@ import {
   Sheet,
   Text,
 } from "../../components/ui";
-import { cueSuccess } from "../../lib/feedback";
+import { cueSuccess, cueTap } from "../../lib/feedback";
 import { usePantryStore } from "../../lib/store";
 
 /**
@@ -65,13 +66,23 @@ export default function NeedsScreen() {
   const [flyerOpen, setFlyerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const deficits: { category: string; deficit: number; reason: string }[] = [];
+  const deficits: {
+    category: string;
+    deficit: number;
+    current: number;
+    goal: number;
+    reason: string;
+  }[] = [];
 
   // The limiting category first: it is the one actually stopping boxes going out.
   if (plan.shortfallPerCategory[plan.limitingCategory] > 0) {
+    const current = plan.categoryTotals[plan.limitingCategory] ?? 0;
+    const deficit = plan.shortfallPerCategory[plan.limitingCategory];
     deficits.push({
       category: plan.limitingCategory,
-      deficit: plan.shortfallPerCategory[plan.limitingCategory],
+      deficit,
+      current,
+      goal: current + deficit,
       reason: "Stopping boxes going out",
     });
   }
@@ -88,6 +99,8 @@ export default function NeedsScreen() {
       deficits.push({
         category: cat,
         deficit: min - current,
+        current,
+        goal: min,
         reason: "Below the level you set",
       });
     }
@@ -115,6 +128,18 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
     setCopied(true);
     setTimeout(() => setCopied(false), 2500);
     Alert.alert("Copied", "Paste it into an email, a post, or a printed flyer.");
+  };
+
+  const handleShare = async () => {
+    cueTap();
+    try {
+      await Share.share({
+        title: `${settings.pantryName} — Most Needed Items`,
+        message: flyerText,
+      });
+    } catch {
+      await handleCopy();
+    }
   };
 
   if (deficits.length === 0) {
@@ -159,17 +184,17 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             <Tappable
               onPress={() => router.push("/(tabs)/settings")}
               accessibilityRole="button"
-              className="mt-3 flex-row items-center gap-2"
+              className="mt-3 min-h-[44px] flex-row items-center gap-2"
             >
               <MaterialCommunityIcons
                 name="package-variant-closed"
-                size={14}
+                size={16}
                 color={COLORS.textSecondary}
               />
               <Text variant="micro" tone="soft" className="flex-1">
                 Amounts are for {settings.boxTarget} box
                 {settings.boxTarget === 1 ? "" : "es"} of {settings.defaultFamilySize}
-                . Change that in Settings.
+                . Change that in Settings →
               </Text>
             </Tappable>
           </View>
@@ -177,56 +202,96 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
 
         {/* Tighter than the page rhythm: these are one list, not separate blocks. */}
         <View className="gap-2.5">
-          {deficits.map((item, i) => (
-            <FadeInUp key={item.category} index={i + 1}>
-              <Card className="flex-row items-center gap-3.5 p-4">
-                <CategoryIcon
-                  category={item.category}
-                  size="md"
-                  tone={
-                    item.reason === "Stopping boxes going out" ? "critical" : "brand"
-                  }
-                />
-                <View className="flex-1">
-                  <View className="flex-row items-baseline gap-2">
-                    <Text variant="heading" className="font-bold capitalize">
-                      {item.category}
-                    </Text>
-                    <Text variant="label" className="font-semibold">
-                      about {item.deficit} more
-                    </Text>
+          {deficits.map((item, i) => {
+            const isLimiting = item.reason === "Stopping boxes going out";
+            return (
+              <FadeInUp key={item.category} index={i + 1}>
+                <Card className="gap-3 p-4">
+                  <View className="flex-row items-start gap-3.5">
+                    <CategoryIcon
+                      category={item.category}
+                      size="md"
+                      tone={isLimiting ? "critical" : "brand"}
+                    />
+                    <View className="flex-1">
+                      <View className="flex-row items-center justify-between gap-2">
+                        <Text variant="heading" className="font-bold capitalize">
+                          {item.category}
+                        </Text>
+                        <Badge
+                          label={`Need ${item.deficit} more`}
+                          tone={isLimiting ? "critical" : "warn"}
+                        />
+                      </View>
+                      <Text variant="label" tone="soft" className="mt-1">
+                        {EXAMPLES[item.category] ?? "Any shelf-stable items"}
+                      </Text>
+                    </View>
                   </View>
-                  <Text variant="label" tone="soft" className="mt-0.5">
-                    {EXAMPLES[item.category] ?? "Any shelf-stable items"}
-                  </Text>
-                  {item.reason === "Stopping boxes going out" && (
-                    <Text variant="micro" tone="critical" className="mt-2 font-bold">
-                      This is what's stopping boxes going out
-                    </Text>
-                  )}
-                </View>
-              </Card>
-            </FadeInUp>
-          ))}
+
+                  <View className="gap-1.5">
+                    <ProgressBar
+                      progress={item.goal > 0 ? Math.min(1, item.current / item.goal) : 0}
+                      color={isLimiting ? COLORS.statusCritical : COLORS.primaryLight}
+                      height={6}
+                    />
+                    <View className="flex-row items-center justify-between">
+                      <Text variant="micro" tone="soft" className="font-semibold">
+                        {item.current} usable on shelf · goal {item.goal}
+                      </Text>
+                      {isLimiting && (
+                        <Text variant="micro" tone="critical" className="font-bold">
+                          Stopping boxes going out
+                        </Text>
+                      )}
+                    </View>
+                  </View>
+                </Card>
+              </FadeInUp>
+            );
+          })}
         </View>
 
         <FadeInUp index={deficits.length + 1}>
           <View className="gap-3">
-            <Button
-              label={copied ? "Copied" : "Copy the ask"}
-              block
-              icon={
-                <MaterialCommunityIcons
-                  name={copied ? "check" : "content-copy"}
-                  size={18}
-                  color={COLORS.textOnPrimary}
+            <View className="flex-row gap-2.5">
+              <View className="flex-1">
+                <Button
+                  label="Share with donors"
+                  block
+                  icon={
+                    <MaterialCommunityIcons
+                      name="share-variant-outline"
+                      size={18}
+                      color={COLORS.textOnPrimary}
+                    />
+                  }
+                  onPress={handleShare}
                 />
-              }
-              onPress={handleCopy}
-            />
-            <Tappable onPress={() => setFlyerOpen(true)} className="self-start px-1 py-2">
-              <Text variant="label" tone="brand" className="font-semibold">
-                See exactly what gets copied
+              </View>
+              <View className="flex-1">
+                <Button
+                  label={copied ? "Copied" : "Copy text"}
+                  variant="secondary"
+                  block
+                  icon={
+                    <MaterialCommunityIcons
+                      name={copied ? "check" : "content-copy"}
+                      size={18}
+                      color={COLORS.textPrimary}
+                    />
+                  }
+                  onPress={handleCopy}
+                />
+              </View>
+            </View>
+            <Tappable
+              onPress={() => setFlyerOpen(true)}
+              accessibilityRole="button"
+              className="min-h-[48px] justify-center self-start px-1 py-2"
+            >
+              <Text variant="label" tone="brand" className="font-bold">
+                Preview donor message →
               </Text>
             </Tappable>
           </View>

@@ -313,10 +313,11 @@ export function Sheet({
                 <Tappable
                   onPress={onClose}
                   hitSlop={10}
+                  accessibilityRole="button"
                   accessibilityLabel="Close"
-                  className="h-9 w-9 items-center justify-center rounded-lg bg-subtle"
+                  className="h-12 w-12 items-center justify-center rounded-lg border border-hairline bg-subtle"
                 >
-                  <MaterialCommunityIcons name="close" size={18} color={COLORS.textPrimary} />
+                  <MaterialCommunityIcons name="close" size={22} color={COLORS.textPrimary} />
                 </Tappable>
               </View>
 

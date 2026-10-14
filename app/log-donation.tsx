@@ -273,11 +273,12 @@ export default function LogDonationScreen() {
                 <Image source={{ uri: shot.uri }} className="h-16 w-16 rounded-lg border-2 border-white" />
                 <Tappable
                   onPress={() => removeShot(i)}
-                  hitSlop={8}
+                  hitSlop={10}
+                  accessibilityRole="button"
                   accessibilityLabel={`Remove photo ${i + 1}`}
-                  className="absolute -right-2 -top-2 h-6 w-6 items-center justify-center rounded-full bg-black"
+                  className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-lg border border-white/60 bg-black"
                 >
-                  <MaterialCommunityIcons name="close" size={14} color="#FFFFFF" />
+                  <MaterialCommunityIcons name="close" size={18} color="#FFFFFF" />
                 </Tappable>
               </View>
             ))}
@@ -302,7 +303,7 @@ export default function LogDonationScreen() {
                 }}
                 accessibilityRole="button"
                 accessibilityState={{ selected: on }}
-                className="rounded-full px-3.5 py-2"
+                className="min-h-[44px] items-center justify-center rounded-lg px-3.5 py-2"
                 style={{ backgroundColor: on ? COLORS.textOnPrimary : GLASS }}
               >
                 <Text variant="label" className={on ? 'font-bold text-ink' : 'font-semibold text-white'}>
@@ -316,7 +317,7 @@ export default function LogDonationScreen() {
         {/* Bottom bar: library · shutter · detect */}
         <View className="px-gutter" style={{ paddingBottom: insets.bottom + 14 }}>
           <View
-            className="flex-row items-center justify-between rounded-full px-3 py-2.5"
+            className="flex-row items-center justify-between rounded-2xl px-3 py-2.5"
             style={{ backgroundColor: GLASS }}
           >
             <RoundButton
@@ -351,7 +352,7 @@ export default function LogDonationScreen() {
               disabled={shots.length === 0 || isAnalyzing}
               accessibilityRole="button"
               accessibilityLabel={`Detect items in ${shots.length} photos`}
-              className="h-12 min-w-[48px] flex-row items-center justify-center gap-1.5 rounded-full px-3.5"
+              className="h-12 min-w-[48px] flex-row items-center justify-center gap-1.5 rounded-xl px-3.5"
               style={{
                 backgroundColor: shots.length > 0 ? COLORS.textOnPrimary : 'rgba(255,255,255,0.18)',
               }}

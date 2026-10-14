@@ -9,7 +9,7 @@ import {
 } from "../components/exit-chart";
 import { AnimatedCounter, FadeInUp, Tappable } from "../components/motion";
 import { categoryIcon } from "../components/ui/category-icon";
-import { Card, EmptyState, Screen, Segmented, Text } from "../components/ui";
+import { Card, Screen, Segmented, Text } from "../components/ui";
 import { cueTap } from "../lib/feedback";
 import {
   bulkLotsCsv,

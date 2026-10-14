@@ -13,6 +13,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { COLORS, RADII } from '../constants/theme';
+import { useAccessibilityStore } from '../lib/accessibility';
 import {
   isTooSmall,
   moveBox,
@@ -38,8 +39,8 @@ import type { DetectionBox } from '../lib/scan-normalize';
  * or a different screen.
  */
 
-/** Corner grab area. Comfortably past the 44pt guidance once the halo is counted. */
-const HANDLE = 26;
+/** Corner grab area: 44pt so older volunteer fingers can grab corners reliably. */
+const HANDLE = 44;
 
 export interface OverlayItem {
   id: string;
@@ -131,6 +132,8 @@ function EditableBox({
   onDragStateChange: (dragging: boolean) => void;
 }) {
   const box = item.box!;
+  const reducedMotion = useReducedMotion();
+  const seniorMode = useAccessibilityStore(state => state.seniorMode);
 
   // Live pixel geometry. Seeded from the fractions and written back on release.
   const x = useSharedValue(box.left * frame.width);
@@ -138,7 +141,6 @@ function EditableBox({
   const w = useSharedValue(box.width * frame.width);
   const h = useSharedValue(box.height * frame.height);
   const glow = useSharedValue(0);
-  const reduceMotion = useReducedMotion();
 
   // Re-seeded when the frame is measured, or when the parent moves the box for
   // some other reason. Without this a layout change strands the box off-screen.
@@ -152,13 +154,11 @@ function EditableBox({
 
   useEffect(() => {
     if (item.verified) {
-      glow.value = withTiming(0, { duration: 260 });
+      glow.value = reducedMotion ? 0 : withTiming(0, { duration: 260 });
       return;
     }
-    // Reduced motion: a steady bright halo instead of a breathing one. The
-    // colour still says "needs checking"; it just doesn't pulse.
-    if (reduceMotion) {
-      glow.value = 1;
+    if (reducedMotion) {
+      glow.value = 0.45;
       return;
     }
     glow.value = withRepeat(
@@ -166,7 +166,7 @@ function EditableBox({
       -1,
       true,
     );
-  }, [item.verified, glow, reduceMotion]);
+  }, [item.verified, reducedMotion, glow]);
 
   const commit = () => {
     onCommit(toFractions({ x: x.value, y: y.value, w: w.value, h: h.value }, frame));
@@ -206,7 +206,7 @@ function EditableBox({
 
   const haloStyle = useAnimatedStyle(() => ({
     opacity: item.verified ? 0 : interpolate(glow.value, [0, 1], [0.25, 0.75]),
-    transform: reduceMotion ? [] : [{ scale: interpolate(glow.value, [0, 1], [1, 1.045]) }],
+    transform: reducedMotion ? [] : [{ scale: interpolate(glow.value, [0, 1], [1, 1.045]) }],
   }));
 
   const accent = item.verified
@@ -238,8 +238,10 @@ function EditableBox({
           }`}
         >
           <View style={[styles.tag, { backgroundColor: accent }]}>
-            {item.verified && <Text style={styles.tagTick}>✓</Text>}
-            <Text style={styles.tagText} numberOfLines={1}>
+            {item.verified && (
+              <Text style={[styles.tagTick, seniorMode && { fontSize: 13 }]}>✓</Text>
+            )}
+            <Text style={[styles.tagText, seniorMode && { fontSize: 14 }]} numberOfLines={1}>
               {item.count > 1 ? `${item.count}× ` : ''}
               {item.label}
             </Text>
@@ -423,18 +425,18 @@ const styles = StyleSheet.create({
 
   tag: {
     position: 'absolute',
-    top: -11,
+    top: -13,
     left: -2,
-    maxWidth: 150,
+    maxWidth: 180,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 3,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
+    paddingHorizontal: 7,
+    paddingVertical: 2.5,
     borderRadius: RADII.sm,
   },
-  tagText: { fontSize: 10, fontWeight: '700', color: COLORS.textOnPrimary },
-  tagTick: { fontSize: 9, fontWeight: '900', color: COLORS.textOnPrimary },
+  tagText: { fontSize: 12, fontWeight: '700', color: COLORS.textOnPrimary },
+  tagTick: { fontSize: 11, fontWeight: '900', color: COLORS.textOnPrimary },
 
   handleHit: {
     position: 'absolute',

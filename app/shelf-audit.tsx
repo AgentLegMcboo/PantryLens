@@ -259,11 +259,12 @@ export default function ShelfAuditScreen() {
                 <ImageEdge radius={8} />
                 <Tappable
                   onPress={() => removeShot(i)}
-                  hitSlop={8}
+                  hitSlop={10}
+                  accessibilityRole="button"
                   accessibilityLabel={`Remove photo ${i + 1}`}
-                  className="absolute -right-2 -top-2 h-7 w-7 items-center justify-center rounded-md bg-ink"
+                  className="absolute -right-2 -top-2 h-9 w-9 items-center justify-center rounded-lg border border-white/60 bg-ink"
                 >
-                  <MaterialCommunityIcons name="close" size={14} color={COLORS.textOnPrimary} />
+                  <MaterialCommunityIcons name="close" size={18} color={COLORS.textOnPrimary} />
                 </Tappable>
               </View>
             ))}
