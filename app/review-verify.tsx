@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, ScrollView, TextInput, View } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RULE_ABOVE } from '../constants/theme';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
@@ -12,8 +12,7 @@ import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
 import { nextRowToCheck } from '../lib/review-order';
 import { attachItemPhotos, type PhotoJob } from '../lib/item-photos';
 import type { DetectionBox, ScanCandidate } from '../lib/scan-normalize';
-import { fromRegion, itemsRegion, toRegion } from '../lib/box-geometry';
-import { cropForDisplay } from '../lib/photo';
+import { fromRegion, itemsRegion, toRegion, zoomWindow } from '../lib/box-geometry';
 import { describeTags, normaliseDietTags } from '../lib/diet';
 import { finishScan, verdictFor, type DetectedSnapshot } from '../lib/scan-history';
 import {
@@ -181,30 +180,22 @@ export default function ReviewVerifyScreen() {
   // Space left for the photo, so it can be sized to fit without scrolling.
   const [photoArea, setPhotoArea] = useState({ w: 0, h: 0 });
   /**
-   * Each photo cropped to the part that holds the donation, for display.
-   * Worked out once from where the scan found things, so the picture doesn't
-   * jump about while boxes are being nudged. Boxes are shown and edited in the
-   * crop's coordinates and stored back in the full photo's.
+   * The part of each photo that holds the donation, worked out once from where
+   * the scan found things (so it doesn't jump while boxes are nudged). The
+   * whole photo is shown; everything outside this is dimmed, not cropped, so
+   * the picture fills the space instead of shrinking to a strip.
    */
-  const [crops, setCrops] = useState<
-    Record<number, { region: DetectionBox; uri: string; width: number; height: number }>
-  >({});
-  useEffect(() => {
-    let cancelled = false;
-    currentScanPhotos.forEach(async (p, index) => {
-      if (!p?.uri || !p.width || !p.height) return;
+  const [focusRegions] = useState<Record<number, DetectionBox>>(() => {
+    const out: Record<number, DetectionBox> = {};
+    currentScanPhotos.forEach((_p: unknown, index: number) => {
       const boxes = currentDraft
         .filter((item: any) => (item.imageIndex ?? 0) === index && item.box)
         .map((item: any) => item.box as DetectionBox);
       const region = itemsRegion(boxes);
-      if (!region) return;
-      const cropped = await cropForDisplay({ uri: p.uri, width: p.width, height: p.height }, region);
-      if (cropped && !cancelled) setCrops((prev) => ({ ...prev, [index]: { region, ...cropped } }));
+      if (region) out[index] = region;
     });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return out;
+  });
 
   useEffect(() => {
     log.debug(
@@ -634,6 +625,19 @@ export default function ReviewVerifyScreen() {
   const selectedIndex = selectedId ? draftItems.findIndex((i) => i.uid === selectedId) : -1;
   const selectedItem = selectedIndex >= 0 ? draftItems[selectedIndex] : null;
 
+  /**
+   * The photo zoomed so the donation fills as much of the space as it can,
+   * with the dimmed surroundings filling the rest. Shape matches the space the
+   * photo has, so nothing is letterboxed.
+   */
+  function viewportFor(index: number): DetectionBox | null {
+    const p = currentScanPhotos[index];
+    const f = focusRegions[index];
+    if (!f || !p?.width || !p?.height || photoArea.w <= 0 || photoArea.h <= 0) return null;
+    return zoomWindow(f, p.width, p.height, photoArea.w / photoArea.h);
+  }
+  const viewport = viewportFor(photoIndex);
+
   // Only what was found in the photo currently on screen.
   const overlayItems: OverlayItem[] = draftItems
     .map((item, i) => ({ item, i }))
@@ -642,7 +646,7 @@ export default function ReviewVerifyScreen() {
       id: item.uid,
       label: item.name ?? 'Item',
       count: item.count ?? 1,
-      box: item.box ? (crops[photoIndex] ? toRegion(item.box, crops[photoIndex].region) : item.box) : null,
+      box: item.box ? (viewport ? toRegion(item.box, viewport) : item.box) : null,
       verified: !!verifiedIds[item.uid],
       needsAttention: (item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition),
     }));
@@ -732,10 +736,10 @@ export default function ReviewVerifyScreen() {
 
   // The photo is sized to whatever height is left, never wider than the screen,
   // so the whole review fits without scrolling.
-  const crop = crops[photoIndex];
-  const shownUri = crop?.uri ?? photo?.uri;
-  const aspect = crop
-    ? crop.width / crop.height
+  const shownUri = photo?.uri;
+  const focus = focusRegions[photoIndex] ?? null;
+  const aspect = viewport && photo?.width && photo?.height
+    ? (viewport.width * photo.width) / (viewport.height * photo.height)
     : photo?.width && photo?.height
       ? photo.width / photo.height
       : 4 / 3;
@@ -788,6 +792,23 @@ export default function ReviewVerifyScreen() {
         className="flex-1 items-center justify-center px-gutter"
         onLayout={(e) => setPhotoArea({ w: e.nativeEvent.layout.width - 40, h: e.nativeEvent.layout.height })}
       >
+        {/* The space the photo doesn't fill, filled with the photo itself —
+            blurred and darkened — so a wide shot sits in a moody frame rather
+            than floating on blank cream, and nothing of it is cropped. */}
+        {shownUri ? (
+          <View
+            pointerEvents="none"
+            className="absolute bottom-0 left-gutter right-gutter top-0 overflow-hidden rounded-lg"
+          >
+            <Image
+              source={{ uri: shownUri }}
+              blurRadius={28}
+              resizeMode="cover"
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(26, 18, 14, 0.55)' }]} />
+          </View>
+        ) : null}
         {photo && photoWidth > 0 ? (
           <View style={{ width: photoWidth }}>
             <DetectionOverlay
@@ -801,8 +822,10 @@ export default function ReviewVerifyScreen() {
                 cueTap();
                 setSelectedId(id);
               }}
-              onBoxChange={(id, box) => handleBoxChange(id, crop ? fromRegion(box, crop.region) : box)}
-              onDraw={(box) => handleDrawBox(crop ? fromRegion(box, crop.region) : box)}
+              onBoxChange={(id, box) => handleBoxChange(id, viewport ? fromRegion(box, viewport) : box)}
+              onDraw={(box) => handleDrawBox(viewport ? fromRegion(box, viewport) : box)}
+              viewport={viewport}
+              focus={focus && viewport ? toRegion(focus, viewport) : focus}
               onDragStateChange={() => {}}
             />
             {/* Controls sit on the picture itself, so nothing appears or

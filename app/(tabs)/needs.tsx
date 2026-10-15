@@ -5,7 +5,7 @@ import React, { useState } from "react";
 import { Alert, Share, View } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
-import { FadeInUp, ProgressBar, Tappable } from "../../components/motion";
+import { AnimatedCounter, FadeInUp, ProgressBar, Tappable } from "../../components/motion";
 import {
   Button,
   Card,
@@ -224,9 +224,15 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                       </Text>
                     </View>
                     <View className="items-end">
-                      <Text variant="title" className="font-bold" style={{ color: accent }}>
-                        +{item.deficit}
-                      </Text>
+                      <View className="flex-row items-baseline">
+                        <Text variant="title" className="font-bold" style={{ color: accent }}>
+                          +
+                        </Text>
+                        <AnimatedCounter
+                          value={item.deficit}
+                          style={{ fontSize: 22, lineHeight: 28, fontWeight: "700", color: accent }}
+                        />
+                      </View>
                       <Text variant="micro" tone="soft">
                         needed
                       </Text>

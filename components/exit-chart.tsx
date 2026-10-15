@@ -1,5 +1,13 @@
 import * as React from 'react';
 import { View } from 'react-native';
+import Animated, {
+  Easing,
+  ReduceMotion,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withTiming,
+} from 'react-native-reanimated';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
 import { COLORS } from '../constants/theme';
 import type { StockExit } from '../lib/reports';
@@ -90,6 +98,22 @@ export function ExitChart({ exits, days }: { exits: StockExit[]; days: number })
   const barW = Math.max(3, Math.min(22, slot * 0.62));
   const y = (v: number) => plotH - (v / top) * plotH;
 
+  const reduceMotion = useReducedMotion();
+  const progress = useSharedValue(0);
+  React.useEffect(() => {
+    progress.value = 0;
+    progress.value = withTiming(1, {
+      duration: reduceMotion ? 200 : 650,
+      easing: Easing.bezier(0.2, 0, 0, 1),
+      reduceMotion: ReduceMotion.Never,
+    });
+  }, [exits, days, reduceMotion, progress]);
+  const grow = useAnimatedStyle(() =>
+    reduceMotion
+      ? { opacity: progress.value }
+      : { transform: [{ scaleY: Math.max(0.001, progress.value) }] },
+  );
+
   // Three dates along the bottom: first, middle, last. More is clutter.
   const ticks = buckets.length
     ? [0, Math.floor((buckets.length - 1) / 2), buckets.length - 1]
@@ -124,37 +148,6 @@ export function ExitChart({ exits, days }: { exits: StockExit[]; days: number })
               </React.Fragment>
             ))}
 
-            {buckets.map((b, i) => {
-              const x = AXIS_W + i * slot + (slot - barW) / 2;
-              const r = Math.min(4, barW / 2);
-              const givenTop = y(b.given);
-              const wastedTop = y(b.given + b.wasted);
-              return (
-                <React.Fragment key={b.start}>
-                  {b.wasted > 0 && (
-                    <Rect
-                      x={x}
-                      y={wastedTop}
-                      width={barW}
-                      height={plotH - wastedTop}
-                      rx={r}
-                      fill={WASTED_COLOUR}
-                    />
-                  )}
-                  {b.given > 0 && (
-                    <Rect
-                      x={x}
-                      y={givenTop}
-                      width={barW}
-                      height={plotH - givenTop}
-                      rx={r}
-                      fill={GIVEN_COLOUR}
-                    />
-                  )}
-                </React.Fragment>
-              );
-            })}
-
             {ticks.map((i, n) => {
               const cx = AXIS_W + i * slot + slot / 2;
               return (
@@ -172,6 +165,51 @@ export function ExitChart({ exits, days }: { exits: StockExit[]; days: number })
               );
             })}
           </Svg>
+        )}
+        {/* The bars on their own layer, so they can grow up from the
+            baseline when the chart appears or the period changes — the axis
+            and labels stay put. With reduced motion they fade in instead. */}
+        {width > 0 && (
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              { position: 'absolute', top: 0, left: 0, width, height: plotH, transformOrigin: 'bottom' },
+              grow,
+            ]}
+          >
+            <Svg width={width} height={plotH}>
+                {buckets.map((b, i) => {
+                  const x = AXIS_W + i * slot + (slot - barW) / 2;
+                  const r = Math.min(4, barW / 2);
+                  const givenTop = y(b.given);
+                  const wastedTop = y(b.given + b.wasted);
+                  return (
+                    <React.Fragment key={b.start}>
+                      {b.wasted > 0 && (
+                        <Rect
+                          x={x}
+                          y={wastedTop}
+                          width={barW}
+                          height={plotH - wastedTop}
+                          rx={r}
+                          fill={WASTED_COLOUR}
+                        />
+                      )}
+                      {b.given > 0 && (
+                        <Rect
+                          x={x}
+                          y={givenTop}
+                          width={barW}
+                          height={plotH - givenTop}
+                          rx={r}
+                          fill={GIVEN_COLOUR}
+                        />
+                      )}
+                    </React.Fragment>
+                  );
+                })}
+            </Svg>
+          </Animated.View>
         )}
       </View>
 

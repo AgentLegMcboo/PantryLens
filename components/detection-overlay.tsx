@@ -62,6 +62,18 @@ interface Props {
   onDraw: (box: DetectionBox) => void;
   /** Lets the parent freeze the scroll view while a box is being dragged. */
   onDragStateChange: (dragging: boolean) => void;
+  /**
+   * The part of the photo that matters, as fractions. Everything outside it is
+   * dimmed rather than cropped away, so the whole photo still fills the space
+   * and the eye still lands on the donation.
+   */
+  focus?: DetectionBox | null;
+  /**
+   * The part of the photo to show, as fractions — the photo is zoomed so this
+   * window fills the frame. Item boxes and `focus` are given in this window's
+   * coordinates, not the full photo's. Omit to show the whole photo.
+   */
+  viewport?: DetectionBox | null;
 }
 
 export function DetectionOverlay({
@@ -74,6 +86,8 @@ export function DetectionOverlay({
   onBoxChange,
   onDraw,
   onDragStateChange,
+  focus,
+  viewport,
 }: Props) {
   const [frame, setFrame] = useState({ width: 0, height: 0 });
 
@@ -87,7 +101,30 @@ export function DetectionOverlay({
 
   return (
     <View style={styles.root} onLayout={onLayout}>
-      <Image source={{ uri }} style={[styles.image, { aspectRatio }]} resizeMode="cover" />
+      {viewport ? (
+        <>
+          {/* Sizes the frame; the zoomed photo is positioned inside it. */}
+          <View style={[styles.image, { aspectRatio }]} />
+          {ready && (
+            <Image
+              source={{ uri }}
+              resizeMode="stretch"
+              style={{
+                position: 'absolute',
+                width: frame.width / viewport.width,
+                height: frame.height / viewport.height,
+                left: -(viewport.left / viewport.width) * frame.width,
+                top: -(viewport.top / viewport.height) * frame.height,
+              }}
+            />
+          )}
+        </>
+      ) : (
+        <Image source={{ uri }} style={[styles.image, { aspectRatio }]} resizeMode="cover" />
+      )}
+
+      {/* Dim outside the focus area: four panels around it, under the boxes. */}
+      {ready && focus && <FocusMask focus={focus} frame={frame} />}
 
       {ready &&
         boxed.map(item => (
@@ -392,6 +429,41 @@ function DrawLayer({
         <Animated.View style={[styles.drawPreview, preview]} pointerEvents="none" />
       </View>
     </GestureDetector>
+  );
+}
+
+function FocusMask({
+  focus,
+  frame,
+}: {
+  focus: DetectionBox;
+  frame: { width: number; height: number };
+}) {
+  const l = focus.left * frame.width;
+  const t = focus.top * frame.height;
+  const r = (focus.left + focus.width) * frame.width;
+  const b = (focus.top + focus.height) * frame.height;
+  const shade = { position: 'absolute' as const, backgroundColor: 'rgba(20, 14, 10, 0.55)' };
+  return (
+    <>
+      <View pointerEvents="none" style={[shade, { left: 0, right: 0, top: 0, height: t }]} />
+      <View pointerEvents="none" style={[shade, { left: 0, right: 0, top: b, bottom: 0 }]} />
+      <View pointerEvents="none" style={[shade, { left: 0, width: l, top: t, height: b - t }]} />
+      <View pointerEvents="none" style={[shade, { left: r, right: 0, top: t, height: b - t }]} />
+      {/* A hairline round the clear area so the edge reads as a frame. */}
+      <View
+        pointerEvents="none"
+        style={{
+          position: 'absolute',
+          left: l,
+          top: t,
+          width: r - l,
+          height: b - t,
+          borderWidth: 1,
+          borderColor: 'rgba(255, 255, 255, 0.35)',
+        }}
+      />
+    </>
   );
 }
 

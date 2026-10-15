@@ -2,6 +2,14 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
 import { Alert, Platform, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { windowEndISO } from '../lib/expiry';
@@ -319,14 +327,39 @@ function HeaderButton({
         size={22}
         color={COLORS.textPrimary}
       />
-      {!!badge && badge > 0 && (
-        <View className="absolute -right-1 -top-1 min-w-[20px] items-center justify-center rounded-md bg-warn px-1.5 py-0.5">
-          <Text variant="micro" tone="on" className="font-bold">
-            {badge > 99 ? '99+' : badge}
-          </Text>
-        </View>
-      )}
+      {!!badge && badge > 0 && <CountBadge count={badge} />}
     </Tappable>
+  );
+}
+
+/**
+ * The count on the bell. It pops once when the number changes — something
+ * new is expiring — and sits still otherwise; it never animates on first
+ * render. The number itself is the lasting cue, so with reduced motion on it
+ * just changes.
+ */
+function CountBadge({ count }: { count: number }) {
+  const scale = useSharedValue(1);
+  const previous = React.useRef(count);
+  useEffect(() => {
+    if (previous.current === count) return;
+    previous.current = count;
+    scale.value = withSequence(
+      withTiming(1.3, { duration: 120, easing: Easing.out(Easing.quad) }),
+      withSpring(1, { dampingRatio: 1, duration: 300 }),
+    );
+  }, [count, scale]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  return (
+    <Animated.View
+      style={style}
+      className="absolute -right-1 -top-1 min-w-[20px] items-center justify-center rounded-md bg-warn px-1.5 py-0.5"
+    >
+      <Text variant="micro" tone="on" className="font-bold">
+        {count > 99 ? '99+' : count}
+      </Text>
+    </Animated.View>
   );
 }
 /**

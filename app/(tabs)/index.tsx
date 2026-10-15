@@ -1,5 +1,11 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
@@ -194,11 +200,12 @@ export default function DashboardScreen() {
                 they've scanned one. Photo underneath, translucent orange on
                 top, so the card stays orange and the label stays legible. */}
             <Image
-              source={lastScanPhoto ? { uri: lastScanPhoto } : PANTRY_SHELF}
+              source={PANTRY_SHELF}
               resizeMode="cover"
               accessibilityIgnoresInvertColors
               style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
             />
+            {lastScanPhoto ? <FadeInImage uri={lastScanPhoto} /> : null}
             <LinearGradient
               // Top half: the photo shows through and fades out. Bottom half:
               // solid orange under the label.
@@ -695,6 +702,31 @@ export default function DashboardScreen() {
         onClose={() => setStaplesModalVisible(false)}
       />
     </Screen>
+  );
+}
+
+/**
+ * The volunteer's own last scan, cross-faded in over the fallback shelf once
+ * it has actually downloaded — rather than the card flashing from one photo to
+ * the other, or to blank while the signed link loads.
+ */
+function FadeInImage({ uri }: { uri: string }) {
+  const opacity = useSharedValue(0);
+  React.useEffect(() => {
+    opacity.value = 0;
+  }, [uri, opacity]);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return (
+    <Animated.Image
+      source={{ uri }}
+      resizeMode="cover"
+      accessibilityIgnoresInvertColors
+      onLoad={() => {
+        // A fade, not movement, so it plays with reduced motion on too.
+        opacity.value = withTiming(1, { duration: 400, reduceMotion: ReduceMotion.Never });
+      }}
+      style={[StyleSheet.absoluteFill, { borderRadius: 16 }, style]}
+    />
   );
 }
 

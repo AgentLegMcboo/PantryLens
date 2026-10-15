@@ -250,3 +250,48 @@ export function fromRegion(box: DetectionBox, region: DetectionBox): DetectionBo
   };
 }
 
+
+/**
+ * The window of a photo to zoom into so `focus` fills a frame of
+ * `frameAspect` (width / height) as fully as it can.
+ *
+ * The window is the smallest rectangle that contains `focus` and has the
+ * frame's shape, centred on `focus` and kept inside the photo. Where the photo
+ * runs out on one side the window shifts rather than shrinks, so whatever
+ * surrounds the focus fills the rest of the frame. If the photo cannot supply
+ * the frame's shape at all (a tiny photo), the window is clipped to the photo.
+ * Everything is in fractions of the photo; `photoWidth`/`photoHeight` are only
+ * used for the aspect ratio.
+ */
+export function zoomWindow(
+  focus: DetectionBox,
+  photoWidth: number,
+  photoHeight: number,
+  frameAspect: number,
+): DetectionBox {
+  const fw = focus.width * photoWidth;
+  const fh = focus.height * photoHeight;
+  let vw: number;
+  let vh: number;
+  if (fw / fh > frameAspect) {
+    vw = fw;
+    vh = fw / frameAspect;
+  } else {
+    vh = fh;
+    vw = fh * frameAspect;
+  }
+  vw = Math.min(vw, photoWidth);
+  vh = Math.min(vh, photoHeight);
+
+  const cx = (focus.left + focus.width / 2) * photoWidth;
+  const cy = (focus.top + focus.height / 2) * photoHeight;
+  const left = Math.min(Math.max(cx - vw / 2, 0), photoWidth - vw);
+  const top = Math.min(Math.max(cy - vh / 2, 0), photoHeight - vh);
+
+  return {
+    left: left / photoWidth,
+    top: top / photoHeight,
+    width: vw / photoWidth,
+    height: vh / photoHeight,
+  };
+}
