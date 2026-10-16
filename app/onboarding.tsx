@@ -22,38 +22,36 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { AuthBackdrop } from "../components/auth-layout";
 import { BrandMark } from "../components/brand-mark";
 import { AppearanceControl } from "../components/appearance-control";
-import {
-  PackedBoxMock,
-  PhotoInventoryMock,
-  InventoryMock,
-} from "../components/onboarding-mocks";
+import { ConfirmDemo, PackDemo, SnapDemo } from "../components/onboarding-demos";
 import { Button, Text } from "../components/ui";
 import { COLORS, fw } from "../constants/theme";
 import { cueSuccess, cueTap } from "../lib/feedback";
 import { usePantryStore } from "../lib/store";
 
 // One outcome per slide. Illustrations are explanatory, not working controls.
+// One moment of the app per slide, and each one can be tried, not just read:
+// snap a shelf, confirm what was found, see how many boxes that packs.
 const PHASES = [
   {
-    key: "camera",
-    Mock: PhotoInventoryMock,
-    title: "Turn photos into inventory.",
-    body: "Photograph a donation pile or a whole shelf. PantryLens identifies the items—just check the names and counts before saving.",
-    imageDescription: "A pantry photo with detected food items. Review the names and counts before saving to inventory.",
+    key: "snap",
+    Demo: SnapDemo,
+    title: "Take a picture",
+    body: "PantryLens finds the food in it for you.",
+    demoDescription: "Try it: tap the shutter to take a picture of a pantry shelf.",
   },
   {
-    key: "inventory",
-    Mock: InventoryMock,
-    title: "Know what’s on your shelves.",
-    body: "See what you have and how much is left. Set your use-first window to spot food close to its date and use it in time.",
-    imageDescription: "Inventory example: 12 cans of beans, 24 bags of rice, and 18 cans of vegetables. Use beans first: 5 days left.",
+    key: "confirm",
+    Demo: ConfirmDemo,
+    title: "Confirm each item",
+    body: "Check it's right, then save it to your inventory.",
+    demoDescription: "Try it: tap Confirm for each item, then Save.",
   },
   {
-    key: "boxes",
-    Mock: PackedBoxMock,
-    title: "Build balanced boxes.",
-    body: "Plan a balanced mix of food from your current stock. See how many boxes you can pack and which foods you need more of.",
-    imageDescription: "An open pantry box with beans, rice, vegetables, and breakfast food. Example: 6 boxes ready to pack. Short on beans.",
+    key: "pack",
+    Demo: PackDemo,
+    title: "Pack boxes for families",
+    body: "Pick a family size. See how many boxes you can make.",
+    demoDescription: "Try it: pick a family size to see how many boxes you can pack.",
   },
 ] as const;
 
@@ -79,6 +77,18 @@ export default function OnboardingScreen() {
     // as incomplete and sends us straight back here.
     await completeOnboarding();
     router.replace(signedIn ? "/(tabs)" : "/login");
+  };
+
+  const pageRef = useRef(0);
+  pageRef.current = page;
+  const goTo = (target: number) => {
+    scrollRef.current?.scrollTo({ x: target * width, animated: true });
+    setPage(target);
+  };
+  // A demo finished by hand: move on by itself, unless they already swiped.
+  const advanceFrom = (from: number) => {
+    if (from !== pageRef.current || from >= PHASES.length - 1) return;
+    goTo(from + 1);
   };
 
   const next = () => {
@@ -108,12 +118,10 @@ export default function OnboardingScreen() {
 
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <View className="flex-row items-center justify-between px-gutter pt-2">
-          <View className="flex-row items-center gap-3">
-            <BrandMark />
-            <AppearanceControl compact />
-          </View>
+          <BrandMark />
 
-          <View style={{ width: 60 }}>
+          <View className="flex-row items-center gap-1">
+          <AppearanceControl compact />
           {!isLast && (
             <Pressable
               onPress={skip}
@@ -139,13 +147,13 @@ export default function OnboardingScreen() {
           onLayout={event => setViewportHeight(event.nativeEvent.layout.height)}
           className="flex-1"
         >
-          {PHASES.map((phase) => {
-            const Mock = phase.Mock;
+          {PHASES.map((phase, index) => {
+            const Demo = phase.Demo;
             // Use the space left by the actual text, not a fixed picture size.
             // On compact screens or with larger text, the page can still scroll.
             const copyHeight = copyHeights[phase.key] ?? 220;
-            const imageHeight = Math.min(470, Math.max(240, viewportHeight - copyHeight - 36));
-            const imageScale = Math.min(1.05, (width - 24) / 430, imageHeight / 410);
+            const demoHeight = Math.min(620, Math.max(340, viewportHeight - copyHeight - 40));
+            const demoWidth = Math.min(width - 40, 460);
             return (
               <ScrollView
                 key={phase.key}
@@ -153,34 +161,28 @@ export default function OnboardingScreen() {
                 contentContainerStyle={{
                   flexGrow: 1,
                   justifyContent: "center",
-                  paddingHorizontal: 24,
+                  paddingHorizontal: 20,
                   paddingTop: 12,
                   paddingBottom: 16,
                 }}
                 showsVerticalScrollIndicator={false}
               >
                 <View
-                  accessible
-                  accessibilityRole="image"
-                  accessibilityLabel={phase.imageDescription}
+                  accessibilityLabel={phase.demoDescription}
                   style={{
-                    height: imageHeight,
+                    height: demoHeight,
                     flexShrink: 0,
                     alignItems: "center",
                     justifyContent: "center",
                     marginBottom: 16,
                   }}
                 >
-                  <View
-                    style={{
-                      width: 430,
-                      height: 430,
-                      flexShrink: 0,
-                      transform: [{ scale: imageScale }],
-                    }}
-                  >
-                    <Mock />
-                  </View>
+                  <Demo
+                    active={index === page}
+                    w={demoWidth}
+                    h={demoHeight}
+                    onDone={() => advanceFrom(index)}
+                  />
                 </View>
 
                 <View style={{ gap: 12 }} onLayout={event => {
@@ -191,8 +193,8 @@ export default function OnboardingScreen() {
                   <Text
                     variant="display"
                     style={{
-                      fontSize: 28,
-                      lineHeight: 34,
+                      fontSize: 34,
+                      lineHeight: 40,
                       fontWeight: fw("700"),
                       letterSpacing: -0.5,
                       color: COLORS.textPrimary,
@@ -203,7 +205,7 @@ export default function OnboardingScreen() {
                   <Text
                     variant="body"
                     tone="soft"
-                    style={{ fontSize: 16, lineHeight: 24 }}
+                    style={{ fontSize: 19, lineHeight: 27 }}
                   >
                     {phase.body}
                   </Text>
@@ -215,7 +217,7 @@ export default function OnboardingScreen() {
 
         <View className="gap-6 px-gutter pb-2">
           <View
-            className="flex-row items-center justify-center gap-1.5"
+            className="flex-row items-center gap-1.5"
             accessible
             accessibilityLabel={`Page ${page + 1} of ${PHASES.length}`}
           >
