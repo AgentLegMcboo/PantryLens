@@ -306,7 +306,7 @@ export default function LogDonationScreen() {
 
         <View className="px-gutter pb-2">
           {shots.length > 0 && (
-            <View className="mt-2 gap-2 rounded-lg bg-card p-3">
+            <View className="mt-2 gap-2 rounded-lg border border-hairline bg-card p-3">
               <Text variant="label" className="font-bold">What will the next photo show?</Text>
               <View className="flex-row gap-2">
                 <Button className="flex-1 self-stretch" label="Another angle" size="compact" variant={captureMode === 'angle' ? 'primary' : 'secondary'} onPress={() => setCaptureMode('angle')} />

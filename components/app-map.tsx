@@ -149,7 +149,7 @@ export function AppMap({
           >
             {group.title}
           </Text>
-          <View className="rounded-lg bg-card px-3">
+          <View className="rounded-lg border border-hairline bg-card px-3">
             {group.entries.map((entry) => (
               <Row
                 key={entry.label}

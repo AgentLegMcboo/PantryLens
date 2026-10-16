@@ -154,14 +154,14 @@ export default function ExpiringSoonScreen() {
               }}
               accessibilityRole="button"
               accessibilityLabel={`Take ${item.name} off the shelf`}
-              className="min-h-[44px] flex-row items-center gap-1.5 rounded-md border border-hairline bg-subtle px-3 py-2"
+              className="min-h-[44px] shrink-0 flex-row items-center gap-1.5 rounded-md border border-hairline bg-subtle px-3 py-2"
             >
               <MaterialCommunityIcons
                 name="tray-arrow-up"
                 size={16}
                 color={COLORS.textPrimary}
               />
-              <Text variant="label" className="font-bold">
+              <Text variant="label" className="font-bold" numberOfLines={1}>
                 Take off shelf
               </Text>
             </Pressable>
@@ -214,9 +214,9 @@ export default function ExpiringSoonScreen() {
                         }}
                         accessibilityRole="button"
                         hitSlop={8}
-                        className="rounded-md bg-subtle px-3 py-2"
+                        className="shrink-0 rounded-md border border-hairline bg-subtle px-3 py-2"
                       >
-                        <Text variant="label" className="font-bold">
+                        <Text variant="label" className="font-bold" numberOfLines={1}>
                           Take off shelf
                         </Text>
                       </Pressable>

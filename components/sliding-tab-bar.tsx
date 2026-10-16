@@ -11,6 +11,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, fw } from '../constants/theme';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { cueTap } from '../lib/feedback';
+import { useTabBarHidden } from '../lib/tab-overlay';
 import { GlassSurface } from './ui/glass-surface';
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
@@ -60,6 +61,8 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
   }, [activeIndex, itemWidth, reduceMotion, x]);
 
   const pill = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
+  const hidden = useTabBarHidden((s) => s.hidden);
+  if (hidden) return null;
 
   return (
     <View

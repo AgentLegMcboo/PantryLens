@@ -154,14 +154,11 @@ const SORTS = [
  * the others, so that cost followed the volunteer around the whole app. Now a
  * row only re-renders when its own props change.
  */
-const ROW_EDGE = {
-  borderWidth: 1,
-  borderColor: "rgba(224,205,187,0.7)",
-} as const;
-const SELECTED_EDGE = {
-  borderWidth: 1.5,
-  borderColor: COLORS.primary,
-} as const;
+// Read at render, not at load: COLORS follows light and dark mode.
+const rowEdge = (selected: boolean) =>
+  selected
+    ? { borderWidth: 1.5, borderColor: COLORS.primary }
+    : { borderWidth: 1, borderColor: COLORS.borderSoft };
 
 const InventoryRow = React.memo(function InventoryRow({
   item,
@@ -225,15 +222,12 @@ const InventoryRow = React.memo(function InventoryRow({
           under it, and the count on the right. Expiry only when there is
           one — "No expiry recorded" on every tin of soap was just noise. */}
         <View
-          className={
-            // Selected keeps the white card; only the edge changes.
-            "mb-2 rounded-lg bg-card px-3.5 py-3"
-          }
-          // A lighter edge than other cards: in a long list a full-strength
-          // outline on every row adds up to a lot of lines.
-          style={isSelected ? SELECTED_EDGE : ROW_EDGE}
+          // One line per item: photo, name and status, count on the right.
+          // Selected keeps the white card; only the edge changes.
+          className="mb-2 flex-row items-center gap-3 rounded-lg bg-card px-3 py-2.5"
+          style={rowEdge(isSelected)}
         >
-          <View className="flex-row items-center gap-3">
+          <View className="flex-1 flex-row items-center gap-3">
             {picking && (
               <MaterialCommunityIcons
                 name={isSelected ? "check-circle" : "circle-outline"}
@@ -252,7 +246,7 @@ const InventoryRow = React.memo(function InventoryRow({
             />
 
             <View className="flex-1 gap-1">
-              <Text variant="body" className="font-semibold">
+              <Text variant="body" className="font-semibold" numberOfLines={2}>
                 {item.name}
               </Text>
               {/* At most one status, worst first, then the details that exist. */}
@@ -273,7 +267,7 @@ const InventoryRow = React.memo(function InventoryRow({
                 ].filter(Boolean) as string[];
                 if (!status && details.length === 0) return null;
                 return (
-                  <Text variant="micro" tone="soft">
+                  <Text variant="micro" tone="soft" numberOfLines={1}>
                     {status ? (
                       <Text
                         variant="micro"
@@ -290,11 +284,7 @@ const InventoryRow = React.memo(function InventoryRow({
               })()}
             </View>
           </View>
-          <View className="mt-3 flex-row items-center justify-between gap-3">
-            <Text variant="label" tone="soft">
-              Quantity
-            </Text>
-            {/* The stepper is meaningless while picking — the row is a checkbox
+          {/* The stepper is meaningless while picking — the row is a checkbox
               then, and a control that also changes stock would fight the tap. */}
             {picking ? (
               <Text variant="label" tone="soft" className="font-semibold">
@@ -327,7 +317,6 @@ const InventoryRow = React.memo(function InventoryRow({
                 }}
               />
             )}
-          </View>
         </View>
       </Pressable>
     </GestureDetector>
@@ -1042,7 +1031,7 @@ export default function InventoryScreen() {
               }}
               accessibilityRole="button"
               accessibilityLabel="Filter and sort inventory"
-              className="min-h-[48px] flex-1 flex-row items-center justify-center gap-2 rounded-lg bg-card px-3"
+              className="min-h-[48px] flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-hairline bg-card px-3"
             >
               <MaterialCommunityIcons
                 name="tune-variant"
@@ -1060,7 +1049,7 @@ export default function InventoryScreen() {
               }}
               accessibilityRole="button"
               accessibilityLabel="Shelves: add, rename or nest shelves"
-              className="min-h-[48px] flex-row items-center justify-center gap-2 rounded-lg bg-card px-3"
+              className="min-h-[48px] flex-row items-center justify-center gap-2 rounded-lg border border-hairline bg-card px-3"
             >
               <MaterialCommunityIcons
                 name="bookshelf"

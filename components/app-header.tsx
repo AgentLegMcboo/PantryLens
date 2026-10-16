@@ -193,8 +193,8 @@ export function AppHeader({ title }: { title: string }) {
           />
           <Row
             icon="account-multiple-outline"
-            label="Team"
-            hint="Members and their activity"
+            label="Volunteers & team"
+            hint="Members, roles and admins"
             onPress={() => {
               close();
               router.push('/team');

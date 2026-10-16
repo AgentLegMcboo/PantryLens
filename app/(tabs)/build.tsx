@@ -186,7 +186,7 @@ export default function BuildBoxesScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <View className="px-gutter pt-3 pb-1">
+      <View className="px-gutter pt-2 pb-0">
         <Segmented
           value={section}
           options={[
@@ -201,107 +201,35 @@ export default function BuildBoxesScreen() {
         />
       </View>
       {section === "plan" ? (
-        <Screen>
-          {/* What's being packed, then how many and for whom. */}
-          <FadeInUp index={1}>
-            <Card className="gap-4">
-              <Tappable
-                onPress={() => {
-                  cueTap();
-                  setPickerOpen(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel={`Box: ${box.name}. Tap to change.`}
-                className="min-h-[52px] flex-row items-center gap-3"
-              >
-                <View className="h-11 w-11 items-center justify-center rounded-md bg-secondary-tint">
-                  <MaterialCommunityIcons
-                    name="package-variant-closed"
-                    size={22}
-                    color={COLORS.secondaryDark}
-                  />
-                </View>
-                <View className="flex-1">
-                  <Text
-                    variant="title"
-                    accessibilityRole="header"
-                    style={{
-                      fontSize: 21,
-                      lineHeight: 26,
-                      fontWeight: fw("700"),
-                      letterSpacing: -0.25,
-                    }}
-                  >
-                    {box.name}
-                  </Text>
-                </View>
-                <Text variant="label" tone="brand" className="font-bold">
-                  Change
-                </Text>
-              </Tappable>
-
-              {box.scales ? (
-                <View className="gap-2">
-                  <Text variant="body" className="font-semibold">
-                    How big are the families?
-                  </Text>
-                  <View className="flex-row flex-wrap gap-2">
-                    {[2, 4, 6].map((size) => (
-                      <Chip
-                        key={size}
-                        label={`${size} people`}
-                        selected={familySize === size}
-                        onPress={() => setFamilySize(size)}
-                      />
-                    ))}
-                  </View>
-                </View>
-              ) : (
-                <Text variant="micro" tone="soft">
-                  This box doesn&apos;t scale: every household gets the same
-                  amounts.
-                </Text>
-              )}
-              <ResponsiveRow className="flex-row items-center justify-between gap-3">
-                <Text variant="body" className="flex-1 font-semibold">
-                  How many boxes do you need?
-                </Text>
-                <Stepper
-                  value={requestedBoxes}
-                  min={1}
-                  max={200}
-                  onChange={(next) => {
-                    touchedBoxes.current = true;
-                    setRequestedBoxes(next);
-                  }}
-                />
-              </ResponsiveRow>
-            </Card>
-          </FadeInUp>
-
+        // Fills the page: the answer card grows into spare height, so a tall
+        // phone has no gap at the bottom and a short one only scrolls a little.
+        <Screen
+          contentContainerClassName="pt-3 gap-3"
+          contentContainerStyle={{ flexGrow: 1 }}
+        >
           {/* The answer. */}
-          <FadeInUp index={0}>
+          <FadeInUp index={0} style={{ flexGrow: 1 }}>
             <View
-              className="overflow-hidden rounded-lg bg-card"
+              className="flex-grow justify-center overflow-hidden rounded-lg bg-card"
               // A soft warm lift. The old 6px bottom lip rendered as a separate
               // dark band under the card on Android.
               style={{ borderWidth: 1, borderColor: COLORS.borderSoft }}
             >
-              <View className="p-card">
+              <View className="px-4 py-3">
                 <Text
                   variant="label"
                   tone="default"
                   className="font-semibold"
                   style={{ opacity: 0.9 }}
                 >
-                  You can pack right now
+                  Boxes you can pack now
                 </Text>
 
-                <View className="mt-1 flex-row items-baseline gap-2">
+                <View className="flex-row items-baseline gap-2">
                   <AnimatedCounter
                     value={plan.achievableBoxes}
                     style={{
-                      fontSize: 60,
+                      fontSize: 46,
                       fontWeight: fw("700"),
                       color: COLORS.textPrimary,
                       letterSpacing: -2,
@@ -312,7 +240,7 @@ export default function BuildBoxesScreen() {
                   </Text>
                 </View>
 
-                <View className="my-4 h-px bg-hairline" />
+                <View className="my-2 h-px bg-hairline" />
 
                 <Tappable
                   scaleTo={PRESS_SCALE_ROW}
@@ -322,7 +250,7 @@ export default function BuildBoxesScreen() {
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="View details: food needed and available for these boxes"
-                  className="min-h-[48px] flex-row items-center justify-between gap-3"
+                  className="min-h-[44px] flex-row items-center justify-between gap-3"
                 >
                   <Text
                     variant="label"
@@ -332,23 +260,20 @@ export default function BuildBoxesScreen() {
                   >
                     {isShort ? (
                       <>
-                        <Text
-                          variant="label"
-                          className="font-bold capitalize text-ink"
-                        >
+                        Need{" "}
+                        <Text variant="label" className="font-bold text-ink">
+                          {plan.shortfallPerCategory[plan.limitingCategory]} more{" "}
                           {plan.limitingCategory}
                         </Text>{" "}
-                        runs out first — short{" "}
-                        {plan.shortfallPerCategory[plan.limitingCategory]} for{" "}
-                        {requestedBoxes}
+                        to pack all {requestedBoxes}
                       </>
                     ) : (
-                      `Enough of everything for ${requestedBoxes}`
+                      `You have enough food for all ${requestedBoxes}`
                     )}
                   </Text>
-                  <View className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-subtle px-3.5 py-2">
+                  <View className="min-h-[36px] flex-row items-center gap-1 rounded-md bg-subtle px-3 py-1.5">
                     <Text variant="label" className="font-bold text-ink">
-                      View details
+                      Details
                     </Text>
                     <MaterialCommunityIcons
                       name="chevron-right"
@@ -369,10 +294,72 @@ export default function BuildBoxesScreen() {
                   disabled={!canPack}
                   block
                   onPress={startPacking}
-                  className="mt-4"
+                  className="mt-3 rounded-md"
                 />
               </View>
             </View>
+          </FadeInUp>
+
+          {/* The settings behind the answer: smaller, below it, and labelled
+              by what they do so nobody wonders why the card is there. */}
+          <FadeInUp index={1}>
+            <Card className="gap-1.5 px-4 py-2.5">
+              <Text variant="label" className="font-bold">
+                Change the plan
+              </Text>
+              <Tappable
+                onPress={() => {
+                  cueTap();
+                  setPickerOpen(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`Box type: ${box.name}. Tap to change.`}
+                className="min-h-[40px] flex-row items-center gap-2"
+              >
+                <Text variant="label" tone="soft" className="w-[96px]">
+                  Box type
+                </Text>
+                <Text variant="label" className="flex-1 font-bold" numberOfLines={1}>
+                  {box.name}
+                </Text>
+                <Text variant="label" tone="brand" className="font-bold">
+                  Change
+                </Text>
+              </Tappable>
+              {box.scales && (
+                <View className="min-h-[40px] flex-row items-center gap-2">
+                  <Text variant="label" tone="soft" className="w-[96px]">
+                    Family size
+                  </Text>
+                  <View className="flex-1 flex-row gap-2">
+                    {[4, 6, 8].map((size) => (
+                      <Chip
+                        key={size}
+                        label={`${size}`}
+                        selected={familySize === size}
+                        onPress={() => setFamilySize(size)}
+                        accessibilityLabel={`Families of ${size}`}
+                        className="min-h-[36px] flex-1 items-center px-2 py-1.5"
+                      />
+                    ))}
+                  </View>
+                </View>
+              )}
+              <View className="min-h-[40px] flex-row items-center gap-2">
+                <Text variant="label" tone="soft" className="flex-1">
+                  Boxes you want
+                </Text>
+                <Stepper
+                  value={requestedBoxes}
+                  min={1}
+                  max={200}
+                  onChange={(next) => {
+                    touchedBoxes.current = true;
+                    setRequestedBoxes(next);
+                  }}
+                />
+              </View>
+            </Card>
           </FadeInUp>
 
           {/* Stock a volunteer can see on the shelf but the plan will not use.
@@ -481,7 +468,7 @@ export default function BuildBoxesScreen() {
 
           {isShort && (
             <Button
-              label="Ask donors for what's short"
+              label="Ask donors for help"
               variant="secondary"
               size="compact"
               onPress={() => router.push("/(tabs)/needs")}
@@ -491,15 +478,11 @@ export default function BuildBoxesScreen() {
           {!canPack && (
             <FadeInUp index={4}>
               <Text variant="label" tone="soft" className="px-1">
-                A box needs every category it calls for. Add stock, or choose a
-                smaller box.
+                Not enough food for even one box. Add food, or pick a different
+                box type.
               </Text>
             </FadeInUp>
           )}
-          <Text variant="micro" tone="soft" className="px-1">
-            Plan a balanced mix from your inventory. Changes here apply to this
-            packing session; Needs uses your saved pantry defaults.
-          </Text>
         </Screen>
       ) : (
         <ReadyBoxesContent onPlan={() => setSection("plan")} />

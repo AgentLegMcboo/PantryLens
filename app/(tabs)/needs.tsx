@@ -7,7 +7,7 @@ import { Alert, Pressable, Share, View } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
 import { FadeInUp, ProgressBar, Tappable } from "../../components/motion";
-import { Button, Card, Panel, Screen, Sheet, Text } from "../../components/ui";
+import { Button, Card, CategoryIcon, Panel, Screen, Sheet, Text } from "../../components/ui";
 import { cueSuccess, cueTap } from "../../lib/feedback";
 import { usePantryStore } from "../../lib/store";
 
@@ -63,12 +63,10 @@ export default function NeedsScreen() {
   const [flyerOpen, setFlyerOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
-  const [planOpen, setPlanOpen] = useState(false);
   const pendingSettings = useRef<"boxes" | "pantry" | null>(null);
   const openSettings = (section: "boxes" | "pantry") => {
     pendingSettings.current = section;
     setFlyerOpen(false);
-    setPlanOpen(false);
   };
   const navigateAfterDismiss = () => {
     const section = pendingSettings.current;
@@ -166,6 +164,8 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
     }
   };
 
+  const boxesShort = Math.max(0, settings.boxTarget - plan.achievableBoxes);
+
   if (deficits.length === 0) {
     return (
       <Screen>
@@ -192,29 +192,68 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
   return (
     <>
       <Screen contentContainerClassName="gap-5">
-        <View className="gap-1 px-1">
-          <Text variant="headline">Most needed</Text>
-          <Tappable
-            onPress={() => setPlanOpen(true)}
-            accessibilityRole="button"
-            accessibilityLabel="View saved plan and change defaults"
-            className="min-h-[48px] flex-row items-center gap-2"
-          >
-            <Text variant="label" tone="soft" className="flex-1">
-              {settings.boxTarget} boxes · families of{" "}
-              {settings.defaultFamilySize}
-            </Text>
-            <MaterialCommunityIcons
-              name="information-outline"
-              size={20}
-              color={COLORS.textSecondary}
+        {/* The headline: what the shortfall costs, in boxes, and the one
+            action that fixes it. */}
+        <FadeInUp index={0}>
+          <Card className="gap-3">
+            <View className="flex-row items-start justify-between gap-3">
+              <View className="flex-1">
+                <Text variant="title" className="font-bold">
+                  {boxesShort > 0
+                    ? `${boxesShort} ${boxesShort === 1 ? "box" : "boxes"} short of your goal`
+                    : "Your box goal is covered"}
+                </Text>
+                <Text variant="label" tone="soft" className="mt-0.5">
+                  You can pack {plan.achievableBoxes} of {settings.boxTarget}
+                </Text>
+              </View>
+              <Tappable
+                onPress={() => {
+                  cueTap();
+                  router.push({ pathname: "/(tabs)/settings", params: { section: "boxes" } });
+                }}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={`Edit box default. Goal: ${settings.boxTarget} boxes for families of ${settings.defaultFamilySize}.`}
+                className="min-h-[36px] flex-row items-center gap-1 rounded-md border border-hairline px-2.5"
+              >
+                <MaterialCommunityIcons name="pencil-outline" size={15} color={COLORS.textSecondary} />
+                <Text variant="micro" tone="soft" className="font-semibold">
+                  Edit box default
+                </Text>
+              </Tappable>
+            </View>
+            <ProgressBar
+              progress={settings.boxTarget > 0 ? Math.min(1, plan.achievableBoxes / settings.boxTarget) : 1}
+              color={boxesShort > 0 ? COLORS.statusWarning : COLORS.statusGood}
+              height={6}
             />
-          </Tappable>
-        </View>
+            <Text variant="label">
+              <Text variant="label" className="font-bold">
+                {deficits.reduce((sum, d) => sum + d.deficit, 0)} units
+              </Text>{" "}
+              short across {deficits.length}{" "}
+              {deficits.length === 1 ? "category" : "categories"} below
+            </Text>
+            <Button
+              label="Ask donors for help"
+              block
+              className="rounded-md"
+              onPress={() => setFlyerOpen(true)}
+              icon={
+                <MaterialCommunityIcons
+                  name="share-variant-outline"
+                  size={18}
+                  color={COLORS.textOnAccent}
+                />
+              }
+            />
+          </Card>
+        </FadeInUp>
 
         <View className="gap-2">
-          <Text variant="micro" tone="soft" className="px-1">
-            Tap a category for details.
+          <Text variant="heading" className="px-1">
+            Most needed
           </Text>
           <Card className="px-4 py-0">
             {deficits.map((item, index) => {
@@ -242,15 +281,24 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                       setExpandedCategory(expanded ? null : item.category);
                     }}
                     style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-                    className="min-h-[72px] flex-row items-center gap-3 py-4"
+                    className="min-h-[68px] flex-row items-center gap-3 py-3"
                   >
-                    <View className="flex-1 gap-1">
-                      <Text variant="heading">{label}</Text>
-                      {limiting && (
-                        <Text variant="micro" tone="critical">
-                          Limits your box goal
-                        </Text>
-                      )}
+                    <CategoryIcon
+                      category={item.category}
+                      tone={limiting ? "critical" : "secondary"}
+                    />
+                    <View className="flex-1 gap-1.5">
+                      <Text variant="body" className="font-bold">
+                        {label}
+                      </Text>
+                      <ProgressBar
+                        progress={item.goal > 0 ? Math.min(1, item.current / item.goal) : 0}
+                        color={limiting ? COLORS.statusCritical : COLORS.statusWarning}
+                        height={4}
+                      />
+                      <Text variant="micro" tone={limiting ? "critical" : "soft"}>
+                        {limiting ? "Runs out first" : `${item.current} of ${item.goal} on hand`}
+                      </Text>
                     </View>
                     <View className="items-end">
                       <Text
@@ -270,32 +318,17 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                     />
                   </Pressable>
                   {expanded && (
-                    <View className="gap-3 pb-4">
-                      <Text variant="body" tone="soft">
+                    <View className="mb-3 gap-1 rounded-md bg-subtle px-3 py-2.5">
+                      <Text variant="label" className="font-bold">
+                        Ask for
+                      </Text>
+                      <Text variant="label">
                         {EXAMPLES[item.category] ?? "Any shelf-stable items"}
                       </Text>
-                      <View className="gap-2">
-                        <Text variant="label" tone="soft">
-                          {item.current} of {item.goal} units on the shelf
-                        </Text>
-                        <ProgressBar
-                          progress={
-                            item.goal > 0
-                              ? Math.min(1, item.current / item.goal)
-                              : 0
-                          }
-                          color={
-                            limiting
-                              ? COLORS.statusCritical
-                              : COLORS.primaryDark
-                          }
-                          height={5}
-                        />
-                      </View>
-                      <Text variant="micro" tone="soft">
+                      <Text variant="label" tone="soft" className="mt-1">
                         {limiting
-                          ? "This category is the first to run out for your saved box goal."
-                          : "Below your pantry’s low-stock alert level."}
+                          ? "Runs out first, so it sets how many boxes you can pack."
+                          : "Below your low-stock level."}
                       </Text>
                     </View>
                   )}
@@ -305,39 +338,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
           </Card>
         </View>
 
-        <Button
-          label="Review & share needs"
-          block
-          onPress={() => setFlyerOpen(true)}
-          icon={
-            <MaterialCommunityIcons
-              name="share-variant-outline"
-              size={18}
-              color={COLORS.textOnAccent}
-            />
-          }
-        />
       </Screen>
-
-      <Sheet
-        visible={planOpen}
-        onClose={() => setPlanOpen(false)}
-        onDismiss={navigateAfterDismiss}
-        title="Saved pantry plan"
-      >
-        <Text variant="heading">
-          {settings.boxTarget} boxes · families of {settings.defaultFamilySize}
-        </Text>
-        <Text tone="soft">
-          Needs uses this saved plan and your low-stock alert levels. Temporary
-          changes on the Boxes tab do not change this list.
-        </Text>
-        <Button
-          label="Change box defaults"
-          block
-          onPress={() => openSettings("boxes")}
-        />
-      </Sheet>
 
       <Sheet
         visible={flyerOpen}

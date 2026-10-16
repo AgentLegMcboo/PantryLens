@@ -192,6 +192,34 @@ export function BoxPicker({
         title={draft.id ? 'Edit box' : 'New box'}
         subtitle="Saved boxes are shared with everyone in your pantry."
       >
+        {/* What goes in the box comes first: it is why this screen is open. */}
+        <View>
+          <Text variant="label" className="px-1 font-bold">
+            What goes in each box
+          </Text>
+          {BOX_CATEGORIES.map((category, i) => (
+            <Row
+              key={category}
+              icon={categoryIcon(String(category))}
+              label={title(String(category))}
+              divider={i < BOX_CATEGORIES.length - 1}
+              right={
+                <Stepper
+                  value={draft.rules[category]}
+                  min={0}
+                  max={MAX_PER_CATEGORY}
+                  onChange={value => setCount(category, value)}
+                />
+              }
+            />
+          ))}
+          <Text variant="micro" tone={total === 0 ? 'critical' : 'soft'} className="px-1">
+            {total === 0
+              ? 'Add at least one item.'
+              : `${total} ${total === 1 ? 'item' : 'items'} in each box${draft.scalesWithFamily ? ' (for a family of 4)' : ''}.`}
+          </Text>
+        </View>
+
         <Input
           label="Name"
           value={draft.name}
@@ -207,11 +235,11 @@ export function BoxPicker({
 
         <Row
           icon="account-group-outline"
-          label="Scale with family size"
+          label="Change amounts by family size"
           hint={
             draft.scalesWithFamily
-              ? 'The amounts below are for a family of 4, and grow or shrink with the household.'
-              : 'Every household gets exactly these amounts.'
+              ? 'Bigger families get more, smaller families get less.'
+              : 'Every family gets the same amounts.'
           }
           right={
             <Toggle
@@ -229,11 +257,10 @@ export function BoxPicker({
             amounts can be filled from. */}
         <View className="gap-3 rounded-md bg-subtle p-3">
           <Text variant="label" className="font-bold">
-            Who can eat it
+            Allergies and diets
           </Text>
           <Text variant="micro" tone="soft">
-            Most boxes need none of this. Set it for a household that has told you
-            about an allergy, a diet, or having nowhere to cook.
+            Optional. Only for families who told you about one.
           </Text>
 
           {DIET_TAG_GROUPS.map(group => (
@@ -284,29 +311,6 @@ export function BoxPicker({
             </Text>
           )}
         </View>
-
-        {BOX_CATEGORIES.map((category, i) => (
-          <Row
-            key={category}
-            icon={categoryIcon(String(category))}
-            label={title(String(category))}
-            divider={i < BOX_CATEGORIES.length - 1}
-            right={
-              <Stepper
-                value={draft.rules[category]}
-                min={0}
-                max={MAX_PER_CATEGORY}
-                onChange={value => setCount(category, value)}
-              />
-            }
-          />
-        ))}
-
-        <Text variant="micro" tone={total === 0 ? 'critical' : 'soft'} className="px-1">
-          {total === 0
-            ? 'A box needs at least one item in it.'
-            : `${total} ${total === 1 ? 'item' : 'items'} per box${draft.scalesWithFamily ? ' for a family of 4' : ''}.`}
-        </Text>
 
         <Button
           label={draft.id ? 'Save changes' : 'Save box'}

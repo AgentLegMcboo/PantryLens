@@ -61,3 +61,51 @@ test('appearance switches existing color references without changing font family
 test('build-time category colors match the runtime palette', () => {
   assert.deepEqual(JSON.parse(JSON.stringify(LIGHT_COLORS.categories)), palette.COLORS.categories);
 });
+
+// Design rule: a white surface on the cream page always has a visible edge.
+// White (#FFF) on cream (#FBF6EE) is barely 1.05:1, so an unedged white box
+// just floats. Any element painted `bg-card` must also carry a border, a
+// shadow ring, or a divider rule in the same tag. Full-bleed bars that sit
+// against a rule (RULE_ABOVE / RULE_BELOW) count as edged.
+test('every bg-card surface has a visible edge', () => {
+  const root = path.join(__dirname, '..');
+  const files = [];
+  const walk = dir => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (/\.tsx$/.test(entry.name) && entry.name !== 'ui-mockup.tsx') files.push(full);
+    }
+  };
+  walk(path.join(root, 'app'));
+  walk(path.join(root, 'components'));
+
+  const EDGE = /\bborder\b|border-|borderWidth|boxShadow|cardSurface|cardShadow|cardEdge|RULE_|rowEdge|Edge\b|shadow-/;
+  const offenders = [];
+  for (const file of files) {
+    const src = fs.readFileSync(file, 'utf8');
+    let at = src.indexOf('bg-card');
+    while (at !== -1) {
+      // The JSX opening tag around this class: back to '<', forward to the
+      // tag's closing '>' (skipping arrow-function '=>' inside props).
+      const start = src.lastIndexOf('<', at);
+      let end = at;
+      let depth = 0;
+      for (; end < src.length; end++) {
+        const c = src[end];
+        if (c === '{') depth++;
+        else if (c === '}') depth--;
+        else if (c === '>' && depth <= 0 && src[end - 1] !== '=') break;
+      }
+      const tag = src.slice(start, end);
+      // The line itself too: a class list (cva variants) is not a JSX tag.
+      const lineText = src.slice(src.lastIndexOf('\n', at) + 1, src.indexOf('\n', at));
+      if (!EDGE.test(tag) && !EDGE.test(lineText) && !/surface-edge-ok/.test(tag)) {
+        const line = src.slice(0, at).split('\n').length;
+        offenders.push(`${path.relative(root, file)}:${line}`);
+      }
+      at = src.indexOf('bg-card', at + 7);
+    }
+  }
+  assert.deepEqual(offenders, [], `bg-card without an edge:\n${offenders.join('\n')}`);
+});

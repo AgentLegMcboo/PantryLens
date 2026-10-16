@@ -314,7 +314,10 @@ export function InventoryMock() {
 }
 
 /** A food illustration, deliberately without charts or miniature controls. */
-export function PackedBoxMock() {
+export function PackedBoxMock({
+  topRight = <Tag icon="package-variant-closed" label="6 boxes ready to pack" tone="good" />,
+  bottomLeft = <Tag icon="alert-circle-outline" label="Short on beans" tone="critical" />,
+}: { topRight?: React.ReactNode; bottomLeft?: React.ReactNode } = {}) {
   return (
     <Stage
       layout={{ tilt: "-4deg", tr: { top: -38, right: -8, rotate: "5deg" }, bl: { bottom: -40, left: 8, rotate: "-5deg" } }}
@@ -362,8 +365,8 @@ export function PackedBoxMock() {
           </Svg>
         </View>
       }
-      topRight={<Tag icon="package-variant-closed" label="6 boxes ready to pack" tone="good" />}
-      bottomLeft={<Tag icon="alert-circle-outline" label="Short on beans" tone="critical" />}
+      topRight={topRight}
+      bottomLeft={bottomLeft}
     />
   );
 }
@@ -529,3 +532,13 @@ const styles = StyleSheet.create({
     width: "100%",
   },
 });
+
+/** Ready to go, with nothing waiting: the same packed box, captioned for pickup. */
+export function ReadyBoxesArt() {
+  return (
+    <PackedBoxMock
+      topRight={<Tag icon="package-variant-closed" label="Packed" tone="good" />}
+      bottomLeft={<Tag icon="hand-heart-outline" label="Waits here for pickup" />}
+    />
+  );
+}

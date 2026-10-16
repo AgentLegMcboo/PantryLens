@@ -12,7 +12,6 @@ import { FadeInUp, ProgressBar, Tappable } from "../components/motion";
 import {
   Button,
   Card,
-  EmptyState,
   Input,
   Panel,
   Screen,
@@ -23,13 +22,7 @@ import { describeRules } from "../lib/box-presets";
 import { cueSuccess, cueTap, cueWarn } from "../lib/feedback";
 import { type PackRun, usePantryStore } from "../lib/store";
 import { timeAgo } from "../lib/time";
-
-/** The empty screen's how-it-works strip. */
-const HOW_IT_WORKS = [
-  { icon: "package-variant-closed", label: "Choose a box" },
-  { icon: "clipboard-check-outline", label: "Pack it" },
-  { icon: "hand-heart-outline", label: "Hand it out" },
-] as const;
+import { ReadyBoxesArt } from "./onboarding-mocks";
 
 /**
  * Boxes that are packed and waiting for families.
@@ -119,50 +112,24 @@ export function ReadyBoxesContent({ onPlan }: { onPlan?: () => void } = {}) {
     return (
       <ScrollView className="flex-1 bg-transparent" showsVerticalScrollIndicator={false}
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: (tabOverlayInset || insets.bottom) + 20 }}>
-        <Card className="w-full max-w-[520px] rounded-[28px] p-0">
-        <EmptyState
-          className="px-5 py-8"
-          icon="package-variant-closed"
-          title="No boxes waiting"
-          body="Packed boxes wait here until families pick them up."
-          actionLabel="Plan boxes"
-          actionVariant="primary"
-          onAction={onPlan ?? (() => router.push("/(tabs)/build"))}
-        >
-          {/* How boxes get here, in three glances. An empty screen that only
-              says "nothing" gives no clue what would ever fill it. */}
-          <View className="mt-7 w-full flex-row items-start">
-            {HOW_IT_WORKS.map((step, i) => (
-              <React.Fragment key={step.label}>
-                {i > 0 && (
-                  <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={22}
-                    color={COLORS.textSecondary}
-                    style={{ marginTop: 12 }}
-                  />
-                )}
-                <View className="flex-1 items-center">
-                  <View className="h-12 w-12 items-center justify-center rounded-lg bg-secondary-tint" style={{ borderWidth: 1, borderColor: COLORS.secondaryDark }}>
-                    <MaterialCommunityIcons
-                      name={step.icon}
-                      size={25}
-                      color={COLORS.secondaryDark}
-                    />
-                  </View>
-                  <Text
-                    variant="micro"
-                    tone="default"
-                    className="mt-2 text-center font-semibold"
-                  >
-                    {step.label}
-                  </Text>
-                </View>
-              </React.Fragment>
-            ))}
+        {/* The onboarding box art, scaled down. It says what fills this
+            screen better than a row of icons did. */}
+        <View style={{ height: 250, alignItems: "center", justifyContent: "center" }}>
+          <View style={{ width: 430, height: 430, transform: [{ scale: 0.62 }] }}>
+            <ReadyBoxesArt />
           </View>
-        </EmptyState>
-        </Card>
+        </View>
+        <Text variant="title" className="mt-4 text-center font-bold">
+          No boxes waiting
+        </Text>
+        <Text variant="body" tone="soft" className="mt-1.5 max-w-[300px] text-center">
+          Packed boxes show up here until families pick them up.
+        </Text>
+        <Button
+          label="Plan boxes"
+          className="mt-5 self-center rounded-md"
+          onPress={onPlan ?? (() => router.push("/(tabs)/build"))}
+        />
       </ScrollView>
     );
   }

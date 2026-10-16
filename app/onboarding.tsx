@@ -26,7 +26,6 @@ import {
   PackedBoxMock,
   PhotoInventoryMock,
   InventoryMock,
-  NeedsMock,
 } from "../components/onboarding-mocks";
 import { Button, Text } from "../components/ui";
 import { COLORS, fw } from "../constants/theme";
@@ -38,7 +37,6 @@ const PHASES = [
   {
     key: "camera",
     Mock: PhotoInventoryMock,
-    lead: "Start with a photo",
     title: "Turn photos into inventory.",
     body: "Photograph a donation pile or a whole shelf. PantryLens identifies the items—just check the names and counts before saving.",
     imageDescription: "A pantry photo with detected food items. Review the names and counts before saving to inventory.",
@@ -46,7 +44,6 @@ const PHASES = [
   {
     key: "inventory",
     Mock: InventoryMock,
-    lead: "Keep track of your stock",
     title: "Know what’s on your shelves.",
     body: "See what you have and how much is left. Set your use-first window to spot food close to its date and use it in time.",
     imageDescription: "Inventory example: 12 cans of beans, 24 bags of rice, and 18 cans of vegetables. Use beans first: 5 days left.",
@@ -54,18 +51,9 @@ const PHASES = [
   {
     key: "boxes",
     Mock: PackedBoxMock,
-    lead: "Pack with confidence",
     title: "Build balanced boxes.",
     body: "Plan a balanced mix of food from your current stock. See how many boxes you can pack and which foods you need more of.",
     imageDescription: "An open pantry box with beans, rice, vegetables, and breakfast food. Example: 6 boxes ready to pack. Short on beans.",
-  },
-  {
-    key: "needs",
-    Mock: NeedsMock,
-    lead: "Make it easy to help",
-    title: "Ask for what you need.",
-    body: "Turn your pantry’s needs list into a donor message. Share the foods and quantities you’re missing so people know what to bring.",
-    imageDescription: "A needs list with 12 cans of beans and 24 bags of pasta becomes a donor message requesting those foods.",
   },
 ] as const;
 
@@ -120,8 +108,10 @@ export default function OnboardingScreen() {
 
       <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <View className="flex-row items-center justify-between px-gutter pt-2">
-          <BrandMark />
-          <AppearanceControl />
+          <View className="flex-row items-center gap-3">
+            <BrandMark />
+            <AppearanceControl compact />
+          </View>
 
           <View style={{ width: 60 }}>
           {!isLast && (
@@ -132,7 +122,7 @@ export default function OnboardingScreen() {
               accessibilityLabel="Skip introduction"
               className="h-12 items-center justify-center px-3"
             >
-              <Text variant="label" tone="soft" className="font-semibold">
+              <Text variant="micro" tone="soft" className="font-semibold">
                 Skip
               </Text>
             </Pressable>
@@ -154,8 +144,8 @@ export default function OnboardingScreen() {
             // Use the space left by the actual text, not a fixed picture size.
             // On compact screens or with larger text, the page can still scroll.
             const copyHeight = copyHeights[phase.key] ?? 220;
-            const imageHeight = Math.min(390, Math.max(220, viewportHeight - copyHeight - 56));
-            const imageScale = Math.min(0.86, (width - 48) / 430, imageHeight / 460);
+            const imageHeight = Math.min(470, Math.max(240, viewportHeight - copyHeight - 36));
+            const imageScale = Math.min(1.05, (width - 24) / 430, imageHeight / 410);
             return (
               <ScrollView
                 key={phase.key}
@@ -178,7 +168,7 @@ export default function OnboardingScreen() {
                     flexShrink: 0,
                     alignItems: "center",
                     justifyContent: "center",
-                    marginBottom: 28,
+                    marginBottom: 16,
                   }}
                 >
                   <View
@@ -198,13 +188,6 @@ export default function OnboardingScreen() {
                   setCopyHeights(previous => Math.abs((previous[phase.key] ?? 0) - measuredHeight) < 1
                     ? previous : { ...previous, [phase.key]: measuredHeight });
                 }}>
-                  <Text
-                    variant="label"
-                    tone="brand"
-                    style={{ fontWeight: "600" }}
-                  >
-                    {phase.lead}
-                  </Text>
                   <Text
                     variant="display"
                     style={{
@@ -230,16 +213,15 @@ export default function OnboardingScreen() {
           })}
         </ScrollView>
 
-        <View className="gap-3.5 px-gutter pb-2">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-1.5">
-              {PHASES.map((p, i) => (
-                <Dot key={p.key} active={i === page} />
-              ))}
-            </View>
-            <Text variant="micro" tone="soft">
-              {page + 1} of {PHASES.length}
-            </Text>
+        <View className="gap-6 px-gutter pb-2">
+          <View
+            className="flex-row items-center justify-center gap-1.5"
+            accessible
+            accessibilityLabel={`Page ${page + 1} of ${PHASES.length}`}
+          >
+            {PHASES.map((p, i) => (
+              <Dot key={p.key} active={i === page} />
+            ))}
           </View>
 
           <Button
@@ -277,13 +259,13 @@ function Dot({ active }: { active: boolean }) {
   // only the brightness fades.
   const style = useAnimatedStyle(() => ({
     width: reduceMotion ? (active ? 26 : 7) : 7 + progress.value * 19,
-    opacity: 0.3 + progress.value * 0.7,
+    opacity: 0.4 + progress.value * 0.6,
   }));
 
   return (
     <Animated.View
       style={[
-        { height: 7, borderRadius: 4, backgroundColor: COLORS.primaryLight },
+        { height: 7, borderRadius: 4, backgroundColor: COLORS.primaryDark },
         style,
       ]}
     />
