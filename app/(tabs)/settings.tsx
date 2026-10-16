@@ -1,4 +1,5 @@
 import { useAppAppearance } from "../../lib/appearance";
+import { resetTours } from "../../components/spotlight";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
@@ -685,6 +686,17 @@ export default function SettingsScreen() {
                   devAction("onboarding", async () => {
                     await replayOnboarding();
                     return "The intro will play next time the app starts.";
+                  })
+                }
+              />
+              <Row
+                icon="lightbulb-on-outline"
+                label="Replay the tips"
+                hint="Shows each tab's first-visit tips again."
+                onPress={() =>
+                  devAction("tours", async () => {
+                    await resetTours();
+                    return "The tips will show again next time the app starts.";
                   })
                 }
               />

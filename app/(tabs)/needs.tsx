@@ -10,6 +10,12 @@ import { FadeInUp, ProgressBar, Tappable } from "../../components/motion";
 import { Button, Card, CategoryIcon, Panel, Screen, Sheet, Text } from "../../components/ui";
 import { cueSuccess, cueTap } from "../../lib/feedback";
 import { usePantryStore } from "../../lib/store";
+import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
+
+const NEEDS_TOUR: TourStep[] = [
+  { target: "needs.firstRow", title: "Tap for ideas", body: "See what foods to ask donors for." },
+  { target: "needs.ask", title: "Share the list", body: "Send it by text, email or a flyer." },
+];
 
 /**
  * What to ask donors for.
@@ -61,6 +67,8 @@ export default function NeedsScreen() {
   );
 
   const [flyerOpen, setFlyerOpen] = useState(false);
+  const firstRowTarget = useSpotlightTarget("needs.firstRow");
+  const askTarget = useSpotlightTarget("needs.ask");
   const [copied, setCopied] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const pendingSettings = useRef<"boxes" | "pantry" | null>(null);
@@ -195,15 +203,15 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
         {/* The headline: what the shortfall costs, in boxes, and the one
             action that fixes it. */}
         <FadeInUp index={0}>
-          <Card className="gap-3">
+          <Card className="gap-4">
             <View className="flex-row items-start justify-between gap-3">
               <View className="flex-1">
-                <Text variant="title" className="font-bold">
+                <Text variant="title" className="font-bold" style={{ lineHeight: 28 }}>
                   {boxesShort > 0
                     ? `${boxesShort} ${boxesShort === 1 ? "box" : "boxes"} short of your goal`
                     : "Your box goal is covered"}
                 </Text>
-                <Text variant="label" tone="soft" className="mt-0.5">
+                <Text variant="label" tone="soft" className="mt-2">
                   You can pack {plan.achievableBoxes} of {settings.boxTarget}
                 </Text>
               </View>
@@ -215,7 +223,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`Edit box default. Goal: ${settings.boxTarget} boxes for families of ${settings.defaultFamilySize}.`}
-                className="min-h-[36px] flex-row items-center gap-1 rounded-md border border-hairline px-2.5"
+                className="mt-0.5 min-h-[36px] flex-row items-center gap-1 self-start rounded-md border border-hairline px-2.5"
               >
                 <MaterialCommunityIcons name="pencil-outline" size={15} color={COLORS.textSecondary} />
                 <Text variant="micro" tone="soft" className="font-semibold">
@@ -235,6 +243,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
               short across {deficits.length}{" "}
               {deficits.length === 1 ? "category" : "categories"} below
             </Text>
+            <View ref={askTarget} collapsable={false}>
             <Button
               label="Ask donors for help"
               block
@@ -248,6 +257,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                 />
               }
             />
+            </View>
           </Card>
         </FadeInUp>
 
@@ -262,6 +272,8 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
               const label = categoryLabels[item.category] ?? item.category;
               return (
                 <View
+                  ref={index === 0 ? firstRowTarget : undefined}
+                  collapsable={false}
                   key={item.category}
                   style={
                     index < deficits.length - 1
@@ -285,7 +297,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                   >
                     <CategoryIcon
                       category={item.category}
-                      tone={limiting ? "critical" : "secondary"}
+                      tone="secondary"
                     />
                     <View className="flex-1 gap-1.5">
                       <Text variant="body" className="font-bold">
@@ -293,12 +305,23 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                       </Text>
                       <ProgressBar
                         progress={item.goal > 0 ? Math.min(1, item.current / item.goal) : 0}
-                        color={limiting ? COLORS.statusCritical : COLORS.statusWarning}
+                        color={limiting ? COLORS.primary : COLORS.statusWarning}
                         height={4}
                       />
-                      <Text variant="micro" tone={limiting ? "critical" : "soft"}>
-                        {limiting ? "Runs out first" : `${item.current} of ${item.goal} on hand`}
-                      </Text>
+                      {limiting ? (
+                        <View
+                          className="self-start rounded-sm px-1.5 py-0.5"
+                          style={{ backgroundColor: COLORS.primaryLight }}
+                        >
+                          <Text variant="micro" className="font-bold" style={{ color: COLORS.primaryDark }}>
+                            Runs out first
+                          </Text>
+                        </View>
+                      ) : (
+                        <Text variant="micro" tone="soft">
+                          {`${item.current} of ${item.goal} on hand`}
+                        </Text>
+                      )}
                     </View>
                     <View className="items-end">
                       <Text
@@ -318,14 +341,14 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                     />
                   </Pressable>
                   {expanded && (
-                    <View className="mb-3 gap-1 rounded-md bg-subtle px-3 py-2.5">
-                      <Text variant="label" className="font-bold">
+                    <View className="mb-3 gap-1.5 rounded-md bg-subtle px-3 py-3">
+                      <Text variant="micro" tone="soft" className="font-bold uppercase" style={{ letterSpacing: 0.6 }}>
                         Ask for
                       </Text>
-                      <Text variant="label">
+                      <Text variant="body">
                         {EXAMPLES[item.category] ?? "Any shelf-stable items"}
                       </Text>
-                      <Text variant="label" tone="soft" className="mt-1">
+                      <Text variant="label" tone="soft">
                         {limiting
                           ? "Runs out first, so it sets how many boxes you can pack."
                           : "Below your low-stock level."}
@@ -339,6 +362,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
         </View>
 
       </Screen>
+      <SpotlightTour tourKey="needs" steps={NEEDS_TOUR} />
 
       <Sheet
         visible={flyerOpen}

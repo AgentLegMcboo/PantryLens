@@ -93,42 +93,8 @@ export function PlacesManager() {
 
   return (
     <>
-      {topLevel.map((loc, i) => (
-        <View key={loc.id}>
-          <Row
-            icon="bookshelf"
-            label={loc.name}
-            hint={
-              subsOf(loc.id).length
-                ? `${subsOf(loc.id).length} sub-shelf${subsOf(loc.id).length === 1 ? '' : 's'} · ${hint(loc.categories)}`
-                : hint(loc.categories)
-            }
-            divider={false}
-            onPress={() => setEditing({ id: loc.id, name: loc.name })}
-          />
-          {subsOf(loc.id).map(sub => (
-            <View key={sub.id} className="ml-[52px]">
-              <Row
-                icon="subdirectory-arrow-right"
-                label={sub.name}
-                hint={hint(sub.categories)}
-                divider={false}
-                onPress={() => setEditing({ id: sub.id, name: sub.name })}
-              />
-            </View>
-          ))}
-          {i < topLevel.length - 1 && <View className="h-px bg-hairline" />}
-        </View>
-      ))}
-
-      {locations.length === 0 && (
-        <Text variant="label" tone="soft" className="pb-2">
-          None yet. Add the shelves and bins you already use — "Canned wall",
-          "Freezer", "Back room".
-        </Text>
-      )}
-
-      <View className="mt-4 flex-row items-end gap-3">
+      {/* Adding comes first: it is what most people open this for. */}
+      <View className="mb-3 flex-row items-end gap-3">
         <View className="flex-1">
           <Input
             label="New shelf"
@@ -150,6 +116,41 @@ export function PlacesManager() {
           <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnAccent} />
         </Tappable>
       </View>
+
+      {topLevel.map((loc, i) => (
+        <View key={loc.id}>
+          <Row
+            icon="bookshelf"
+            label={loc.name}
+            hint={
+              subsOf(loc.id).length
+                ? `${subsOf(loc.id).length} sub-shelf${subsOf(loc.id).length === 1 ? '' : 's'} · ${hint(loc.categories)}`
+                : hint(loc.categories)
+            }
+            divider={false}
+            onPress={() => setEditing({ id: loc.id, name: loc.name })}
+          />
+          {subsOf(loc.id).map(sub => (
+            <View key={sub.id} className="ml-[52px]">
+              <Row
+                icon="chevron-down"
+                label={sub.name}
+                hint={hint(sub.categories)}
+                divider={false}
+                onPress={() => setEditing({ id: sub.id, name: sub.name })}
+              />
+            </View>
+          ))}
+          {i < topLevel.length - 1 && <View className="h-px bg-hairline" />}
+        </View>
+      ))}
+
+      {locations.length === 0 && (
+        <Text variant="label" tone="soft" className="pb-2">
+          None yet. Add the shelves and bins you already use — "Canned wall",
+          "Freezer", "Back room".
+        </Text>
+      )}
 
       <Sheet
         visible={!!editing}

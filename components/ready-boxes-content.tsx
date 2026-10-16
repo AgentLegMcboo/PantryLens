@@ -114,10 +114,9 @@ export function ReadyBoxesContent({ onPlan }: { onPlan?: () => void } = {}) {
         contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 20, paddingTop: 20, paddingBottom: (tabOverlayInset || insets.bottom) + 20 }}>
         {/* The onboarding box art, scaled down. It says what fills this
             screen better than a row of icons did. */}
-        <View style={{ height: 250, alignItems: "center", justifyContent: "center" }}>
-          <View style={{ width: 430, height: 430, transform: [{ scale: 0.62 }] }}>
-            <ReadyBoxesArt />
-          </View>
+        {/* Drawn at real size: a scaled-down drawing came out blurry. */}
+        <View style={{ height: 250, width: "100%", alignItems: "center", justifyContent: "center" }}>
+          <ReadyBoxesArt />
         </View>
         <Text variant="title" className="mt-4 text-center font-bold">
           No boxes waiting

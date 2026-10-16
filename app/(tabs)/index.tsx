@@ -4,13 +4,20 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
-import { COLORS } from "../../constants/theme";
+import { COLORS, fw } from "../../constants/theme";
 import { Card, cardShadow, Row, Screen, Text } from "../../components/ui";
 import { buildStockUnits, computeAllocation } from "../../lib/allocation";
 import { windowEndISO } from "../../lib/expiry";
 import { InventoryItem, usePantryStore } from "../../lib/store";
 import { cuePress, cueTap } from "../../lib/feedback";
 import { QuickAddStaplesModal } from "../../components/quick-add-staples";
+import { ShelfCheckSheet } from "../../components/shelf-check";
+import { SpotlightTour, type TourStep } from "../../components/spotlight";
+
+const HOME_TOUR: TourStep[] = [
+  { target: "header.Home.bell", title: "Notifications", body: "A red number means food is expiring soon." },
+  { target: "header.Home.menu", title: "Every screen", body: "Find any page in the app from here." },
+];
 
 const CATEGORY_LABELS: Record<string, string> = {
   protein: "Protein",
@@ -28,6 +35,7 @@ export default function DashboardScreen() {
   const { inventory, bulkLots, boxRules, settings, thresholds, readyBoxes } =
     usePantryStore();
   const [staplesModalVisible, setStaplesModalVisible] = useState(false);
+  const [shelfCheckOpen, setShelfCheckOpen] = useState(false);
 
   const readyCount = readyBoxes.reduce(
     (sum, r) => sum + (r.boxes - r.boxes_collected),
@@ -186,7 +194,10 @@ export default function DashboardScreen() {
               label="Check a shelf"
               hint="Compare a shelf count with inventory"
               divider={false}
-              onPress={() => router.push("/shelf-audit")}
+              onPress={() => {
+                cueTap();
+                setShelfCheckOpen(true);
+              }}
             />
           </Card>
         </View>
@@ -209,6 +220,15 @@ export default function DashboardScreen() {
             hint={`Goal: ${targetBoxes} boxes · ${familySize} people per family`}
             divider={false}
             onPress={() => router.push("/(tabs)/build")}
+          />
+        </Card>
+        <Card className="py-0">
+          <Row
+            icon="chart-box-outline"
+            label="Reports & activity"
+            hint="What came in, what went out, CSV exports"
+            divider={false}
+            onPress={() => router.push("/reports")}
           />
         </Card>
       </View>
@@ -257,16 +277,12 @@ export default function DashboardScreen() {
         </View>
       )}
 
-      <View className="px-1">
-        <Row
-          icon="history"
-          label="Reports & Activity"
-          hint="Recent activity and CSV exports"
-          divider={false}
-          onPress={() => router.push("/reports")}
-        />
-      </View>
 
+      <SpotlightTour tourKey="home" steps={HOME_TOUR} />
+      <ShelfCheckSheet
+        visible={shelfCheckOpen}
+        onClose={() => setShelfCheckOpen(false)}
+      />
       <QuickAddStaplesModal
         visible={staplesModalVisible}
         onClose={() => setStaplesModalVisible(false)}
@@ -294,9 +310,12 @@ const styles = StyleSheet.create({
   },
   scanSubtitle: {
     marginTop: 2,
-    fontSize: 16,
-    lineHeight: 22,
-    fontWeight: "500",
+    fontSize: 18,
+    lineHeight: 24,
+    fontWeight: fw("700"),
+    // Lifts the line off the light end of the gradient.
+    textShadowColor: "rgba(80, 40, 10, 0.25)",
+    textShadowRadius: 2,
   },
   pressed: { opacity: 0.85 },
   scanRow: {

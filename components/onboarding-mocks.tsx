@@ -21,6 +21,7 @@ import {
   Text,
 } from "./ui";
 import { COLORS } from "../constants/theme";
+import { EmptyBox } from "./onboarding-demos";
 
 /**
  * Inert onboarding illustrations using the app's surfaces, icons and palette.
@@ -533,12 +534,14 @@ const styles = StyleSheet.create({
   },
 });
 
-/** Ready to go, with nothing waiting: the same packed box, captioned for pickup. */
+/** Ready to go, with nothing waiting: an empty open box. */
 export function ReadyBoxesArt() {
   return (
-    <PackedBoxMock
-      topRight={<Tag icon="package-variant-closed" label="Packed" tone="good" />}
-      bottomLeft={<Tag icon="hand-heart-outline" label="Waits here for pickup" />}
+    <Stage
+      layout={{ tilt: "-3.5deg", tr: { top: -30, right: -8, rotate: "5deg" }, bl: { bottom: -30, left: 8, rotate: "-5deg" } }}
+      main={<EmptyBox width={230} />}
+      topRight={<Tag icon="package-variant" label="Empty for now" />}
+      bottomLeft={<Tag icon="hand-heart-outline" label="Packed boxes wait here" />}
     />
   );
 }

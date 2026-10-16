@@ -185,7 +185,7 @@ export default function OnboardingScreen() {
                   />
                 </View>
 
-                <View style={{ gap: 12 }} onLayout={event => {
+                <View style={{ gap: 6 }} onLayout={event => {
                   const measuredHeight = event.nativeEvent.layout.height;
                   setCopyHeights(previous => Math.abs((previous[phase.key] ?? 0) - measuredHeight) < 1
                     ? previous : { ...previous, [phase.key]: measuredHeight });

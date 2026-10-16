@@ -36,6 +36,12 @@ import {
 } from "../../components/ui";
 import { cuePress, cueTap } from "../../lib/feedback";
 import { BoxRules, usePantryStore } from "../../lib/store";
+import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
+
+const BOXES_TOUR: TourStep[] = [
+  { target: "boxes.details", title: "See what's missing", body: "Tap Details to see each food group." },
+  { target: "boxes.change", title: "Other box types", body: "Pick a senior box, a no-cook box and more." },
+];
 
 /**
  * Building family boxes.
@@ -164,6 +170,9 @@ export default function BuildBoxesScreen() {
   const isShort = plan.achievableBoxes < requestedBoxes;
   const canPack = plan.achievableBoxes > 0;
 
+  const detailsTarget = useSpotlightTarget("boxes.details");
+  const changeTarget = useSpotlightTarget("boxes.change");
+
   const startPacking = () => {
     cuePress();
     router.push({
@@ -250,10 +259,10 @@ export default function BuildBoxesScreen() {
                   }}
                   accessibilityRole="button"
                   accessibilityLabel="View details: food needed and available for these boxes"
-                  className="min-h-[44px] flex-row items-center justify-between gap-3"
+                  className="min-h-[40px] flex-row items-center justify-between gap-3"
                 >
                   <Text
-                    variant="label"
+                    variant="micro"
                     tone="default"
                     className="flex-1"
                     style={{ opacity: 0.92 }}
@@ -261,7 +270,7 @@ export default function BuildBoxesScreen() {
                     {isShort ? (
                       <>
                         Need{" "}
-                        <Text variant="label" className="font-bold text-ink">
+                        <Text variant="micro" className="font-bold text-ink">
                           {plan.shortfallPerCategory[plan.limitingCategory]} more{" "}
                           {plan.limitingCategory}
                         </Text>{" "}
@@ -271,8 +280,8 @@ export default function BuildBoxesScreen() {
                       `You have enough food for all ${requestedBoxes}`
                     )}
                   </Text>
-                  <View className="min-h-[36px] flex-row items-center gap-1 rounded-md bg-subtle px-3 py-1.5">
-                    <Text variant="label" className="font-bold text-ink">
+                  <View ref={detailsTarget} collapsable={false} className="min-h-[32px] flex-row items-center gap-1 rounded-md bg-subtle px-2.5 py-1">
+                    <Text variant="micro" className="font-bold text-ink">
                       Details
                     </Text>
                     <MaterialCommunityIcons
@@ -304,7 +313,7 @@ export default function BuildBoxesScreen() {
               by what they do so nobody wonders why the card is there. */}
           <FadeInUp index={1}>
             <Card className="gap-1.5 px-4 py-2.5">
-              <Text variant="label" className="font-bold">
+              <Text variant="heading" className="font-bold">
                 Change the plan
               </Text>
               <Tappable
@@ -322,9 +331,11 @@ export default function BuildBoxesScreen() {
                 <Text variant="label" className="flex-1 font-bold" numberOfLines={1}>
                   {box.name}
                 </Text>
-                <Text variant="label" tone="brand" className="font-bold">
-                  Change
-                </Text>
+                <View ref={changeTarget} collapsable={false}>
+                  <Text variant="label" tone="brand" className="font-bold">
+                    Change
+                  </Text>
+                </View>
               </Tappable>
               {box.scales && (
                 <View className="min-h-[40px] flex-row items-center gap-2">
@@ -562,6 +573,7 @@ export default function BuildBoxesScreen() {
         </Text>
       </Sheet>
 
+      {section === "plan" && <SpotlightTour tourKey="boxes" steps={BOXES_TOUR} />}
       <BoxPicker
         visible={pickerOpen}
         onClose={() => setPickerOpen(false)}

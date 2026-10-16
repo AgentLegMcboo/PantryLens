@@ -22,6 +22,7 @@ import { Row } from './ui/row';
 import { Sheet } from './ui/sheet';
 import { Text } from './ui/text';
 import { AppMap } from './app-map';
+import { useSpotlightTarget } from './spotlight';
 import { AppearanceControl } from './appearance-control';
 import { useAppAppearance } from '../lib/appearance';
 
@@ -33,6 +34,8 @@ export function AppHeader({ title }: { title: string }) {
   const [mapOpen, setMapOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const bellTarget = useSpotlightTarget(`header.${title}.bell`);
+  const menuTarget = useSpotlightTarget(`header.${title}.menu`);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
@@ -143,17 +146,21 @@ export function AppHeader({ title }: { title: string }) {
         <View className="ml-auto flex-row items-center gap-2">
           <AppearanceControl />
 
-          <HeaderButton
-            icon="bell-outline"
-            label="Notifications"
-            badge={unreadCount}
-            onPress={() => router.push('/expiring-soon')}
-          />
-          <HeaderButton
-            icon="view-grid-outline"
-            label="Full app map"
-            onPress={() => setMapOpen(true)}
-          />
+          <View ref={bellTarget} collapsable={false}>
+            <HeaderButton
+              icon="bell-outline"
+              label="Notifications"
+              badge={unreadCount}
+              onPress={() => router.push('/expiring-soon')}
+            />
+          </View>
+          <View ref={menuTarget} collapsable={false}>
+            <HeaderButton
+              icon="dots-horizontal"
+              label="Full app map"
+              onPress={() => setMapOpen(true)}
+            />
+          </View>
         </View>
       </View>
       <AppMap visible={mapOpen} onClose={() => setMapOpen(false)} />
@@ -401,7 +408,7 @@ export function StackHeader({
         </Text>
 
         {right}
-        <HeaderButton icon="view-grid-outline" label="Full app map" onPress={() => setMapOpen(true)} />
+        <HeaderButton icon="dots-horizontal" label="Full app map" onPress={() => setMapOpen(true)} />
       </View>
       <AppMap visible={mapOpen} onClose={() => setMapOpen(false)} />
     </View>

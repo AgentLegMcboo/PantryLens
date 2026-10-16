@@ -541,6 +541,46 @@ function Falling({ delay, from, children, style }: { delay: number; from: number
 }
 
 /**
+ * An ordinary open cardboard box, seen from the front and a little to the
+ * right: a square front face, one side, and four flaps folded open. Drawn in
+ * two layers so things can sit inside it: the back (back flap, left flap, the
+ * dark inside) and the front (front face, side, front and right flaps).
+ */
+const BOX_VB = "0 0 240 185";
+export function OpenBoxBack({ width, height }: { width: number; height: number }) {
+  return (
+    <Svg width={width} height={height} viewBox={BOX_VB} style={{ position: "absolute" }}>
+      <Ellipse cx="122" cy="172" rx="104" ry="9" fill="#6B4A2F" opacity="0.14" />
+      <Path d="M64 58L206 58L196 26L74 26Z" fill="#E8C4A1" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
+      <Path d="M34 80L64 58L44 38L12 60Z" fill="#EECFB0" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
+      <Path d="M34 80L64 58L206 58L176 80Z" fill="#9C7351" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
+    </Svg>
+  );
+}
+export function OpenBoxFront({ width, height }: { width: number; height: number }) {
+  return (
+    <Svg width={width} height={height} viewBox={BOX_VB} style={{ position: "absolute" }}>
+      <Path d="M34 80H176V166H34Z" fill="#D8AB80" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
+      <Path d="M176 80L206 58V144L176 166Z" fill="#C79A70" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
+      <Path d="M34 80H176L168 100H42Z" fill="#EECFB0" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
+      <Path d="M176 80L206 58L230 72L202 98Z" fill="#E8C29C" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
+      <Path d="M70 130H140" stroke="#B88960" strokeWidth="3" strokeLinecap="round" opacity="0.5" />
+    </Svg>
+  );
+}
+
+/** The same box with nothing in it yet. */
+export function EmptyBox({ width }: { width: number }) {
+  const height = (185 * width) / 240;
+  return (
+    <View style={{ width, height }}>
+      <OpenBoxBack width={width} height={height} />
+      <OpenBoxFront width={width} height={height} />
+    </View>
+  );
+}
+
+/**
  * An open box that fills up: the back of the box, the groceries falling in,
  * then the front panel over their bottoms, so they land inside it.
  */
@@ -549,9 +589,11 @@ function FillingBox({ items, width, keyId }: { items: number; width: number; key
   const height = 185 * k;
   const back = Math.floor(items / 2);
   const front = items - back;
+  // Two rows inside the rim: the back row up and to the right, the front row
+  // lower, both with their bottoms hidden behind the front face.
   const rows = [
-    { count: back, bottom: 100, x0: 50, x1: 190 },
-    { count: front, bottom: 116, x0: 40, x1: 200 },
+    { count: back, bottom: 90, x0: 74, x1: 198 },
+    { count: front, bottom: 100, x0: 42, x1: 172 },
   ];
   const placed: { x: number; bottom: number; i: number }[] = [];
   let n = 0;
@@ -562,11 +604,7 @@ function FillingBox({ items, width, keyId }: { items: number; width: number; key
 
   return (
     <View style={{ width, height }}>
-      <Svg width={width} height={height} viewBox="0 0 240 185" style={{ position: "absolute" }}>
-        <Ellipse cx="120" cy="174" rx="100" ry="8" fill="#6B4A2F" opacity="0.14" />
-        <Path d="M40 62L60 30H180L200 62Z" fill="#E8C4A1" stroke="#BB8C63" strokeWidth="2" strokeLinejoin="round" />
-        <Path d="M30 98L40 62H200L210 98Z" fill="#B58763" />
-      </Svg>
+      <OpenBoxBack width={width} height={height} />
       {placed.map((p) => {
         const g = GOODS[p.i % GOODS.length];
         const { w, h } = SIZE[g.kind];
@@ -581,12 +619,7 @@ function FillingBox({ items, width, keyId }: { items: number; width: number; key
           </Falling>
         );
       })}
-      <Svg width={width} height={height} viewBox="0 0 240 185" style={{ position: "absolute" }}>
-        <Path d="M30 98L120 110L210 98L204 160Q120 182 36 160Z" fill="#D8AB80" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
-        <Path d="M30 98L8 72L98 84L120 110Z" fill="#EECFB0" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
-        <Path d="M120 110L142 84L232 72L210 98Z" fill="#E8C29C" stroke="#B88960" strokeWidth="2" strokeLinejoin="round" />
-        <Path d="M120 111V177" stroke="#BD9069" strokeWidth="2" />
-      </Svg>
+      <OpenBoxFront width={width} height={height} />
     </View>
   );
 }

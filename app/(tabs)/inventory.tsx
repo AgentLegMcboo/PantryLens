@@ -55,6 +55,13 @@ import {
 import { QuickAddStaplesModal } from "../../components/quick-add-staples";
 import { useTabOverlayInset } from "../../lib/tab-overlay";
 import { Tappable, PRESS_SCALE_ROW } from "../../components/motion";
+import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
+
+const INVENTORY_TOUR: TourStep[] = [
+  { target: "inventory.firstRow", title: "Hold and drag", body: "Hold an item, then drag it onto a shelf to move it." },
+  { target: "inventory.firstRow", title: "Swipe right", body: "Swipe an item to the right to take it off the shelf." },
+  { target: "inventory.select", title: "Select many", body: "Move or take off lots of items at once." },
+];
 
 /**
  * The shelf, as a list.
@@ -99,6 +106,14 @@ type GroupBy = (typeof GROUPS)[number]["id"];
 
 /** How far the row travels when the action is fully open. */
 const SWIPE_WIDTH = 96;
+
+/** A sub-shelf, drawn inside its shelf: inset, with a rule down the left. */
+const NESTED = {
+  marginLeft: 8,
+  paddingLeft: 14,
+  borderLeftWidth: 2,
+  borderLeftColor: "rgba(140, 110, 80, 0.25)",
+};
 
 /**
  * What sits in the gap a swipe opens up.
@@ -745,7 +760,23 @@ export default function InventoryScreen() {
   const rootRef = React.useRef<View>(null);
   const rootY = useSharedValue(0);
 
-  const renderItemRow = ({ item }: { item: InventoryItem }) => (
+  const firstRowTarget = useSpotlightTarget("inventory.firstRow");
+  const selectTarget = useSpotlightTarget("inventory.select");
+  const renderItemRow = ({
+    item,
+    index,
+    section,
+  }: {
+    item: InventoryItem;
+    index: number;
+    section: { depth?: 0 | 1 };
+  }) => (
+    // A sub-shelf's items sit inset behind a rule, inside their parent shelf.
+    <View
+      ref={index === 0 && section === sections[0] ? firstRowTarget : undefined}
+      collapsable={false}
+      style={section.depth === 1 && dGroup !== "none" && !picking ? NESTED : undefined}
+    >
     <InventoryRow
       item={item}
       picking={picking}
@@ -758,6 +789,7 @@ export default function InventoryScreen() {
       drag={dragApi}
       isDragging={draggingId === item.id}
     />
+    </View>
   );
 
   return (
@@ -782,6 +814,7 @@ export default function InventoryScreen() {
               </Text>
             </View>
             {inventory.length > 0 && (
+              <View ref={selectTarget} collapsable={false}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Select items to move or take off shelf"
@@ -789,17 +822,18 @@ export default function InventoryScreen() {
                   cueTap();
                   setSelectMode(true);
                 }}
-                className="min-h-[48px] flex-row items-center gap-1.5 rounded-lg border border-hairline bg-card px-3.5 py-2"
+                className="min-h-[44px] flex-row items-center gap-1.5 rounded-md border border-hairline bg-card px-3 py-2"
               >
                 <MaterialCommunityIcons
                   name="checkbox-multiple-marked-outline"
                   size={18}
-                  color={COLORS.primary}
+                  color={COLORS.textSecondary}
                 />
-                <Text variant="label" tone="brand" className="font-bold">
+                <Text variant="label" className="font-semibold">
                   Select
                 </Text>
               </Pressable>
+              </View>
             )}
           </View>
         )}
@@ -1058,6 +1092,22 @@ export default function InventoryScreen() {
               />
               <Text variant="label">Shelves</Text>
             </Tappable>
+            <Tappable
+              onPress={() => {
+                cueTap();
+                setManagingPlaces(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Add a shelf or sub-shelf"
+              className="min-h-[48px] flex-row items-center justify-center gap-1.5 rounded-lg border border-hairline bg-card px-3"
+            >
+              <MaterialCommunityIcons
+                name="folder-plus-outline"
+                size={20}
+                color={COLORS.textSecondary}
+              />
+              <Text variant="label">Shelf</Text>
+            </Tappable>
           </View>
         )}
       </View>
@@ -1093,18 +1143,11 @@ export default function InventoryScreen() {
               }}
               // Opaque, because it sticks: a translucent header would let rows
               // scroll through the text behind it.
-              className={`mb-3 flex-row items-center gap-2 bg-canvas pb-2 pt-1 ${
-                section.depth === 1 ? "pl-6" : ""
-              }`}
+              className="mb-3 flex-row items-center gap-2 bg-canvas pb-2 pt-1"
+              style={section.depth === 1 ? NESTED : undefined}
             >
               <MaterialCommunityIcons
-                name={
-                  section.depth === 1
-                    ? "subdirectory-arrow-right"
-                    : isCollapsed
-                      ? "chevron-right"
-                      : "chevron-down"
-                }
+                name={isCollapsed ? "chevron-right" : "chevron-down"}
                 size={section.depth === 1 ? 18 : 20}
                 color={COLORS.secondary}
               />
@@ -1130,31 +1173,6 @@ export default function InventoryScreen() {
             </Pressable>
           );
         }}
-        ListFooterComponent={
-          dGroup === "place" && !picking ? (
-            <Tappable
-              onPress={() => {
-                cueTap();
-                setManagingPlaces(true);
-              }}
-              accessibilityRole="button"
-              className="mt-2 min-h-[52px] flex-row items-center justify-center gap-2 rounded-lg border-[1.5px] border-dashed border-outline"
-            >
-              <MaterialCommunityIcons
-                name="folder-plus-outline"
-                size={20}
-                color={COLORS.secondaryDark}
-              />
-              <Text
-                variant="label"
-                className="font-bold"
-                style={{ color: COLORS.secondaryDark }}
-              >
-                New shelf or sub-shelf
-              </Text>
-            </Tappable>
-          ) : null
-        }
         ListEmptyComponent={
           <EmptyState
             icon="clipboard-text-search-outline"
@@ -1502,6 +1520,7 @@ export default function InventoryScreen() {
         onClose={() => setStaplesModalVisible(false)}
       />
 
+      <SpotlightTour tourKey="inventory" steps={INVENTORY_TOUR} />
       <InventoryDragLayer
         api={dragApi}
         dragging={dragging}
