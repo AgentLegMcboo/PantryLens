@@ -26,6 +26,7 @@ import { useAppAppearance } from "../../lib/appearance";
  */
 export function Row({
   icon,
+  leading: leadingContent,
   label,
   hint,
   right,
@@ -37,6 +38,7 @@ export function Row({
   className,
 }: {
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  leading?: React.ReactNode;
   label: string;
   hint?: string;
   right?: React.ReactNode;
@@ -58,7 +60,7 @@ export function Row({
   const glyphColour =
     tone === "critical" ? COLORS.statusCritical : COLORS.secondaryDark;
 
-  const leading = icon ? (
+  const leading = leadingContent ?? (icon ? (
     <View
       className={cn(
         "h-10 w-10 items-center justify-center rounded-lg",
@@ -67,7 +69,7 @@ export function Row({
     >
       <MaterialCommunityIcons name={icon} size={20} color={glyphColour} />
     </View>
-  ) : null;
+  ) : null);
   const copy = (
     <View className="flex-1">
       <Text variant="body" className="font-semibold" style={{ color: colour }}>

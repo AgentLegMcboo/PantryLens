@@ -11,7 +11,7 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "lint": "tsc --noEmit",
-    "test": "node --test scripts/barcode-test.cjs tests/expiry.test.cjs tests/diet.test.cjs tests/allocation.test.cjs tests/offline-queue.test.cjs tests/accessibility.test.cjs tests/intake.test.cjs tests/presentation.test.cjs",
+    "test": "node --test scripts/barcode-test.cjs tests/expiry.test.cjs tests/diet.test.cjs tests/allocation.test.cjs tests/offline-queue.test.cjs tests/accessibility.test.cjs tests/intake.test.cjs tests/presentation.test.cjs tests/profile-photo.test.cjs tests/settings-navigation.test.cjs",
     "test:barcodes": "node --test scripts/barcode-test.cjs"
   },
   "dependencies": {

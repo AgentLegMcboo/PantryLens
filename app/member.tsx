@@ -1,4 +1,6 @@
 import { ResponsiveRow } from '../components/ui/responsive-row';
+import { ProfileAvatar } from '../components/profile-avatar';
+import { loadProfilePhoto } from '../lib/profile-photos';
 import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -142,7 +144,7 @@ export default function MemberScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([load(), fetchMembers().catch(() => {})]);
+    await Promise.all([load(), fetchMembers().catch(() => {}), id ? loadProfilePhoto(id, true) : Promise.resolve()]);
     setRefreshing(false);
   };
 
@@ -226,11 +228,7 @@ export default function MemberScreen() {
       {/* Who */}
       <FadeInUp index={0}>
         <View className="flex-row items-center gap-3.5">
-          <View className="h-14 w-14 items-center justify-center rounded-lg bg-brand">
-            <Text variant="title" tone="on" className="font-bold" style={{ color: COLORS.textOnAccent }}>
-              {name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <ProfileAvatar userId={member.user_id} name={name} size={56} />
           <View className="flex-1">
             <Text variant="heading" className="font-bold">
               {name}
@@ -242,6 +240,9 @@ export default function MemberScreen() {
             </Text>
           </View>
         </View>
+        {isMe ? (
+          <Button label="Edit profile photo" variant="ghost" onPress={() => router.push({ pathname: '/(tabs)/settings', params: { section: 'profile' } })} />
+        ) : null}
       </FadeInUp>
 
       {!canView ? (

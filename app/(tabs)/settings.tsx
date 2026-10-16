@@ -6,6 +6,8 @@ import React, { useEffect, useRef, useState } from "react";
 import { ActivityIndicator, Alert, View } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { KeyboardScreen } from "../../components/keyboard-screen";
+import { ProfileAvatar } from "../../components/profile-avatar";
+import { ProfilePhotoEditor } from "../../components/profile-photo-editor";
 import {
   Button,
   Card,
@@ -63,7 +65,7 @@ export default function SettingsScreen() {
   const { mode, setMode } = useAppAppearance();
   useEffect(() => {
     if (
-      ["pantry", "boxes", "stock", "display", "sound"].includes(
+      ["profile", "pantry", "boxes", "stock", "display", "sound"].includes(
         params.section ?? "",
       )
     ) {
@@ -75,6 +77,7 @@ export default function SettingsScreen() {
     if (params.section) router.setParams({ section: undefined });
   };
   const sectionTitles: Record<string, string> = {
+    profile: "Your profile",
     pantry: "Pantry details",
     boxes: "Box defaults",
     stock: "Stock alerts",
@@ -89,6 +92,7 @@ export default function SettingsScreen() {
   const setSeniorMode = useAccessibilityStore((state) => state.setSeniorMode);
 
   const {
+    session,
     settings,
     boxRules,
     thresholds,
@@ -256,6 +260,17 @@ export default function SettingsScreen() {
             Choose a group to view or change its settings.
           </Text>
         </View>
+        {session?.user ? (
+          <Card className="py-0">
+            <Row
+              leading={<ProfileAvatar userId={session.user.id} name={session.user.email || 'You'} />}
+              label="Your profile"
+              hint="Add or change your profile photo"
+              divider={false}
+              onPress={() => setSettingsSection("profile")}
+            />
+          </Card>
+        ) : null}
         {!canEdit && (
           <View>
             <Card className="flex-row items-start gap-3">
@@ -373,6 +388,9 @@ export default function SettingsScreen() {
           }
         }}
       >
+        {settingsSection === "profile" && session?.user ? (
+          <ProfilePhotoEditor userId={session.user.id} email={session.user.email || ''} />
+        ) : null}
         {settingsSection === "pantry" && (
           <View>
             <Card className={canEdit ? "gap-4" : undefined}>

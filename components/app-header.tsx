@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert, Platform, View } from 'react-native';
 import Animated, {
   Easing,
@@ -25,6 +25,7 @@ import { AppMap } from './app-map';
 import { useSpotlightTarget } from './spotlight';
 import { AppearanceControl } from './appearance-control';
 import { useAppAppearance } from '../lib/appearance';
+import { ProfileAvatar } from './profile-avatar';
 
 /**
  * The app's top bar.
@@ -44,6 +45,7 @@ export function AppHeader({ title }: { title: string }) {
   );
 
   const {
+    session,
     settings,
     inventory,
     signOut,
@@ -52,6 +54,7 @@ export function AppHeader({ title }: { title: string }) {
     setAddingPantry,
   } = usePantryStore();
   const [switchOpen, setSwitchOpen] = useState(false);
+  const pendingMenuAction = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     return offlineQueue.subscribe((count) => setPendingCount(count));
@@ -68,6 +71,19 @@ export function AppHeader({ title }: { title: string }) {
     setMenuOpen(false);
     setSwitchOpen(false);
   };
+
+  const afterMenuDismiss = (action: () => void) => {
+    // Ignore a second tap while the selected action is waiting for UIKit.
+    if (pendingMenuAction.current) return;
+    pendingMenuAction.current = action;
+    close();
+  };
+
+  const handleMenuDismiss = useCallback(() => {
+    const action = pendingMenuAction.current;
+    pendingMenuAction.current = null;
+    action?.();
+  }, []);
 
   const handleSignOut = () => {
     close();
@@ -168,9 +184,18 @@ export function AppHeader({ title }: { title: string }) {
       <Sheet
         visible={menuOpen}
         onClose={close}
+        onDismiss={handleMenuDismiss}
         title={settings.pantryName || 'Pantry Menu'}
       >
         <View>
+          <Row
+            leading={<ProfileAvatar userId={session?.user.id} name={session?.user.email || 'You'} />}
+            label="Your profile"
+            hint="Your profile photo"
+            onPress={() => afterMenuDismiss(() => {
+              router.push({ pathname: '/(tabs)/settings', params: { section: 'profile' } });
+            })}
+          />
           <Row
             icon="format-size"
             label={seniorMode ? 'Larger text: On' : 'Larger text: Off'}
@@ -184,28 +209,25 @@ export function AppHeader({ title }: { title: string }) {
             icon="chart-box-outline"
             label="Reports & Activity"
             hint="Given out, wasted, CSV export"
-            onPress={() => {
-              close();
+            onPress={() => afterMenuDismiss(() => {
               router.push('/reports');
-            }}
+            })}
           />
           <Row
             icon="cog-outline"
             label="Pantry settings"
             hint="Box rules, thresholds, sound"
-            onPress={() => {
-              close();
+            onPress={() => afterMenuDismiss(() => {
               router.push('/(tabs)/settings');
-            }}
+            })}
           />
           <Row
             icon="account-multiple-outline"
             label="Volunteers & team"
             hint="Members, roles and admins"
-            onPress={() => {
-              close();
+            onPress={() => afterMenuDismiss(() => {
               router.push('/team');
-            }}
+            })}
           />
           <Row
             icon="swap-horizontal"
@@ -265,11 +287,10 @@ export function AppHeader({ title }: { title: string }) {
             icon="plus-circle-outline"
             label="Add or create pantry"
             hint="Join with a code or start one"
-            onPress={() => {
-              close();
+            onPress={() => afterMenuDismiss(() => {
               setAddingPantry(true);
               router.push('/pantry-selection');
-            }}
+            })}
           />
           <Row
             icon="logout"
