@@ -24,7 +24,7 @@ import Animated, {
   withSpring,
   withTiming,
 } from 'react-native-reanimated';
-import { COLORS, RADII } from '../constants/theme';
+import { COLORS, RADII, themedStyles } from '../constants/theme';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { cuePress, cueTap } from '../lib/feedback';
 import { SPRING_PRESS } from '../lib/motion-physics';
@@ -389,11 +389,11 @@ export function GrainOverlay({ opacity = 0.5 }: { opacity?: number }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   progressTrack: {
     width: '100%',
     backgroundColor: COLORS.surfaceVariant,
     borderRadius: RADII.full,
     overflow: 'hidden',
   },
-});
+}));

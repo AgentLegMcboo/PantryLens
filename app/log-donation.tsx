@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming, useReducedMotion } from 'react-native-reanimated';
+import Animated, { FadeIn, FadeOut, LinearTransition, useAnimatedStyle, useSharedValue, withSequence, withTiming, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Sheet, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
@@ -73,7 +73,9 @@ export default function LogDonationScreen() {
   const [torch, setTorch] = useState(false);
   const [capturing, setCapturing] = useState(false);
   const [shots, setShots] = useState<(PreparedPhoto & { group: number })[]>([]);
-  const [captureMode, setCaptureMode] = useState<'angle' | 'new'>('angle');
+  const [captureMode, setCaptureMode] = useState<'angle' | 'new'>('new');
+  /** The group whose photos are fanned out in the strip; the rest show one photo. */
+  const [openGroup, setOpenGroup] = useState<number | null>(null);
   const reducedMotion = useReducedMotion();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   /**
@@ -105,7 +107,7 @@ export default function LogDonationScreen() {
       // Library selection follows the chosen intent; new-group mode treats each selected picture as separate stock.
       return [...prev, ...prepared.map((photo, index) => ({ ...photo, group: firstGroup + (captureMode === 'new' ? index : 0) }))].slice(0, MAX_PHOTOS);
     });
-    setCaptureMode('angle');
+    setCaptureMode('new');
   };
 
   const handleShutter = async () => {
@@ -156,14 +158,28 @@ export default function LogDonationScreen() {
     setShots((prev) => prev.filter((_, i) => i !== index));
   };
 
+  /**
+   * Each read gets a number. Cancel bumps it, so a read that finishes after
+   * being cancelled sees it is stale and drops its result. The request itself
+   * can't be stopped once sent; this just stops it taking over the screen.
+   */
+  const scanRun = useRef(0);
+  const cancelScan = () => {
+    cueTap();
+    scanRun.current += 1;
+    setIsAnalyzing(false);
+  };
+
   const handleDetectItems = async () => {
     if (shots.length === 0 || isAnalyzing) return;
     log.debug('scan', `detect pressed with ${shots.length} photo(s)`);
+    const run = ++scanRun.current;
     setIsAnalyzing(true);
 
     try {
       const startedAt = Date.now();
       const { candidates, photosRead, photosSent } = await processImageScan(shots.map((s) => s.base64), { photoGroups: shots.map((s) => s.group) });
+      if (run !== scanRun.current) return;
 
       // Opened BEFORE the review, so a scan the volunteer walks away from is
       // still recorded. Best-effort: a null record changes nothing that follows.
@@ -225,6 +241,7 @@ export default function LogDonationScreen() {
       }
       router.push('/review-verify');
     } catch (err) {
+      if (run !== scanRun.current) return;
       log.error('scan', 'scan failed', err);
       cueWarn();
       const message =
@@ -244,7 +261,7 @@ export default function LogDonationScreen() {
         { text: 'Try again', style: 'cancel' },
       ]);
     } finally {
-      setIsAnalyzing(false);
+      if (run === scanRun.current) setIsAnalyzing(false);
     }
   };
 
@@ -283,6 +300,35 @@ export default function LogDonationScreen() {
           style={{ paddingTop: insets.top + 8 }}
         >
           <RoundButton icon="close" label="Close" onPress={() => router.back()} />
+          {/* What the next photo shows: same items from another angle, or new
+              ones. Only matters once there's a photo to compare with. */}
+          {shots.length > 0 ? (
+            <View className="flex-row items-center gap-1 rounded-full p-1" style={{ backgroundColor: GLASS }}>
+              {(['angle', 'new'] as const).map((mode) => {
+                const on = captureMode === mode;
+                return (
+                  <Tappable
+                    key={mode}
+                    onPress={() => {
+                      cueTap();
+                      setCaptureMode(mode);
+                    }}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={mode === 'angle' ? 'Next photo shows the same items' : 'Next photo shows new items'}
+                    className="min-h-[44px] items-center justify-center rounded-full px-3"
+                    style={{ backgroundColor: on ? '#FFFFFF' : 'transparent' }}
+                  >
+                    <Text variant="micro" className="font-bold" style={{ color: on ? '#1E140E' : '#FFFFFF' }} numberOfLines={1}>
+                      {mode === 'angle' ? 'Same items' : 'New items'}
+                    </Text>
+                  </Tappable>
+                );
+              })}
+            </View>
+          ) : (
+            <View className="flex-1" />
+          )}
           <RoundButton
             icon={torch ? 'flashlight' : 'flashlight-off'}
             label={torch ? 'Turn the light off' : 'Turn the light on'}
@@ -296,7 +342,9 @@ export default function LogDonationScreen() {
 
         {/* Viewfinder corners */}
         <View className="flex-1 items-center justify-center" pointerEvents="none">
-          <View style={{ width: '78%', aspectRatio: 0.85 }}>
+          {/* Sized by height as well as width, so when the panel below appears
+              the frame shrinks instead of climbing under the top buttons. */}
+          <View style={{ height: '86%', maxWidth: '78%', aspectRatio: 0.85 }}>
             <Corner style={{ top: 0, left: 0, borderTopWidth: 4, borderLeftWidth: 4, borderTopLeftRadius: 18 }} />
             <Corner style={{ top: 0, right: 0, borderTopWidth: 4, borderRightWidth: 4, borderTopRightRadius: 18 }} />
             <Corner style={{ bottom: 0, left: 0, borderBottomWidth: 4, borderLeftWidth: 4, borderBottomLeftRadius: 18 }} />
@@ -304,26 +352,27 @@ export default function LogDonationScreen() {
           </View>
         </View>
 
-        <View className="px-gutter pb-2">
-          {shots.length > 0 && (
-            <View className="mt-2 gap-2 rounded-lg border border-hairline bg-card p-3">
-              <Text variant="label" className="font-bold">What will the next photo show?</Text>
-              <View className="flex-row gap-2">
-                <Button className="flex-1 self-stretch" label="Another angle" size="compact" variant={captureMode === 'angle' ? 'primary' : 'secondary'} onPress={() => setCaptureMode('angle')} />
-                <Button className="flex-1 self-stretch" label="New group" size="compact" variant={captureMode === 'new' ? 'primary' : 'secondary'} onPress={() => setCaptureMode('new')} />
-              </View>
-              <Text variant="micro" tone="soft">{captureMode === 'angle' ? 'Same physical items: overlapping counts will not be added twice.' : 'Different physical items: counts stay separate from earlier groups.'}</Text>
-            </View>
-          )}
-        </View>
         {/* Hint */}
-        <View className="items-center pb-3" pointerEvents="none">
-          <View className="flex-row items-center gap-2 rounded-full px-4 py-2" style={{ backgroundColor: GLASS }}>
+        <View className="flex-row items-center justify-center gap-2 pb-3" pointerEvents="box-none">
+          <View className="flex-row items-center gap-2 rounded-full px-4 py-2" style={{ backgroundColor: GLASS }} pointerEvents="none">
             {isAnalyzing && <ActivityIndicator size="small" color="#FFFFFF" />}
             <Text variant="label" className="font-semibold text-white">
               {hint}
             </Text>
           </View>
+          {isAnalyzing && (
+            <Tappable
+              onPress={cancelScan}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Cancel reading the photos"
+              className="min-h-[40px] justify-center rounded-full bg-white px-4"
+            >
+              <Text variant="label" className="font-bold" style={{ color: '#1E140E' }}>
+                Cancel
+              </Text>
+            </Tappable>
+          )}
         </View>
 
         {/* Shots taken so far */}
@@ -334,22 +383,82 @@ export default function LogDonationScreen() {
             contentContainerClassName="gap-3 px-gutter pb-3 pt-2"
             style={{ flexGrow: 0 }}
           >
-            {shots.map((shot, i) => (
-              <View key={`${shot.uri}-${i}`}>
-                <Text variant="micro" className="font-bold text-white">Group {shot.group + 1}</Text>
-                <Image source={{ uri: shot.uri }} className="h-16 w-16 rounded-lg border-2 border-white" />
-                <Tappable
-                  disabled={busy}
-                  onPress={() => removeShot(i)}
-                  hitSlop={10}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Remove photo ${i + 1}`}
-                  className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-lg border border-white/60 bg-black"
-                >
-                  <MaterialCommunityIcons name="close" size={18} color="#FFFFFF" />
-                </Tappable>
-              </View>
-            ))}
+            {/* One stack per group. Closed: the first photo, with the edges of
+                the others peeking out to its right. Tap it and the group zips
+                open sideways to show every angle, each removable. */}
+            {Array.from(new Set(shots.map((s) => s.group))).map((group, groupIndex) => {
+              const members = shots
+                .map((shot, index) => ({ shot, index }))
+                .filter((m) => m.shot.group === group);
+              const open = openGroup === group && members.length > 1;
+              const shown = open ? members : members.slice(0, 1);
+              const extra = members.length - 1;
+              return (
+                <Animated.View key={group} layout={LinearTransition.duration(220)}>
+                  <Text variant="micro" className="font-bold text-white">
+                    Group {groupIndex + 1}{members.length > 1 ? ` · ${members.length}` : ''}
+                  </Text>
+                  <Pressable
+                    onPress={() => {
+                      if (members.length < 2) return;
+                      cueTap();
+                      setOpenGroup(open ? null : group);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={
+                      members.length > 1
+                        ? `Group ${groupIndex + 1}, ${members.length} photos. ${open ? 'Close' : 'Show all'}.`
+                        : `Group ${groupIndex + 1}, 1 photo`
+                    }
+                    className="flex-row items-center gap-2"
+                  >
+                    {shown.map(({ shot, index }, k) => {
+                      const peeks = !open && k === 0 ? Math.min(extra, 3) : 0;
+                      return (
+                      <Animated.View
+                        key={`${shot.uri}-${index}`}
+                        entering={FadeIn.duration(180)}
+                        exiting={FadeOut.duration(120)}
+                        layout={LinearTransition.duration(220)}
+                        style={{ marginRight: peeks * 6 }}
+                      >
+                        {/* Closed with more inside: the other photos' edges,
+                            drawn first so the top photo sits over them. */}
+                        {Array.from({ length: peeks }, (_, p) => (
+                          <View
+                            key={p}
+                            pointerEvents="none"
+                            style={{
+                              position: 'absolute',
+                              left: (p + 1) * 6,
+                              top: 3 + p * 3,
+                              width: 64,
+                              height: 58 - p * 6,
+                              borderRadius: 10,
+                              borderWidth: 2,
+                              borderColor: `rgba(255,255,255,${0.85 - p * 0.2})`,
+                              backgroundColor: 'rgba(0,0,0,0.35)',
+                            }}
+                          />
+                        )).reverse()}
+                        <Image source={{ uri: shot.uri }} className="h-16 w-16 rounded-lg border-2 border-white" />
+                        <Tappable
+                          disabled={busy}
+                          onPress={() => removeShot(index)}
+                          hitSlop={10}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove photo ${index + 1}`}
+                          className="absolute -right-1.5 -top-1.5 h-6 w-6 items-center justify-center rounded-md border border-white/60 bg-black"
+                        >
+                          <MaterialCommunityIcons name="close" size={14} color="#FFFFFF" />
+                        </Tappable>
+                      </Animated.View>
+                      );
+                    })}
+                  </Pressable>
+                </Animated.View>
+              );
+            })}
           </ScrollView>
         )}
 

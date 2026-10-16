@@ -203,6 +203,8 @@ export function itemsRegion(
   boxes: DetectionBox[],
   padding = 0.06,
   minSide = 0.35,
+  /** Above this share of the photo, zooming gains nothing: show it whole. */
+  maxArea = 0.85,
 ): DetectionBox | null {
   if (boxes.length === 0) return null;
   let left = Math.min(...boxes.map((b) => b.left)) - padding;
@@ -226,7 +228,7 @@ export function itemsRegion(
 
   const width = right - left;
   const height = bottom - top;
-  if (width * height > 0.85) return null;
+  if (width * height > maxArea) return null;
   return { left, top, width, height };
 }
 

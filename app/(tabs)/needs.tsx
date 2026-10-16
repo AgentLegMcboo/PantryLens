@@ -13,6 +13,7 @@ import { usePantryStore } from "../../lib/store";
 import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
 
 const NEEDS_TOUR: TourStep[] = [
+  { target: "needs.summary", title: "What you're short", body: "How far you are from your box goal, worked out for you." },
   { target: "needs.firstRow", title: "Tap for ideas", body: "See what foods to ask donors for." },
   { target: "needs.ask", title: "Share the list", body: "Send it by text, email or a flyer." },
 ];
@@ -69,6 +70,7 @@ export default function NeedsScreen() {
   const [flyerOpen, setFlyerOpen] = useState(false);
   const firstRowTarget = useSpotlightTarget("needs.firstRow");
   const askTarget = useSpotlightTarget("needs.ask");
+  const summaryTarget = useSpotlightTarget("needs.summary");
   const [copied, setCopied] = useState(false);
   const [expandedCategory, setExpandedCategory] = useState<string | null>(null);
   const pendingSettings = useRef<"boxes" | "pantry" | null>(null);
@@ -203,6 +205,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
         {/* The headline: what the shortfall costs, in boxes, and the one
             action that fixes it. */}
         <FadeInUp index={0}>
+          <View ref={summaryTarget} collapsable={false}>
           <Card className="gap-4">
             <View className="flex-row items-start justify-between gap-3">
               <View className="flex-1">
@@ -259,6 +262,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             />
             </View>
           </Card>
+          </View>
         </FadeInUp>
 
         <View className="gap-2">

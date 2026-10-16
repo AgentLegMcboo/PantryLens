@@ -12,11 +12,16 @@ import { InventoryItem, usePantryStore } from "../../lib/store";
 import { cuePress, cueTap } from "../../lib/feedback";
 import { QuickAddStaplesModal } from "../../components/quick-add-staples";
 import { ShelfCheckSheet } from "../../components/shelf-check";
-import { SpotlightTour, type TourStep } from "../../components/spotlight";
+import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
 
 const HOME_TOUR: TourStep[] = [
-  { target: "header.Home.bell", title: "Notifications", body: "A red number means food is expiring soon." },
-  { target: "header.Home.menu", title: "Every screen", body: "Find any page in the app from here." },
+  { target: "header.Home.pantry", title: "Your pantry", body: "Tap here for settings, your team, reports, or to switch pantries." },
+  { target: "header.Home.bell", title: "Notifications", body: "A red number means food is expiring soon. Check here every visit." },
+  { target: "header.Home.theme", title: "Light or dark", body: "Change how the app looks." },
+  { target: "header.Home.menu", title: "Every screen", body: "Lost? Find any page in the app from here." },
+  { target: "home.scan", title: "Scan donations", body: "Start here when food comes in. Take a picture, PantryLens finds the items." },
+  { target: "home.tools", title: "Other ways in", body: "Add by hand, weigh a big delivery, or fix a shelf's count." },
+  { target: "home.reports", title: "Reports", body: "See what came in and went out, and export it." },
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -36,6 +41,9 @@ export default function DashboardScreen() {
     usePantryStore();
   const [staplesModalVisible, setStaplesModalVisible] = useState(false);
   const [shelfCheckOpen, setShelfCheckOpen] = useState(false);
+  const scanTarget = useSpotlightTarget("home.scan");
+  const toolsTarget = useSpotlightTarget("home.tools");
+  const reportsTarget = useSpotlightTarget("home.reports");
 
   const readyCount = readyBoxes.reduce(
     (sum, r) => sum + (r.boxes - r.boxes_collected),
@@ -126,7 +134,7 @@ export default function DashboardScreen() {
           {/* The card's shape lives on a plain View with fixed styles: a
               Pressable's style *function* was being dropped by NativeWind,
               which left the card thin and the photo unclipped. */}
-          <View style={[styles.scanCard, cardShadow]}>
+          <View ref={scanTarget} collapsable={false} style={[styles.scanCard, cardShadow]}>
             <LinearGradient
               colors={
                 scheme === "dark"
@@ -173,6 +181,7 @@ export default function DashboardScreen() {
             </Pressable>
           </View>
 
+          <View ref={toolsTarget} collapsable={false}>
           <Card className="py-0">
             <Row
               icon="lightning-bolt-outline"
@@ -200,6 +209,7 @@ export default function DashboardScreen() {
               }}
             />
           </Card>
+          </View>
         </View>
       </View>
 
@@ -222,6 +232,7 @@ export default function DashboardScreen() {
             onPress={() => router.push("/(tabs)/build")}
           />
         </Card>
+        <View ref={reportsTarget} collapsable={false}>
         <Card className="py-0">
           <Row
             icon="chart-box-outline"
@@ -231,6 +242,7 @@ export default function DashboardScreen() {
             onPress={() => router.push("/reports")}
           />
         </Card>
+        </View>
       </View>
 
       {(allExpiringOrPast.length > 0 ||

@@ -39,8 +39,11 @@ import { BoxRules, usePantryStore } from "../../lib/store";
 import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
 
 const BOXES_TOUR: TourStep[] = [
+  { target: "boxes.tabs", title: "Plan, then hand out", body: "Plan boxes here. Packed boxes wait in Ready to go until families pick them up." },
+  { target: "boxes.answer", title: "How many you can pack", body: "Worked out from what's on your shelves right now." },
   { target: "boxes.details", title: "See what's missing", body: "Tap Details to see each food group." },
   { target: "boxes.change", title: "Other box types", body: "Pick a senior box, a no-cook box and more." },
+  { target: "boxes.family", title: "Family size", body: "Bigger families get more food in each box." },
 ];
 
 /**
@@ -171,6 +174,9 @@ export default function BuildBoxesScreen() {
   const canPack = plan.achievableBoxes > 0;
 
   const detailsTarget = useSpotlightTarget("boxes.details");
+  const tabsTarget = useSpotlightTarget("boxes.tabs");
+  const answerTarget = useSpotlightTarget("boxes.answer");
+  const familyTarget = useSpotlightTarget("boxes.family");
   const changeTarget = useSpotlightTarget("boxes.change");
 
   const startPacking = () => {
@@ -195,7 +201,7 @@ export default function BuildBoxesScreen() {
 
   return (
     <View style={{ flex: 1 }}>
-      <View className="px-gutter pt-2 pb-0">
+      <View ref={tabsTarget} collapsable={false} className="px-gutter pt-2 pb-0">
         <Segmented
           value={section}
           options={[
@@ -219,6 +225,8 @@ export default function BuildBoxesScreen() {
           {/* The answer. */}
           <FadeInUp index={0} style={{ flexGrow: 1 }}>
             <View
+              ref={answerTarget}
+              collapsable={false}
               className="flex-grow justify-center overflow-hidden rounded-lg bg-card"
               // A soft warm lift. The old 6px bottom lip rendered as a separate
               // dark band under the card on Android.
@@ -262,7 +270,7 @@ export default function BuildBoxesScreen() {
                   className="min-h-[40px] flex-row items-center justify-between gap-3"
                 >
                   <Text
-                    variant="micro"
+                    variant="label"
                     tone="default"
                     className="flex-1"
                     style={{ opacity: 0.92 }}
@@ -270,7 +278,7 @@ export default function BuildBoxesScreen() {
                     {isShort ? (
                       <>
                         Need{" "}
-                        <Text variant="micro" className="font-bold text-ink">
+                        <Text variant="label" className="font-bold text-ink">
                           {plan.shortfallPerCategory[plan.limitingCategory]} more{" "}
                           {plan.limitingCategory}
                         </Text>{" "}
@@ -338,7 +346,7 @@ export default function BuildBoxesScreen() {
                 </View>
               </Tappable>
               {box.scales && (
-                <View className="min-h-[40px] flex-row items-center gap-2">
+                <View ref={familyTarget} collapsable={false} className="min-h-[40px] flex-row items-center gap-2">
                   <Text variant="label" tone="soft" className="w-[96px]">
                     Family size
                   </Text>

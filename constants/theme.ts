@@ -90,6 +90,26 @@ export const COLORS = new Proxy(LIGHT_COLORS, {
       : LIGHT_COLORS)[key],
 });
 
+/**
+ * StyleSheet.create, rebuilt for light and dark.
+ *
+ * A plain `StyleSheet.create` at module level reads COLORS once, at load,
+ * before the saved light/dark choice has been restored, and keeps that palette
+ * for good. That froze the splash and the photo labels in dark mode for people
+ * using light. This builds one sheet per mode and hands back the current one.
+ * The component still has to re-render on a mode change (useAppAppearance).
+ */
+export function themedStyles<T>(make: () => T): T {
+  const cache: Partial<Record<"light" | "dark", T>> = {};
+  return new Proxy({} as object, {
+    get: (_target, key) => {
+      const scheme = useAppAppearance.getState().scheme === "dark" ? "dark" : "light";
+      const sheet = (cache[scheme] ??= make());
+      return (sheet as Record<string | symbol, unknown>)[key];
+    },
+  }) as T;
+}
+
 export const SPACING = {
   xs: 4,
   sm: 8,

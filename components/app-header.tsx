@@ -37,6 +37,8 @@ export function AppHeader({ title }: { title: string }) {
   const router = useRouter();
   const bellTarget = useSpotlightTarget(`header.${title}.bell`);
   const menuTarget = useSpotlightTarget(`header.${title}.menu`);
+  const pantryTarget = useSpotlightTarget(`header.${title}.pantry`);
+  const themeTarget = useSpotlightTarget(`header.${title}.theme`);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
@@ -142,6 +144,7 @@ export function AppHeader({ title }: { title: string }) {
           accessibilityLabel={`${settings.pantryName || 'PantryLens'}, ${title}. Opens pantry menu.`}
           className="min-h-[48px] flex-1 flex-row items-center gap-2.5 py-1"
         >
+          <View ref={pantryTarget} collapsable={false} className="flex-1 flex-row items-center gap-2.5">
           <View className="h-11 w-11 items-center justify-center rounded-lg bg-brand">
             <Text variant="body" tone="on" className="font-bold" style={{ color: COLORS.textOnAccent }}>
               {(settings.pantryName || 'P').trim().charAt(0).toUpperCase()}
@@ -155,12 +158,15 @@ export function AppHeader({ title }: { title: string }) {
               {settings.pantryName || 'PantryLens'}
             </Text>
           </View>
+          </View>
         </Tappable>
 
         {/* Grouped and pushed right as one block, so the buttons sit on the
             right edge whatever the title beside them does. */}
         <View className="ml-auto flex-row items-center gap-2">
-          <AppearanceControl />
+          <View ref={themeTarget} collapsable={false}>
+            <AppearanceControl />
+          </View>
 
           <View ref={bellTarget} collapsable={false}>
             <HeaderButton
@@ -172,7 +178,7 @@ export function AppHeader({ title }: { title: string }) {
           </View>
           <View ref={menuTarget} collapsable={false}>
             <HeaderButton
-              icon="dots-horizontal"
+              icon="dots-vertical"
               label="Full app map"
               onPress={() => setMapOpen(true)}
             />
@@ -429,7 +435,7 @@ export function StackHeader({
         </Text>
 
         {right}
-        <HeaderButton icon="dots-horizontal" label="Full app map" onPress={() => setMapOpen(true)} />
+        <HeaderButton icon="dots-vertical" label="Full app map" onPress={() => setMapOpen(true)} />
       </View>
       <AppMap visible={mapOpen} onClose={() => setMapOpen(false)} />
     </View>

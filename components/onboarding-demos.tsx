@@ -39,9 +39,9 @@ type DemoProps = { active: boolean; w: number; h: number; onDone: () => void };
 const IDLE_MS = 6000;
 const NEVER = ReduceMotion.Never;
 
-/** Detection colours that read on any photo: hot orange edge, dark label. */
+/** Detection colours that read on any photo, in light or dark mode: a hot orange edge and a deep orange label with white text. */
 const BOX_EDGE = "#FF7A1A";
-const LABEL_BG = "#1E140E";
+const LABEL_BG = "#C7570F";
 
 /** Runs `fn` once after the idle pause, unless the slide is left first. */
 function useAutoplay(on: boolean, fn: () => void, deps: unknown[]) {
@@ -584,7 +584,7 @@ export function EmptyBox({ width }: { width: number }) {
  * An open box that fills up: the back of the box, the groceries falling in,
  * then the front panel over their bottoms, so they land inside it.
  */
-function FillingBox({ items, width, keyId }: { items: number; width: number; keyId: number }) {
+export function FillingBox({ items, width, keyId }: { items: number; width: number; keyId: number }) {
   const k = width / 240;
   const height = 185 * k;
   const back = Math.floor(items / 2);

@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Required for react-native-gesture-handler to receive touches at all. Without
 // it the box drag/resize handles in Review & Verify are inert on Android.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { SpotlightHost } from '../components/spotlight';
 import { COLORS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
 import { vars } from 'nativewind';
 import { useAppAppearance } from '../lib/appearance';
@@ -177,6 +178,8 @@ export default function RootLayout() {
         // Brand-coloured hold rather than a white flash while state resolves.
         <View style={{ flex: 1, backgroundColor: COLORS.background }} />
       )}
+      {/* First-visit tips, drawn above every screen and the tab bar. */}
+      <SpotlightHost />
       {/* Sits above every screen. Non-interactive, so it never eats a tap. */}
       <GrainOverlay opacity={0.12} />
       {!splashDone && <BrandSplash hold={!ready} onDone={() => setSplashDone(true)} />}

@@ -32,6 +32,7 @@ import { useAccessibilityStore } from '../lib/accessibility';
 import { canCombineIntake, parsePrintedDate, splitInspection } from '../lib/intake';
 import { log } from '../lib/log';
 import { Tappable } from '../components/motion';
+import { FillingBox } from '../components/onboarding-demos';
 
 /**
  * Confirming what the scanner found, against the photo it found it in.
@@ -112,7 +113,7 @@ export default function ReviewVerifyScreen() {
     setCurrentScan,
     setAuditDraft,
   } = usePantryStore();
-  const { height: windowHeight } = useWindowDimensions();
+  const { height: windowHeight, width: windowWidth } = useWindowDimensions();
   const seniorMode = useAccessibilityStore((s) => s.seniorMode);
 
   /**
@@ -221,7 +222,9 @@ export default function ReviewVerifyScreen() {
       const boxes = currentDraft
         .filter((item: any) => (item.imageIndex ?? 0) === index && item.box)
         .map((item: any) => item.box as DetectionBox);
-      const region = itemsRegion(boxes);
+      // Tight around the items: a little padding, and zoom in even when they
+      // cover most of the photo.
+      const region = itemsRegion(boxes, 0.03, 0.25, 0.97);
       if (region) out[index] = region;
     });
     return out;
@@ -671,13 +674,41 @@ export default function ReviewVerifyScreen() {
     else commit();
   };
 
-  if (savedSummary) return (
-    <View className="flex-1 justify-center gap-5 bg-transparent px-gutter">
-      <Text variant="headline">Donation added</Text>
-      <Text variant="body">{savedSummary.units} units recorded · {savedSummary.held} held for inspection · {savedSummary.unknownDates} batches with unknown dates.</Text>
-      <Button label="View inventory" block onPress={() => router.replace('/(tabs)/inventory')} />
-    </View>
-  );
+  if (savedSummary) {
+    // The same box art as onboarding, filling as it lands: the donation, put away.
+    const stats = [
+      { value: savedSummary.units, label: 'units added', icon: 'package-variant' as const, tone: COLORS.statusGood },
+      { value: savedSummary.held, label: 'held to inspect', icon: 'alert-outline' as const, tone: COLORS.statusWarning },
+      { value: savedSummary.unknownDates, label: 'no date yet', icon: 'calendar-question' as const, tone: COLORS.textSecondary },
+    ];
+    return (
+      <ScrollView
+        className="flex-1 bg-transparent"
+        contentContainerStyle={{ flexGrow: 1, justifyContent: 'center', paddingHorizontal: 20, paddingTop: 16, paddingBottom: insets.bottom + 20, gap: 18 }}
+      >
+        <View className="items-center">
+          <FillingBox items={Math.max(4, Math.min(12, savedSummary.units))} width={Math.min(260, windowWidth - 80)} keyId={1} />
+        </View>
+        <View className="items-center gap-1">
+          <Text variant="headline" className="text-center">Donation added</Text>
+          <Text variant="body" tone="soft" className="text-center">It&apos;s on your shelves now.</Text>
+        </View>
+        <View className="flex-row gap-2">
+          {stats.map((st) => (
+            <View key={st.label} className="flex-1 items-center gap-1 rounded-lg border border-hairline bg-card px-2 py-3">
+              <MaterialCommunityIcons name={st.icon} size={20} color={st.tone} />
+              <Text variant="title" className="font-bold">{st.value}</Text>
+              <Text variant="micro" tone="soft" className="text-center" numberOfLines={2}>{st.label}</Text>
+            </View>
+          ))}
+        </View>
+        <View className="gap-2">
+          <Button label="View inventory" block className="rounded-md" onPress={() => router.replace('/(tabs)/inventory')} />
+          <Button label="Scan another donation" variant="secondary" block className="rounded-md" onPress={() => router.replace('/log-donation')} />
+        </View>
+      </ScrollView>
+    );
+  }
 
   if (draftItems.length === 0) {
     return (
@@ -823,15 +854,28 @@ export default function ReviewVerifyScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       className="flex-1 bg-transparent"
     >
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+      {/* A fixed column, not a scroll view: the photo takes what the controls
+          leave and shrinks when they need more, instead of pushing them off
+          the bottom of the screen. */}
+      <View style={{ flex: 1 }}>
       {/* Progress, and where the batch is going. One slim row instead of a
           title block, a paragraph and a progress card. */}
       <View className="gap-2 px-gutter pb-2 pt-2">
-        <Button label={`View all ${draftItems.length} items`} variant="secondary" size="compact" onPress={() => setListOpen(true)} />
-        <ResponsiveRow className="flex-row items-center justify-between gap-3">
-          <Text variant="body" className="font-bold">
-            {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
-          </Text>
+        {/* The list and where it's going, side by side on one line. */}
+        <View className="flex-row items-center gap-2">
+          <Tappable
+            onPress={() => {
+              cueTap();
+              setListOpen(true);
+            }}
+            accessibilityRole="button"
+            className="min-h-[40px] shrink-0 flex-row items-center gap-1 rounded-md border border-hairline bg-card px-3"
+          >
+            <MaterialCommunityIcons name="format-list-bulleted" size={15} color={COLORS.textSecondary} />
+            <Text variant="micro" className="font-bold">
+              All {draftItems.length} items
+            </Text>
+          </Tappable>
           {locations.length > 0 && !auditLocation && (
             <Tappable
               onPress={() => {
@@ -839,21 +883,26 @@ export default function ReviewVerifyScreen() {
                 setFilingOpen(true);
               }}
               accessibilityRole="button"
-              accessibilityLabel="Choose where this batch is filed"
-              className="flex-row items-center gap-1.5 min-h-[48px] rounded-lg border border-hairline bg-card px-3 py-2"
+              accessibilityLabel="Choose where this batch is going"
+              className="min-h-[40px] flex-1 flex-row items-center gap-1 rounded-md border border-hairline bg-card px-3"
             >
-              <MaterialCommunityIcons name="map-marker-outline" size={15} color={COLORS.textSecondary} />
-              <Text variant="micro" className="font-semibold" numberOfLines={1}>
+              <Text variant="micro" tone="soft" className="font-semibold">
+                Going to:
+              </Text>
+              <Text variant="micro" className="shrink font-bold" numberOfLines={1} style={{ textDecorationLine: 'underline' }}>
                 {batchLocation
                   ? shelfLabels(locations)[batchLocation] ?? 'Filed'
                   : autoFiles
-                    ? 'Suggested shelf'
-                    : 'Choose shelf'}
+                    ? 'Each item\'s usual shelf'
+                    : 'Choose a shelf'}
               </Text>
               <MaterialCommunityIcons name="chevron-down" size={15} color={COLORS.textSecondary} />
             </Tappable>
           )}
-        </ResponsiveRow>
+        </View>
+        <Text variant="label" className="font-bold">
+          {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
+        </Text>
         <View className="h-1.5 overflow-hidden rounded-sm bg-muted">
           <View
             className={allVerified ? 'h-full rounded-sm bg-good' : 'h-full rounded-sm bg-brand-light'}
@@ -865,7 +914,9 @@ export default function ReviewVerifyScreen() {
       {/* The photo, with this item's box selected on it. */}
       <View
         className="items-center justify-center px-gutter"
-        style={{ height: photo ? Math.min(260, Math.max(140, windowHeight * 0.25)) : 60 }}
+        // Takes whatever height the controls leave, and gives it up first when
+        // they need more: the controls are never cut off, the photo shrinks.
+        style={photo ? { flex: 1, minHeight: 110, overflow: 'hidden' } : { height: 60 }}
         onLayout={(e) => setPhotoArea({ w: e.nativeEvent.layout.width - 40, h: e.nativeEvent.layout.height })}
       >
         {/* The space the photo doesn't fill, filled with the photo itself —
@@ -1004,7 +1055,7 @@ export default function ReviewVerifyScreen() {
                   size={16}
                   color={checked ? COLORS.statusGood : flagged ? COLORS.statusWarning : COLORS.borderStrong}
                 />
-                <Text variant="label" numberOfLines={1} className={current ? 'font-bold' : 'font-semibold'}>
+                <Text variant="label" numberOfLines={1} className={`shrink ${current ? 'font-bold' : 'font-semibold'}`}>
                   {item.name?.trim() || 'Unnamed'}
                 </Text>
               </Tappable>
@@ -1018,8 +1069,8 @@ export default function ReviewVerifyScreen() {
           Pinned at the bottom so the thumb never has to travel, and everything
           needed for the common case is here; the rest is behind "More". */}
       <View
-        className="gap-3 bg-card px-gutter pt-3"
-        style={[RULE_ABOVE, { paddingBottom: 12 }]}
+        className="gap-2 bg-card px-gutter pt-2.5"
+        style={[RULE_ABOVE, { paddingBottom: 10, flexShrink: 0 }]}
       >
         {selectedItem ? (
           <>
@@ -1119,20 +1170,30 @@ export default function ReviewVerifyScreen() {
               </View>
             </View>
 
-            <Button label={`${selectedItem.expiration ? `Date: ${selectedItem.expiration}` : 'Date unknown'} · ${damaged ? 'Inspect damage' : 'Check condition'}`} variant="secondary" size="compact" onPress={() => setMoreOpen(true)} />
-            <ResponsiveRow className="flex-row items-center justify-between gap-3">
-              <Text variant="label" tone="soft" className="font-semibold">Quantity</Text>
-              <Stepper value={selectedItem.count ?? 1} min={1} onChange={(count) => updateItemAtIndex(selectedIndex, { count })} />
-            </ResponsiveRow>
-            <View className="flex-row flex-wrap gap-2">
-              {[6, 12, 24].map(pack => (
-                <Button key={pack} label={`+${pack}`} accessibilityLabel={`Add ${pack} more units`} variant="secondary" size="compact" onPress={() => updateItemAtIndex(selectedIndex, { count: (selectedItem.count ?? 1) + pack })} />
-              ))}
+            {/* Date/condition and quantity on one line. Confirm moves to the next
+                item, so there are no Previous/Next buttons. */}
+            <View className="flex-row items-center gap-2">
+              <Tappable
+                onPress={() => {
+                  cueTap();
+                  setMoreOpen(true);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={`${selectedItem.expiration ? `Date ${selectedItem.expiration}` : 'Date unknown'}. ${damaged ? 'Inspect damage' : 'Check condition'}.`}
+                className="min-h-[44px] flex-1 justify-center rounded-md border border-hairline bg-card px-3"
+              >
+                <Text variant="micro" tone="soft" numberOfLines={1}>
+                  {damaged ? 'Damaged · inspect' : 'Date & condition'}
+                </Text>
+                <Text variant="label" className="font-bold" numberOfLines={1}>
+                  {selectedItem.expiration ? selectedItem.expiration : 'Date unknown'}
+                </Text>
+              </Tappable>
+              <QuantityField
+                value={selectedItem.count ?? 1}
+                onChange={(count) => updateItemAtIndex(selectedIndex, { count })}
+              />
             </View>
-            <ResponsiveRow className="flex-row gap-2">
-              <View className="flex-1"><Button label="Previous item" size="compact" variant="ghost" disabled={currentIndex <= 0} onPress={() => focusRow(draftItems[currentIndex - 1])} /></View>
-              <View className="flex-1"><Button label="Next item" size="compact" variant="ghost" disabled={currentIndex >= draftItems.length - 1} onPress={() => focusRow(draftItems[currentIndex + 1])} /></View>
-            </ResponsiveRow>
           </>
         ) : (
           <Text variant="label" tone="soft">
@@ -1143,8 +1204,8 @@ export default function ReviewVerifyScreen() {
         )}
 
       </View>
-      </ScrollView>
-      <View className="gap-3 bg-card px-gutter pt-3" style={[RULE_ABOVE, { paddingBottom: insets.bottom + 12 }]}>
+      </View>
+      <View className="gap-2 bg-card px-gutter pt-2.5" style={[RULE_ABOVE, { paddingBottom: insets.bottom + 8 }]}>
         {notice && <Text variant="label" tone="critical" accessibilityRole="alert">{notice}</Text>}
         {/* Confirm and Add, side by side, in fixed positions. Confirm is the wide
             one on the left, where rapid taps land, and it ends as a
@@ -1726,5 +1787,46 @@ function ItemEditor({
         />
       )}
     </Card>
+  );
+}
+
+/**
+ * Quantity you can type straight into, with − and + either side for a nudge.
+ * Typing replaces the old +6 / +12 / +24 shortcuts.
+ */
+function QuantityField({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  const [text, setText] = useState(String(value));
+  useEffect(() => setText(String(value)), [value]);
+  const commit = (raw: string) => {
+    const n = parseInt(raw.replace(/[^0-9]/g, ''), 10);
+    if (Number.isFinite(n) && n >= 1) onChange(Math.min(n, 9999));
+    else setText(String(value));
+  };
+  const step = (d: number) => {
+    cueTap();
+    onChange(Math.max(1, value + d));
+  };
+  return (
+    <View className="flex-row items-center rounded-md border border-hairline bg-card">
+      <Pressable onPress={() => step(-1)} accessibilityRole="button" accessibilityLabel="One fewer" hitSlop={6} className="h-11 w-10 items-center justify-center">
+        <MaterialCommunityIcons name="minus" size={20} color={COLORS.textPrimary} />
+      </Pressable>
+      <TextInput
+        value={text}
+        onChangeText={(t) => setText(t.replace(/[^0-9]/g, ''))}
+        onEndEditing={(e) => commit(e.nativeEvent.text)}
+        onSubmitEditing={(e) => commit(e.nativeEvent.text)}
+        keyboardType="number-pad"
+        returnKeyType="done"
+        selectTextOnFocus
+        maxLength={4}
+        accessibilityLabel="Quantity"
+        className="text-ink"
+        style={{ minWidth: 48, height: 44, textAlign: 'center', textAlignVertical: 'center', fontSize: 18, fontWeight: '700', paddingVertical: 0, includeFontPadding: false }}
+      />
+      <Pressable onPress={() => step(1)} accessibilityRole="button" accessibilityLabel="One more" hitSlop={6} className="h-11 w-10 items-center justify-center">
+        <MaterialCommunityIcons name="plus" size={20} color={COLORS.textPrimary} />
+      </Pressable>
+    </View>
   );
 }

@@ -15,7 +15,8 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { COLORS, fw } from "../constants/theme";
+import { COLORS, fw, themedStyles } from "../constants/theme";
+import { useAppAppearance } from "../lib/appearance";
 import { cueTap } from "../lib/feedback";
 
 const { width: W, height: H } = Dimensions.get("window");
@@ -61,6 +62,8 @@ export function BrandSplash({
   hold: boolean;
   onDone: () => void;
 }) {
+  // Re-render once the saved light/dark choice loads, so the splash matches it.
+  useAppAppearance((state) => state.scheme);
   // One clock drives the whole sequence; each element reads its own slice of it.
   const t = useSharedValue(0);
   const exit = useSharedValue(0);
@@ -337,7 +340,7 @@ function FallingItem({ cfg }: { cfg: Falling }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   root: { backgroundColor: COLORS.primary, zIndex: 999, elevation: 999 },
   fallLayer: { ...StyleSheet.absoluteFill, overflow: "hidden" },
   can: { position: "absolute", top: 0 },
@@ -398,4 +401,4 @@ const styles = StyleSheet.create({
     textAlign: "center",
     paddingHorizontal: 24,
   },
-});
+}));

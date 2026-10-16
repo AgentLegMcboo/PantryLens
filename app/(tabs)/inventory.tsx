@@ -58,6 +58,9 @@ import { Tappable, PRESS_SCALE_ROW } from "../../components/motion";
 import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
 
 const INVENTORY_TOUR: TourStep[] = [
+  { target: "inventory.add", title: "Add by hand", body: "No photo? Type an item in here." },
+  { target: "inventory.filter", title: "Find things fast", body: "Show one food group, or sort by date or count." },
+  { target: "inventory.shelf", title: "Your shelves", body: "Add shelves, and shelves inside shelves, to match your pantry." },
   { target: "inventory.firstRow", title: "Hold and drag", body: "Hold an item, then drag it onto a shelf to move it." },
   { target: "inventory.firstRow", title: "Swipe right", body: "Swipe an item to the right to take it off the shelf." },
   { target: "inventory.select", title: "Select many", body: "Move or take off lots of items at once." },
@@ -762,6 +765,9 @@ export default function InventoryScreen() {
 
   const firstRowTarget = useSpotlightTarget("inventory.firstRow");
   const selectTarget = useSpotlightTarget("inventory.select");
+  const addTarget = useSpotlightTarget("inventory.add");
+  const filterTarget = useSpotlightTarget("inventory.filter");
+  const shelfTarget = useSpotlightTarget("inventory.shelf");
   const renderItemRow = ({
     item,
     index,
@@ -822,14 +828,14 @@ export default function InventoryScreen() {
                   cueTap();
                   setSelectMode(true);
                 }}
-                className="min-h-[44px] flex-row items-center gap-1.5 rounded-md border border-hairline bg-card px-3 py-2"
+                className="min-h-[44px] flex-row items-center gap-1.5 rounded-md border-[1.5px] border-outline bg-card px-3 py-2"
               >
                 <MaterialCommunityIcons
                   name="checkbox-multiple-marked-outline"
                   size={18}
-                  color={COLORS.textSecondary}
+                  color={COLORS.primaryDark}
                 />
-                <Text variant="label" className="font-semibold">
+                <Text variant="label" className="font-bold" style={{ color: COLORS.primaryDark }}>
                   Select
                 </Text>
               </Pressable>
@@ -979,6 +985,7 @@ export default function InventoryScreen() {
               ) : null}
             </View>
 
+            <View ref={addTarget} collapsable={false}>
             <Pressable
               onPress={() => setModalVisible(true)}
               accessibilityRole="button"
@@ -999,6 +1006,7 @@ export default function InventoryScreen() {
                 Add
               </Text>
             </Pressable>
+            </View>
           </View>
         )}
 
@@ -1058,6 +1066,7 @@ export default function InventoryScreen() {
 
         {!picking && (
           <View className="flex-row gap-3">
+            <View ref={filterTarget} collapsable={false} style={{ flex: 1 }}>
             <Tappable
               onPress={() => {
                 cueTap();
@@ -1076,6 +1085,7 @@ export default function InventoryScreen() {
                 Filter &amp; sort{selectedCategory !== "all" ? " · 1" : ""}
               </Text>
             </Tappable>
+            </View>
             <Tappable
               onPress={() => {
                 cueTap();
@@ -1092,6 +1102,7 @@ export default function InventoryScreen() {
               />
               <Text variant="label">Shelves</Text>
             </Tappable>
+            <View ref={shelfTarget} collapsable={false}>
             <Tappable
               onPress={() => {
                 cueTap();
@@ -1108,6 +1119,7 @@ export default function InventoryScreen() {
               />
               <Text variant="label">Shelf</Text>
             </Tappable>
+            </View>
           </View>
         )}
       </View>

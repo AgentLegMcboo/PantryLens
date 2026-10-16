@@ -56,10 +56,15 @@ const labelTone = {
 } as const;
 
 /** The lip colour per variant. Null means the variant has no lip. */
+// Getters, so the lip follows light and dark mode instead of the mode at load.
 const lipColor = {
-  primary: COLORS.primaryDeep,
+  get primary() {
+    return COLORS.primaryDeep;
+  },
   critical: '#8E2A1F',
-  secondary: COLORS.borderStrong,
+  get secondary() {
+    return COLORS.borderStrong;
+  },
   ghost: null,
   criticalGhost: null,
 } as const;

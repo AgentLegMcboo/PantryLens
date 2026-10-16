@@ -12,7 +12,8 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { COLORS, RADII, fw } from '../constants/theme';
+import { COLORS, RADII, fw, themedStyles } from '../constants/theme';
+import { useAppAppearance } from '../lib/appearance';
 import { useAccessibilityStore } from '../lib/accessibility';
 import {
   isTooSmall,
@@ -89,6 +90,7 @@ export function DetectionOverlay({
   focus,
   viewport,
 }: Props) {
+  useAppAppearance((state) => state.scheme);
   const [frame, setFrame] = useState({ width: 0, height: 0 });
 
   const onLayout = (e: LayoutChangeEvent) => {
@@ -467,7 +469,7 @@ function FocusMask({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   root: {
     width: '100%',
     backgroundColor: '#1A1512',
@@ -535,4 +537,4 @@ const styles = StyleSheet.create({
     borderRadius: RADII.sm,
     backgroundColor: 'rgba(255,255,255,0.22)',
   },
-});
+}));

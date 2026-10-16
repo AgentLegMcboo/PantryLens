@@ -148,10 +148,10 @@ function Stage({
 
 type TagTone = "brand" | "good" | "warn" | "critical";
 const TAG_COLORS: Record<TagTone, string> = {
-  brand: COLORS.primaryLight,
-  good: COLORS.statusGood,
-  warn: COLORS.statusWarning,
-  critical: COLORS.statusCritical,
+  get brand() { return COLORS.primaryLight; },
+  get good() { return COLORS.statusGood; },
+  get warn() { return COLORS.statusWarning; },
+  get critical() { return COLORS.statusCritical; },
 };
 
 /**
