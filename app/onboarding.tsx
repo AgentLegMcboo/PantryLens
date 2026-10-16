@@ -23,49 +23,49 @@ import { AuthBackdrop } from "../components/auth-layout";
 import { BrandMark } from "../components/brand-mark";
 import { AppearanceControl } from "../components/appearance-control";
 import {
-  BoxesMock,
-  CameraMock,
-  ScanMock,
+  PackedBoxMock,
+  PhotoInventoryMock,
+  InventoryMock,
+  NeedsMock,
 } from "../components/onboarding-mocks";
 import { Button, Text } from "../components/ui";
 import { COLORS, fw } from "../constants/theme";
 import { cueSuccess, cueTap } from "../lib/feedback";
 import { usePantryStore } from "../lib/store";
 
-/**
- * Each phase shows a live miniature of the screen it describes, so a volunteer
- * arrives at the real thing already recognising it. Headlines lead with the
- * verb — what they will actually do — not with the technology.
- *
- * The chrome is the app's: the same photograph and scrim as Log In, and the same
- * physical button with a lip that every other screen commits with. Before this
- * the intro had its own pill-shaped CTA and its own copy of the background, so
- * the very first tap a volunteer made felt nothing like the second.
- */
+// One outcome per slide. Illustrations are explanatory, not working controls.
 const PHASES = [
   {
     key: "camera",
-    Mock: CameraMock,
-    lead: "Step 1 · Take photos",
-    title: "A donation pile or a whole shelf.",
-    body: "Photograph a donation pile or a shelf. We’ll guide you through each step to make inventory simple and stress-free.",
-    tint: "#F6ECE2",
+    Mock: PhotoInventoryMock,
+    lead: "Start with a photo",
+    title: "Turn photos into inventory.",
+    body: "Photograph a donation pile or a whole shelf. PantryLens identifies the items—just check the names and counts before saving.",
+    imageDescription: "A pantry photo with detected food items. Review the names and counts before saving to inventory.",
   },
   {
-    key: "scan",
-    Mock: ScanMock,
-    lead: "Step 2 · Review your items",
-    title: "Your photos → An item spreadsheet.",
-    body: "PantryLens turns your photos into an item spreadsheet automatically. Check the names and quantities—no need to type every item by hand.",
-    tint: "#F7EBDF",
+    key: "inventory",
+    Mock: InventoryMock,
+    lead: "Keep track of your stock",
+    title: "Know what’s on your shelves.",
+    body: "See what you have and how much is left. Set your use-first window to spot food close to its date and use it in time.",
+    imageDescription: "Inventory example: 12 cans of beans, 24 bags of rice, and 18 cans of vegetables. Use beans first: 5 days left.",
   },
   {
     key: "boxes",
-    Mock: BoxesMock,
+    Mock: PackedBoxMock,
     lead: "Pack with confidence",
     title: "Build balanced boxes.",
-    body: "Set limits for food close to expiry. Plan boxes with a balanced mix from your current inventory, and see exactly what’s missing.",
-    tint: "#F7E9E4",
+    body: "Plan a balanced mix of food from your current stock. See how many boxes you can pack and which foods you need more of.",
+    imageDescription: "An open pantry box with beans, rice, vegetables, and breakfast food. Example: 6 boxes ready to pack. Short on beans.",
+  },
+  {
+    key: "needs",
+    Mock: NeedsMock,
+    lead: "Make it easy to help",
+    title: "Ask for what you need.",
+    body: "Turn your pantry’s needs list into a donor message. Share the foods and quantities you’re missing so people know what to bring.",
+    imageDescription: "A needs list with 12 cans of beans and 24 bags of pasta becomes a donor message requesting those foods.",
   },
 ] as const;
 
@@ -123,6 +123,7 @@ export default function OnboardingScreen() {
           <BrandMark />
           <AppearanceControl />
 
+          <View style={{ width: 60 }}>
           {!isLast && (
             <Pressable
               onPress={skip}
@@ -136,6 +137,7 @@ export default function OnboardingScreen() {
               </Text>
             </Pressable>
           )}
+          </View>
         </View>
 
         <ScrollView
@@ -152,8 +154,8 @@ export default function OnboardingScreen() {
             // Use the space left by the actual text, not a fixed picture size.
             // On compact screens or with larger text, the page can still scroll.
             const copyHeight = copyHeights[phase.key] ?? 220;
-            const imageHeight = Math.min(360, Math.max(200, viewportHeight - copyHeight - 64));
-            const imageScale = Math.min(0.8, (width - 56) / 430, imageHeight / 450);
+            const imageHeight = Math.min(390, Math.max(220, viewportHeight - copyHeight - 56));
+            const imageScale = Math.min(0.86, (width - 48) / 430, imageHeight / 460);
             return (
               <ScrollView
                 key={phase.key}
@@ -162,24 +164,21 @@ export default function OnboardingScreen() {
                   flexGrow: 1,
                   justifyContent: "center",
                   paddingHorizontal: 24,
-                  paddingTop: 20,
-                  paddingBottom: 20,
+                  paddingTop: 12,
+                  paddingBottom: 16,
                 }}
                 showsVerticalScrollIndicator={false}
               >
                 <View
                   accessible
-                  accessibilityLabel={
-                    phase.key === "boxes"
-                      ? "Example: not enough beans. Add 12 cans to pack all 12 boxes."
-                      : undefined
-                  }
+                  accessibilityRole="image"
+                  accessibilityLabel={phase.imageDescription}
                   style={{
                     height: imageHeight,
                     flexShrink: 0,
                     alignItems: "center",
                     justifyContent: "center",
-                    marginBottom: 24,
+                    marginBottom: 28,
                   }}
                 >
                   <View
@@ -190,14 +189,7 @@ export default function OnboardingScreen() {
                       transform: [{ scale: imageScale }],
                     }}
                   >
-                    {phase.key === "boxes" ? (
-                      <BoxesMock
-                        limitLabel="Not enough beans"
-                        stockLabel="Add 12 cans for 12 boxes"
-                      />
-                    ) : (
-                      <Mock />
-                    )}
+                    <Mock />
                   </View>
                 </View>
 
