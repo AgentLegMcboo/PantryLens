@@ -13,7 +13,9 @@ import {
 import Animated, {
   Easing,
   interpolateColor,
+  ReduceMotion,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withTiming,
 } from 'react-native-reanimated';
@@ -22,7 +24,7 @@ import { AuthBackdrop } from '../components/auth-layout';
 import { BrandMark } from '../components/brand-mark';
 import { BoxesMock, CameraMock, ScanMock } from '../components/onboarding-mocks';
 import { Button, Text } from '../components/ui';
-import { COLORS } from '../constants/theme';
+import { COLORS, fw } from '../constants/theme';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { cueSuccess, cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
@@ -72,7 +74,7 @@ export default function OnboardingScreen() {
   const completeOnboarding = usePantryStore(state => state.completeOnboarding);
   // Signed in only when the intro is replayed in development.
   const signedIn = usePantryStore(state => !!state.session);
-  const { seniorMode, toggleSeniorMode } = useAccessibilityStore();
+  const seniorMode = useAccessibilityStore(s => s.seniorMode);
   const [page, setPage] = useState(0);
 
   const isLast = page === PHASES.length - 1;
@@ -115,50 +117,19 @@ export default function OnboardingScreen() {
         <View className="flex-row items-center justify-between px-gutter pt-2">
           <BrandMark />
 
-          <View className="flex-row items-center gap-2">
+          {!isLast && (
             <Pressable
-              onPress={() => {
-                cueTap();
-                toggleSeniorMode();
-              }}
-              hitSlop={8}
-              accessibilityRole="switch"
-              accessibilityState={{ checked: seniorMode }}
-              accessibilityLabel="Large text mode for older volunteers"
-              className="h-12 flex-row items-center gap-1.5 rounded-lg border px-3"
-              style={{
-                backgroundColor: seniorMode ? COLORS.primary : COLORS.cardSurface,
-                borderColor: seniorMode ? COLORS.primaryDeep : COLORS.borderStrong,
-              }}
+              onPress={skip}
+              hitSlop={10}
+              accessibilityRole="button"
+              accessibilityLabel="Skip introduction"
+              className="h-12 items-center justify-center px-3"
             >
-              <MaterialCommunityIcons
-                name="format-size"
-                size={19}
-                color={seniorMode ? COLORS.textOnPrimary : COLORS.textPrimary}
-              />
-              <Text
-                variant="micro"
-                className="font-bold"
-                style={{ color: seniorMode ? COLORS.textOnPrimary : COLORS.textPrimary }}
-              >
-                {seniorMode ? 'Large text ON' : 'Large text'}
+              <Text variant="label" tone="soft" className="font-semibold">
+                Skip
               </Text>
             </Pressable>
-
-            {!isLast && (
-              <Pressable
-                onPress={skip}
-                hitSlop={10}
-                accessibilityRole="button"
-                accessibilityLabel="Skip introduction"
-                className="h-12 items-center justify-center px-3"
-              >
-                <Text variant="label" tone="soft" className="font-semibold">
-                  Skip
-                </Text>
-              </Pressable>
-            )}
-          </View>
+          )}
         </View>
 
         <ScrollView
@@ -184,7 +155,7 @@ export default function OnboardingScreen() {
                     style={{
                       fontSize: seniorMode ? 33 : 30,
                       lineHeight: seniorMode ? 40 : 37,
-                      fontWeight: '700',
+                      fontWeight: fw('700'),
                       letterSpacing: -0.5,
                       color: COLORS.textPrimary,
                     }}
@@ -194,7 +165,7 @@ export default function OnboardingScreen() {
                       style={{
                         fontSize: seniorMode ? 33 : 30,
                         lineHeight: seniorMode ? 40 : 37,
-                        fontWeight: '700',
+                        fontWeight: fw('700'),
                         color: COLORS.primaryLight,
                       }}
                     >
@@ -212,15 +183,10 @@ export default function OnboardingScreen() {
         </ScrollView>
 
         <View className="gap-3.5 px-gutter pb-2">
-          <View className="flex-row items-center justify-between">
-            <View className="flex-row items-center gap-1.5">
-              {PHASES.map((p, i) => (
-                <Dot key={p.key} active={i === page} />
-              ))}
-            </View>
-            <Text variant="micro" tone="soft" className="font-semibold">
-              Step {page + 1} of {PHASES.length}
-            </Text>
+          <View className="flex-row items-center gap-1.5">
+            {PHASES.map((p, i) => (
+              <Dot key={p.key} active={i === page} />
+            ))}
           </View>
 
           <Button
@@ -250,9 +216,11 @@ function PhaseTint({ page }: { page: number }) {
   const progress = useSharedValue(0);
 
   useEffect(() => {
+    // A colour cross-fade, not movement, so it plays with reduced motion too.
     progress.value = withTiming(page, {
       duration: 420,
       easing: Easing.out(Easing.quad),
+      reduceMotion: ReduceMotion.Never,
     });
   }, [page, progress]);
 
@@ -269,17 +237,21 @@ function PhaseTint({ page }: { page: number }) {
 
 function Dot({ active }: { active: boolean }) {
   const progress = useSharedValue(active ? 1 : 0);
+  const reduceMotion = useReducedMotion();
 
   // Written in an effect, not during render — Reanimated warns about the latter.
   useEffect(() => {
     progress.value = withTiming(active ? 1 : 0, {
       duration: 280,
       easing: Easing.bezier(0.16, 1, 0.3, 1),
+      reduceMotion: ReduceMotion.Never,
     });
   }, [active, progress]);
 
+  // With reduced motion the dot doesn't stretch; it takes its size at once and
+  // only the brightness fades.
   const style = useAnimatedStyle(() => ({
-    width: 7 + progress.value * 19,
+    width: reduceMotion ? (active ? 26 : 7) : 7 + progress.value * 19,
     opacity: 0.3 + progress.value * 0.7,
   }));
 

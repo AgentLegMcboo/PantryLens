@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
-import { COLORS } from '../../constants/theme';
+import { COLORS, fw } from '../../constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccessibilityStore } from '../../lib/accessibility';
 import { AppHeader } from '../../components/app-header';
@@ -31,7 +31,7 @@ export default function TabLayout() {
           },
           tabBarLabelStyle: {
             fontSize: seniorMode ? 15 : 12,
-            fontWeight: seniorMode ? '700' : '600',
+            fontWeight: fw(seniorMode ? '700' : '600'),
             marginTop: 2,
           },
           tabBarIconStyle: { marginTop: 0 },
@@ -48,9 +48,9 @@ export default function TabLayout() {
           name="index"
           options={{
             title: 'Home',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ focused, color, size }) => (
               <MaterialCommunityIcons
-                name="home-variant-outline"
+                name={focused ? "home-variant" : "home-variant-outline"}
                 size={seniorMode ? 28 : size}
                 color={color}
               />
@@ -61,9 +61,9 @@ export default function TabLayout() {
           name="inventory"
           options={{
             title: 'Inventory',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ focused, color, size }) => (
               <MaterialCommunityIcons
-                name="format-list-bulleted"
+                name={focused ? "clipboard-list" : "clipboard-list-outline"}
                 size={seniorMode ? 28 : size}
                 color={color}
               />
@@ -74,9 +74,9 @@ export default function TabLayout() {
           name="build"
           options={{
             title: 'Build',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ focused, color, size }) => (
               <MaterialCommunityIcons
-                name="package-variant-closed"
+                name={focused ? "cube" : "cube-outline"}
                 size={seniorMode ? 28 : size}
                 color={color}
               />
@@ -87,9 +87,9 @@ export default function TabLayout() {
           name="needs"
           options={{
             title: 'Needs',
-            tabBarIcon: ({ color, size }) => (
+            tabBarIcon: ({ focused, color, size }) => (
               <MaterialCommunityIcons
-                name="bullhorn-outline"
+                name={focused ? "bullhorn" : "bullhorn-outline"}
                 size={seniorMode ? 28 : size}
                 color={color}
               />

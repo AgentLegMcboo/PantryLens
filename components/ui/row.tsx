@@ -3,7 +3,7 @@ import * as React from 'react';
 import { Platform, Pressable, Switch, View } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { COLORS, RULE_BELOW } from '../../constants/theme';
-import { usePressScale } from '../motion';
+import { PRESS_SCALE_ROW, usePressScale } from '../motion';
 import { cueTap } from '../../lib/feedback';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
@@ -100,7 +100,7 @@ export function Row({
  * every static row in the app, and one below it would break the rules.
  */
 function PressableRow({ onPress, children }: { onPress: () => void; children: React.ReactNode }) {
-  const press = usePressScale(0.985);
+  const press = usePressScale(PRESS_SCALE_ROW);
 
   return (
     <Pressable

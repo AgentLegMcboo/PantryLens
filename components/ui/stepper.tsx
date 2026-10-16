@@ -87,7 +87,7 @@ function StepButton({
     >
       <Animated.View
         style={[{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center' }, press.style]}
-        className={cn('h-12 w-12 items-center justify-center', disabled && 'opacity-35')}
+        className={cn('h-12 w-12 items-center justify-center', disabled && 'opacity-40')}
       >
         <MaterialCommunityIcons name={icon} size={18} color={COLORS.textPrimary} />
       </Animated.View>

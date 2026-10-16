@@ -1,14 +1,22 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
+import { COLORS, RULE_ABOVE } from '../constants/theme';
 import { FadeInUp } from '../components/motion';
 import { Badge, Button, Card, CategoryIcon, EmptyState, Row, Sheet, Text } from '../components/ui';
 import { daysUntil, windowEndISO } from '../lib/expiry';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
-import { ExitReason, InventoryItem, usePantryStore } from '../lib/store';
+import {
+  CONDITION_LABELS,
+  ExitReason,
+  InventoryItem,
+  isUsableCondition,
+  usePantryStore,
+} from '../lib/store';
+import { shelfLabels } from '../lib/shelves';
+import { notificationKeys, useReadNotifications } from '../lib/notifications';
 
 /** How a window of days should read: past, this week, or merely soon. */
 function urgency(days: number) {
@@ -34,6 +42,18 @@ export default function ExpiringSoonScreen() {
   const pastDateItems = expiring.filter(i => (daysUntil(i.expiration!) ?? 0) < 0);
   const soonItems = expiring.filter(i => (daysUntil(i.expiration!) ?? 0) >= 0);
   const unitsAtRisk = expiring.reduce((sum, item) => sum + item.count, 0);
+  // Damaged or flagged stock: held out of every box until someone clears it.
+  // Inventory and Build show a closable banner for this; it always lives here.
+  const heldBack = inventory.filter(i => i.count > 0 && !isUsableCondition(i.condition));
+
+  // Seeing this page reads every notification on it, so the bell clears.
+  const markRead = useReadNotifications(s => s.markRead);
+  const loadRead = useReadNotifications(s => s.load);
+  useEffect(() => {
+    if (!settings.pantryId) return;
+    loadRead(settings.pantryId);
+    markRead(notificationKeys(inventory, settings.expirationWarningDays));
+  }, [settings.pantryId, inventory, settings.expirationWarningDays, loadRead, markRead]);
 
   const handleDisposition = (reason: ExitReason) => {
     if (!exitItem) return;
@@ -80,7 +100,7 @@ export default function ExpiringSoonScreen() {
   const renderRow = ({ item, index }: { item: InventoryItem; index: number }) => {
     const days = daysUntil(item.expiration!) ?? 0;
     const state = urgency(days);
-    const place = locations.find(l => l.id === item.location_id)?.name;
+    const place = item.location_id ? shelfLabels(locations)[item.location_id] : undefined;
 
     return (
       <FadeInUp index={index + 1}>
@@ -158,9 +178,49 @@ export default function ExpiringSoonScreen() {
         contentContainerStyle={{ paddingBottom: 24 + insets.bottom }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          expiring.length > 0 || unknownDates.length > 0 ? (
+          expiring.length > 0 || heldBack.length > 0 || unknownDates.length > 0 ? (
             <FadeInUp index={0}>
-              <View className="mb-5 gap-2 px-1">
+              {heldBack.length > 0 && (
+                <Card className="mb-5 gap-1 p-4">
+                  <View className="mb-1 flex-row items-center gap-2">
+                    <MaterialCommunityIcons name="alert-circle-outline" size={20} color={COLORS.statusCritical} />
+                    <Text variant="heading" className="flex-1 font-bold">
+                      Held back from boxes
+                    </Text>
+                    <Badge label={`${heldBack.length}`} tone="critical" />
+                  </View>
+                  <Text variant="label" tone="soft" className="mb-1">
+                    Damaged or flagged. Left out of every box until it's checked.
+                  </Text>
+                  {heldBack.map(item => (
+                    <View key={item.id} className="flex-row items-center gap-3 py-2.5" style={RULE_ABOVE}>
+                      <CategoryIcon category={item.category} tone="critical" />
+                      <View className="flex-1">
+                        <Text variant="body" className="font-semibold" numberOfLines={1}>
+                          {item.name}
+                        </Text>
+                        <Text variant="micro" tone="critical" className="font-bold">
+                          {CONDITION_LABELS[item.condition || 'ok']} · {item.count}{' '}
+                          {item.count === 1 ? 'unit' : 'units'}
+                        </Text>
+                      </View>
+                      <Pressable
+                        onPress={() => {
+                          cueTap();
+                          setExitItem(item);
+                        }}
+                        accessibilityRole="button"
+                        hitSlop={8}
+                        className="rounded-md bg-subtle px-3 py-2"
+                      >
+                        <Text variant="label" className="font-bold">
+                          Take off shelf
+                        </Text>
+                      </Pressable>
+                    </View>
+                  ))}
+                </Card>
+              )}
                 {unknownDates.length > 0 && (
                   <Card className="mb-2 gap-2">
                     <Text variant="label" className="font-bold">{unknownDates.length} batches have no recorded date</Text>
@@ -168,6 +228,8 @@ export default function ExpiringSoonScreen() {
                     <Button label={`Check ${unknownDates[0].name}`} variant="secondary" size="compact" onPress={() => router.push({ pathname: '/item-detail', params: { id: unknownDates[0].id } })} />
                   </Card>
                 )}
+              {expiring.length > 0 && (
+              <View className="mb-5 gap-2 px-1">
                 <Text variant="headline">
                   {unitsAtRisk} {unitsAtRisk === 1 ? 'unit' : 'units'} to check first
                 </Text>
@@ -190,6 +252,7 @@ export default function ExpiringSoonScreen() {
                   )}
                 </View>
               </View>
+              )}
             </FadeInUp>
           ) : null
         }
@@ -216,6 +279,7 @@ export default function ExpiringSoonScreen() {
           ) : null
         }
         ListEmptyComponent={
+          heldBack.length > 0 ? null : (
           <EmptyState
             icon="check-circle-outline"
             tone="good"
@@ -224,6 +288,7 @@ export default function ExpiringSoonScreen() {
             actionLabel="Back to the shelf"
             onAction={() => router.push('/(tabs)/inventory')}
           />
+          )
         }
       />
 

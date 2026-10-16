@@ -3,8 +3,9 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../../constants/theme";
+import { COLORS, fw } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
+import { useDismissible } from "../../lib/dismissals";
 import {
   DIET_TAG_LABELS,
   EXCLUSION_CAVEAT,
@@ -15,7 +16,9 @@ import { BoxPicker, type BoxSelection } from "../../components/box-picker";
 import {
   AnimatedCounter,
   FadeInUp,
+  PRESS_SCALE_ROW,
   ProgressBar,
+  Tappable,
 } from "../../components/motion";
 import {
   Button,
@@ -138,6 +141,12 @@ export default function BuildBoxesScreen() {
       requires: box.requires,
     },
   );
+  // Closable; it returns when the held-back stock changes. The same items are
+  // on the Notifications page (the bell).
+  const [heldBackVisible, dismissHeldBack] = useDismissible(
+    `build-held-back.${settings.pantryId ?? "none"}`,
+    `${plan.excluded.pastDate.units}-${plan.excluded.flagged.units}`,
+  );
 
   const categories = Object.keys(box.rules) as (keyof BoxRules)[];
   const isShort = plan.achievableBoxes < requestedBoxes;
@@ -170,15 +179,9 @@ export default function BuildBoxesScreen() {
         <FadeInUp index={0}>
           <View
             className="overflow-hidden rounded-lg"
-            style={{
-              borderBottomWidth: 6,
-              borderBottomColor: COLORS.primaryDeep,
-              shadowColor: COLORS.shadow,
-              shadowOpacity: 0.18,
-              shadowRadius: 14,
-              shadowOffset: { width: 0, height: 5 },
-              elevation: 4,
-            }}
+            // A soft warm lift. The old 6px bottom lip rendered as a separate
+            // dark band under the card on Android.
+            style={{ boxShadow: "0 4px 18px 0 rgba(107, 74, 47, 0.22)" }}
           >
             <LinearGradient
               colors={["#B0512F", "#9C4226"]}
@@ -188,7 +191,7 @@ export default function BuildBoxesScreen() {
             />
 
             <View className="p-card">
-              <Text variant="label" className="text-ink-on/70">
+              <Text variant="label" tone="on" className="font-semibold" style={{ opacity: 0.9 }}>
                 You can pack right now
               </Text>
 
@@ -197,7 +200,7 @@ export default function BuildBoxesScreen() {
                   value={plan.achievableBoxes}
                   style={{
                     fontSize: 60,
-                    fontWeight: "800",
+                    fontWeight: fw('800'),
                     color: COLORS.textOnPrimary,
                     letterSpacing: -2,
                   }}
@@ -209,7 +212,8 @@ export default function BuildBoxesScreen() {
 
               <View className="my-4 h-px bg-white/20" />
 
-              <Pressable
+              <Tappable
+                scaleTo={PRESS_SCALE_ROW}
                 onPress={() => {
                   cueTap();
                   setBreakdownOpen(true);
@@ -218,7 +222,7 @@ export default function BuildBoxesScreen() {
                 accessibilityLabel="See per-category breakdown for this box"
                 className="min-h-[48px] flex-row items-center justify-between gap-3"
               >
-                <Text variant="label" className="flex-1 text-ink-on/90">
+                <Text variant="label" tone="on" className="flex-1" style={{ opacity: 0.92 }}>
                   {isShort ? (
                     <>
                       <Text
@@ -236,10 +240,7 @@ export default function BuildBoxesScreen() {
                   )}
                 </Text>
                 <View className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-white/20 px-3.5 py-2">
-                  <Text
-                    variant="label"
-                    className="font-bold text-ink-on"
-                  >
+                  <Text variant="label" className="font-bold text-ink-on">
                     Why
                   </Text>
                   <MaterialCommunityIcons
@@ -248,7 +249,7 @@ export default function BuildBoxesScreen() {
                     color={COLORS.textOnPrimary}
                   />
                 </View>
-              </Pressable>
+              </Tappable>
 
               {/* The action lives with the answer it acts on. White on the
                   orange so it's the one thing the eye lands on next. */}
@@ -275,7 +276,9 @@ export default function BuildBoxesScreen() {
                 <Text
                   variant="body"
                   className="font-bold tracking-wide"
-                  style={{ color: canPack ? COLORS.primary : COLORS.textOnPrimary }}
+                  style={{
+                    color: canPack ? COLORS.primary : COLORS.textOnPrimary,
+                  }}
                 >
                   {canPack
                     ? `Pack ${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? "box" : "boxes"}`
@@ -328,7 +331,8 @@ export default function BuildBoxesScreen() {
         )}
 
         {(plan.excluded.pastDate.units > 0 ||
-          plan.excluded.flagged.units > 0) && (
+          plan.excluded.flagged.units > 0) &&
+          heldBackVisible && (
           <FadeInUp index={1}>
             <Panel className="flex-row gap-3">
               <MaterialCommunityIcons
@@ -359,22 +363,28 @@ export default function BuildBoxesScreen() {
                     : "are"}{" "}
                   on the shelf but left out of this plan.
                 </Text>
-                {plan.excluded.pastDate.units > 0 && (
-                  <Pressable
-                    onPress={() => router.push("/expiring-soon")}
-                    accessibilityRole="button"
-                    className="min-h-[44px] justify-center self-start py-1"
-                  >
-                    <Text
-                      variant="label"
-                      tone="brand"
-                      className="font-bold"
-                    >
-                      Check what is out of date →
-                    </Text>
-                  </Pressable>
-                )}
+                <Tappable
+                  onPress={() => router.push("/expiring-soon")}
+                  accessibilityRole="button"
+                  className="min-h-[44px] justify-center self-start py-1"
+                >
+                  <Text variant="label" tone="brand" className="font-bold">
+                    See them in Notifications →
+                  </Text>
+                </Tappable>
               </View>
+              <Tappable
+                onPress={() => {
+                  cueTap();
+                  dismissHeldBack();
+                }}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss. It stays on the Notifications page."
+                className="-mr-1 -mt-1 h-8 w-8 items-center justify-center"
+              >
+                <MaterialCommunityIcons name="close" size={18} color={COLORS.textSecondary} />
+              </Tappable>
             </Panel>
           </FadeInUp>
         )}
@@ -382,7 +392,7 @@ export default function BuildBoxesScreen() {
         {/* What's being packed, then how many and for whom. */}
         <FadeInUp index={1}>
           <Card className="gap-4">
-            <Pressable
+            <Tappable
               onPress={() => {
                 cueTap();
                 setPickerOpen(true);
@@ -411,12 +421,10 @@ export default function BuildBoxesScreen() {
                   {describeRules(box.rules)}
                 </Text>
               </View>
-              <View className="rounded-md bg-subtle px-3 py-2">
-                <Text variant="label" tone="brand" className="font-bold">
-                  Change
-                </Text>
-              </View>
-            </Pressable>
+              <Text variant="label" tone="brand" className="font-bold">
+                Change
+              </Text>
+            </Tappable>
 
             <View className="flex-row items-center justify-between gap-3">
               <Text variant="body" className="flex-1 font-semibold">
@@ -468,7 +476,7 @@ export default function BuildBoxesScreen() {
                 Packed boxes
               </Text>
               {readyBoxes.length > 0 && (
-                <Pressable
+                <Tappable
                   onPress={() => router.push("/ready-boxes")}
                   hitSlop={8}
                   accessibilityRole="button"
@@ -477,7 +485,7 @@ export default function BuildBoxesScreen() {
                   <Text variant="label" tone="brand" className="font-bold">
                     Hand out →
                   </Text>
-                </Pressable>
+                </Tappable>
               )}
             </View>
 
@@ -630,8 +638,16 @@ export default function BuildBoxesScreen() {
                 )}
               </View>
               <ProgressBar
-                progress={neededTotal > 0 ? Math.min(1, stock / neededTotal) : 1}
-                color={short > 0 ? (limiting ? COLORS.statusCritical : COLORS.statusWarning) : COLORS.statusGood}
+                progress={
+                  neededTotal > 0 ? Math.min(1, stock / neededTotal) : 1
+                }
+                color={
+                  short > 0
+                    ? limiting
+                      ? COLORS.statusCritical
+                      : COLORS.statusWarning
+                    : COLORS.statusGood
+                }
                 height={6}
               />
             </View>

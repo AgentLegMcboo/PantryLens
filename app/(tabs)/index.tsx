@@ -1,25 +1,49 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { useRouter } from 'expo-router';
-import React, { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
-import { COLORS, RULE_ABOVE_FAINT } from '../../constants/theme';
-import { AnimatedCounter, FadeInUp, ProgressBar } from '../../components/motion';
-import { Badge, Card, CategoryIcon, Screen, Text } from '../../components/ui';
-import { buildStockUnits, computeAllocation } from '../../lib/allocation';
-import { isPastDate, todayISO, windowEndISO } from '../../lib/expiry';
-import { InventoryItem, isUsableCondition, usePantryStore } from '../../lib/store';
-import { cuePress, cueTap } from '../../lib/feedback';
-import { QuickAddStaplesModal } from '../../components/quick-add-staples';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import Animated, {
+  ReduceMotion,
+  useAnimatedStyle,
+  useSharedValue,
+  withTiming,
+} from "react-native-reanimated";
+import { useRouter } from "expo-router";
+import React, { useMemo, useState } from "react";
+import { Image, Pressable, StyleSheet, View } from "react-native";
+import { COLORS, RULE_ABOVE_FAINT, fw } from "../../constants/theme";
+import {
+  AnimatedCounter,
+  FadeInUp,
+  ProgressBar,
+  PRESS_SCALE_ROW,
+  Tappable,
+} from "../../components/motion";
+import {
+  Badge,
+  Card,
+  cardShadow,
+  CategoryIcon,
+  Screen,
+  Text,
+} from "../../components/ui";
+import { buildStockUnits, computeAllocation } from "../../lib/allocation";
+import { isPastDate, todayISO, windowEndISO } from "../../lib/expiry";
+import {
+  InventoryItem,
+  isUsableCondition,
+  usePantryStore,
+} from "../../lib/store";
+import { useLastScanPhoto } from "../../lib/last-scan-photo";
+import { cuePress, cueTap } from "../../lib/feedback";
+import { QuickAddStaplesModal } from "../../components/quick-add-staples";
 
 const CATEGORY_LABELS: Record<string, string> = {
-  protein: 'Protein',
-  grain: 'Grains & Pasta',
-  vegetable: 'Vegetables',
-  breakfast: 'Breakfast',
-  snack: 'Snacks',
-  baby: 'Baby Needs',
-  hygiene: 'Hygiene',
+  protein: "Protein",
+  grain: "Grains & Pasta",
+  vegetable: "Vegetables",
+  breakfast: "Breakfast",
+  snack: "Snacks",
+  baby: "Baby Needs",
+  hygiene: "Hygiene",
 };
 
 function formatActivityTime(iso: string): string {
@@ -27,7 +51,7 @@ function formatActivityTime(iso: string): string {
   if (Number.isNaN(then)) return iso;
 
   const minutes = Math.floor((Date.now() - then) / 60000);
-  if (minutes < 1) return 'Just now';
+  if (minutes < 1) return "Just now";
   if (minutes < 60) return `${minutes}m ago`;
 
   const hours = Math.floor(minutes / 60);
@@ -36,23 +60,38 @@ function formatActivityTime(iso: string): string {
   const days = Math.floor(hours / 24);
   if (days < 7) return `${days}d ago`;
 
-  return new Date(then).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
+  return new Date(then).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
   });
 }
 
 export default function DashboardScreen() {
   const router = useRouter();
-  const { inventory, bulkLots, boxRules, settings, activities, thresholds, readyBoxes } =
-    usePantryStore();
+  const {
+    inventory,
+    bulkLots,
+    boxRules,
+    settings,
+    activities,
+    thresholds,
+    readyBoxes,
+  } = usePantryStore();
   const [staplesModalVisible, setStaplesModalVisible] = useState(false);
+  const userId = usePantryStore((s) => s.session?.user?.id);
+  const lastScanPhoto = useLastScanPhoto(settings.pantryId, userId);
 
-  const readyCount = readyBoxes.reduce((sum, r) => sum + (r.boxes - r.boxes_collected), 0);
+  const readyCount = readyBoxes.reduce(
+    (sum, r) => sum + (r.boxes - r.boxes_collected),
+    0,
+  );
   const targetBoxes = settings.boxTarget || 12;
   const familySize = settings.defaultFamilySize || 4;
 
-  const givable = useMemo(() => buildStockUnits(inventory, bulkLots), [inventory, bulkLots]);
+  const givable = useMemo(
+    () => buildStockUnits(inventory, bulkLots),
+    [inventory, bulkLots],
+  );
   const totalStockCount = useMemo(
     () => givable.reduce((sum: number, i: InventoryItem) => sum + i.count, 0),
     [givable],
@@ -60,44 +99,75 @@ export default function DashboardScreen() {
 
   const plan = useMemo(
     () =>
-      computeAllocation(inventory, boxRules, targetBoxes, familySize, bulkLots, {
-        warningDays: settings.expirationWarningDays,
-      }),
-    [inventory, boxRules, targetBoxes, familySize, bulkLots, settings.expirationWarningDays],
+      computeAllocation(
+        inventory,
+        boxRules,
+        targetBoxes,
+        familySize,
+        bulkLots,
+        {
+          warningDays: settings.expirationWarningDays,
+        },
+      ),
+    [
+      inventory,
+      boxRules,
+      targetBoxes,
+      familySize,
+      bulkLots,
+      settings.expirationWarningDays,
+    ],
   );
 
   // Matches AppHeader and app/expiring-soon.tsx so the numbers never disagree.
   const today = todayISO();
   const warningStr = windowEndISO(settings.expirationWarningDays);
   const allExpiringOrPast = useMemo(
-    () => inventory.filter((i: InventoryItem) => i.count > 0 && !!i.expiration && i.expiration <= warningStr),
+    () =>
+      inventory.filter(
+        (i: InventoryItem) =>
+          i.count > 0 && !!i.expiration && i.expiration <= warningStr,
+      ),
     [inventory, warningStr],
   );
   const usableSoonItems = useMemo(
     () =>
       allExpiringOrPast.filter(
-        (i: InventoryItem) => isUsableCondition(i.condition) && !isPastDate(i.expiration, today),
+        (i: InventoryItem) =>
+          isUsableCondition(i.condition) && !isPastDate(i.expiration, today),
       ),
     [allExpiringOrPast, today],
   );
   const pastDateItems = useMemo(
-    () => allExpiringOrPast.filter((i: InventoryItem) => isPastDate(i.expiration, today)),
+    () =>
+      allExpiringOrPast.filter((i: InventoryItem) =>
+        isPastDate(i.expiration, today),
+      ),
     [allExpiringOrPast, today],
   );
   const expiringUnitCount = useMemo(
-    () => allExpiringOrPast.reduce((sum: number, item: InventoryItem) => sum + item.count, 0),
+    () =>
+      allExpiringOrPast.reduce(
+        (sum: number, item: InventoryItem) => sum + item.count,
+        0,
+      ),
     [allExpiringOrPast],
   );
 
   const lowCategories = useMemo(() => {
     return Object.keys(thresholds)
       .map((cat: string) => {
-        const total = plan.categoryTotals[cat as keyof typeof plan.categoryTotals] ?? 0;
+        const total =
+          plan.categoryTotals[cat as keyof typeof plan.categoryTotals] ?? 0;
         const threshold = (thresholds as any)[cat] ?? 0;
-        const neededForBoxes = (plan.shortfallPerCategory as Record<string, number>)[cat] ?? 0;
-        const neededTotal = ((plan.perBoxNeeds as Record<string, number>)[cat] ?? 0) * targetBoxes;
+        const neededForBoxes =
+          (plan.shortfallPerCategory as Record<string, number>)[cat] ?? 0;
+        const neededTotal =
+          ((plan.perBoxNeeds as Record<string, number>)[cat] ?? 0) *
+          targetBoxes;
         const deficit = Math.max(threshold - total, neededForBoxes);
-        const isLimiting = plan.limitingCategory === cat && plan.achievableBoxes < targetBoxes;
+        const isLimiting =
+          plan.limitingCategory === cat && plan.achievableBoxes < targetBoxes;
         return {
           category: cat,
           label: CATEGORY_LABELS[cat] ?? cat,
@@ -116,89 +186,96 @@ export default function DashboardScreen() {
 
   return (
     <Screen contentContainerClassName="gap-5">
+
       {/* ZONE 1: Unified Intake & Shelf Tools — everything a volunteer does when food arrives */}
       <FadeInUp index={0}>
         <View className="gap-3">
-          {/* Primary Hero CTA: Scan Donations */}
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Scan donations. Take photos or scan barcodes to add food."
-            onPress={() => {
-              cuePress();
-              router.push('/log-donation');
-            }}
-            style={({ pressed }) => ({
-              borderBottomWidth: pressed ? 2 : 6,
-              borderBottomColor: COLORS.primaryDeep,
-              transform: [{ translateY: pressed ? 3 : 0 }],
-              shadowColor: COLORS.shadow,
-              shadowOpacity: 0.18,
-              shadowRadius: 12,
-              shadowOffset: { width: 0, height: 4 },
-              elevation: 4,
-            })}
-            className="min-h-[82px] overflow-hidden rounded-xl"
-          >
-            <LinearGradient
-              colors={['#B0512F', '#9C4226']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
+          {/* The main job, as one clear brand slab: icon, what it is, one short
+              line, a chevron. No lip clipped by the corners, no boxed arrow,
+              no second line of subtitle. */}
+          {/* The card's shape lives on a plain View with fixed styles: a
+              Pressable's style *function* was being dropped by NativeWind,
+              which left the card thin and the photo unclipped. */}
+          <View style={[styles.scanCard, cardShadow]}>
+            {/* The last thing this volunteer scanned, showing faintly through
+                the brand orange — or the pantry shelf from the intro until
+                they've scanned one. Photo underneath, translucent orange on
+                top, so the card stays orange and the label stays legible. */}
+            <Image
+              source={PANTRY_SHELF}
+              resizeMode="cover"
+              accessibilityIgnoresInvertColors
+              style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
             />
-            <View className="flex-row items-center justify-between px-5 py-4">
-              <View className="flex-1 flex-row items-center gap-4">
-                <View className="h-12 w-12 items-center justify-center rounded-lg bg-white/20">
-                  <MaterialCommunityIcons name="camera-outline" size={28} color={COLORS.textOnPrimary} />
+            {lastScanPhoto ? <FadeInImage uri={lastScanPhoto} /> : null}
+            <LinearGradient
+              // Top half: the photo shows through and fades out. Bottom half:
+              // solid orange under the label.
+              colors={['rgba(176, 81, 47, 0.25)', 'rgba(166, 72, 42, 0.9)', 'rgba(156, 66, 38, 1)']}
+              locations={[0, 0.55, 1]}
+              start={{ x: 0.5, y: 0 }}
+              end={{ x: 0.5, y: 1 }}
+              style={[StyleSheet.absoluteFill, { borderRadius: 16 }]}
+            />
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Scan donations. Take photos or scan barcodes to add food."
+              onPress={() => {
+                cuePress();
+                router.push('/log-donation');
+              }}
+              style={styles.scanPress}
+            >
+              {({ pressed }) => (
+                <View style={[styles.scanRow, pressed && styles.pressed]}>
+                  <View className="h-16 w-16 items-center justify-center rounded-lg bg-white/20">
+                    <MaterialCommunityIcons name="camera-outline" size={34} color={COLORS.textOnPrimary} />
+                  </View>
+                  <View className="flex-1">
+                    <Text variant="headline" tone="on">
+                      Scan donations
+                    </Text>
+                    <Text variant="body" tone="on" numberOfLines={1} style={{ opacity: 0.9 }}>
+                      Photos or barcodes
+                    </Text>
+                  </View>
+                  <MaterialCommunityIcons name="chevron-right" size={30} color={COLORS.textOnPrimary} />
                 </View>
-                <View className="flex-1 gap-0.5">
-                  <Text variant="title" tone="on" className="font-bold">
-                    Scan Donations
-                  </Text>
-                  <Text variant="label" tone="on" style={{ opacity: 0.92 }}>
-                    Point camera at cans, boxes, or barcodes
-                  </Text>
-                </View>
-              </View>
-              <View className="h-10 w-10 items-center justify-center rounded-lg bg-white/15">
-                <MaterialCommunityIcons name="arrow-right" size={24} color={COLORS.textOnPrimary} />
-              </View>
-            </View>
-          </Pressable>
+              )}
+            </Pressable>
+          </View>
 
-          {/* Secondary 1-Tap Accelerator: Quick Add Staples */}
-          <Pressable
+          <Tappable
             accessibilityRole="button"
             accessibilityLabel="Quick Add any item or choose a common item"
             onPress={() => {
               cueTap();
               setStaplesModalVisible(true);
             }}
-            style={({ pressed }) => ({
-              borderBottomWidth: pressed ? 1 : 3,
-              borderBottomColor: COLORS.borderStrong,
-              transform: [{ translateY: pressed ? 2 : 0 }],
-            })}
-            className="min-h-[64px] flex-row items-center justify-between rounded-xl border border-hairline bg-card p-4"
+            style={cardShadow}
+            className="flex-row items-center gap-3 rounded-lg border border-hairline bg-card p-4"
           >
-            <View className="flex-1 flex-row items-center gap-3">
-              <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
-                <MaterialCommunityIcons name="lightning-bolt" size={24} color={COLORS.secondaryDark} />
-              </View>
-              <View className="flex-1">
-                <Text variant="heading" className="font-bold">
-                  Quick Add
-                </Text>
-                <Text variant="label" tone="soft">
-                  Type any item or choose a common item
-                </Text>
-              </View>
+            <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
+              <MaterialCommunityIcons
+                name="lightning-bolt"
+                size={24}
+                color={COLORS.secondaryDark}
+              />
             </View>
-            <View className="rounded-md border border-hairline bg-subtle px-3 py-2">
-              <Text variant="label" tone="brand" className="font-bold">
-                Open →
+            <View className="flex-1">
+              <Text variant="heading" className="font-bold" numberOfLines={1}>
+                Quick Add
+              </Text>
+              <Text variant="label" tone="soft" numberOfLines={1}>
+                Type any item or choose a common item
               </Text>
             </View>
-          </Pressable>
+            <MaterialCommunityIcons
+              name="chevron-right"
+              size={22}
+              color={COLORS.textSecondary}
+            />
+          </Tappable>
 
           {/* Unified Intake Pair: Weigh Deliveries & Count Shelves */}
           <View className="flex-row gap-3">
@@ -207,20 +284,28 @@ export default function DashboardScreen() {
               accessibilityLabel="Weigh Bulk Deliveries. Large grocery and crate drops."
               onPress={() => {
                 cueTap();
-                router.push('/bulk-intake');
+                router.push("/bulk-intake");
               }}
               style={({ pressed }) => ({
                 borderBottomWidth: pressed ? 1 : 3,
                 borderBottomColor: COLORS.borderStrong,
                 transform: [{ translateY: pressed ? 2 : 0 }],
               })}
-              className="flex-1 rounded-xl border border-hairline bg-card p-4"
+              className="flex-1 rounded-lg border border-hairline bg-card p-4"
             >
               <View className="flex-row items-center justify-between">
                 <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
-                  <MaterialCommunityIcons name="scale" size={24} color={COLORS.secondaryDark} />
+                  <MaterialCommunityIcons
+                    name="scale"
+                    size={24}
+                    color={COLORS.secondaryDark}
+                  />
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={COLORS.textSecondary}
+                />
               </View>
               <Text variant="heading" className="mt-2.5 font-bold">
                 Weigh Drop
@@ -235,14 +320,14 @@ export default function DashboardScreen() {
               accessibilityLabel="Check shelf inventory. Compare physical counts with the app."
               onPress={() => {
                 cueTap();
-                router.push('/shelf-audit');
+                router.push("/shelf-audit");
               }}
               style={({ pressed }) => ({
                 borderBottomWidth: pressed ? 1 : 3,
                 borderBottomColor: COLORS.borderStrong,
                 transform: [{ translateY: pressed ? 2 : 0 }],
               })}
-              className="flex-1 rounded-xl border border-hairline bg-card p-4"
+              className="flex-1 rounded-lg border border-hairline bg-card p-4"
             >
               <View className="flex-row items-center justify-between">
                 <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
@@ -252,7 +337,11 @@ export default function DashboardScreen() {
                     color={COLORS.secondaryDark}
                   />
                 </View>
-                <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
+                <MaterialCommunityIcons
+                  name="chevron-right"
+                  size={20}
+                  color={COLORS.textSecondary}
+                />
               </View>
               <Text variant="heading" className="mt-2.5 font-bold">
                 Check a shelf
@@ -284,7 +373,7 @@ export default function DashboardScreen() {
               accessibilityLabel={`${plan.achievableBoxes} of ${targetBoxes} boxes can be packed right now. Tap to open box builder.`}
               onPress={() => {
                 cueTap();
-                router.push('/(tabs)/build');
+                router.push("/(tabs)/build");
               }}
               style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
               className="gap-2.5"
@@ -304,7 +393,7 @@ export default function DashboardScreen() {
                   style={{
                     fontSize: 34,
                     lineHeight: 40,
-                    fontWeight: '800',
+                    fontWeight: fw('800'),
                     color: COLORS.textPrimary,
                   }}
                 />
@@ -314,8 +403,15 @@ export default function DashboardScreen() {
               </View>
 
               <ProgressBar
-                progress={Math.min(1, plan.achievableBoxes / Math.max(1, targetBoxes))}
-                color={plan.achievableBoxes >= targetBoxes ? COLORS.statusGood : COLORS.secondary}
+                progress={Math.min(
+                  1,
+                  plan.achievableBoxes / Math.max(1, targetBoxes),
+                )}
+                color={
+                  plan.achievableBoxes >= targetBoxes
+                    ? COLORS.statusGood
+                    : COLORS.secondary
+                }
                 height={8}
               />
 
@@ -334,7 +430,7 @@ export default function DashboardScreen() {
                 accessibilityLabel={`${readyCount} packed boxes waiting for families to pick up. Tap to hand out.`}
                 onPress={() => {
                   cueTap();
-                  router.push('/ready-boxes');
+                  router.push("/ready-boxes");
                 }}
                 style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
                 className="min-h-[52px] flex-row items-center justify-between gap-3 rounded-lg bg-secondary-tint px-3.5 py-3"
@@ -345,11 +441,20 @@ export default function DashboardScreen() {
                     size={22}
                     color={COLORS.secondaryDark}
                   />
-                  <Text variant="label" className="flex-1 font-bold" style={{ color: COLORS.secondaryDark }}>
-                    {readyCount} packed {readyCount === 1 ? 'box' : 'boxes'} waiting for pickup
+                  <Text
+                    variant="label"
+                    className="flex-1 font-bold"
+                    style={{ color: COLORS.secondaryDark }}
+                  >
+                    {readyCount} packed {readyCount === 1 ? "box" : "boxes"}{" "}
+                    waiting for pickup
                   </Text>
                 </View>
-                <Text variant="label" className="font-bold" style={{ color: COLORS.secondaryDark }}>
+                <Text
+                  variant="label"
+                  className="font-bold"
+                  style={{ color: COLORS.secondaryDark }}
+                >
                   Hand out →
                 </Text>
               </Pressable>
@@ -363,7 +468,7 @@ export default function DashboardScreen() {
               accessibilityLabel={`${totalStockCount} usable units on shelves. Tap to view inventory.`}
               onPress={() => {
                 cueTap();
-                router.push('/(tabs)/inventory');
+                router.push("/(tabs)/inventory");
               }}
               style={({ pressed }) => ({ opacity: pressed ? 0.85 : 1 })}
               className="gap-1.5"
@@ -383,7 +488,7 @@ export default function DashboardScreen() {
                   style={{
                     fontSize: 34,
                     lineHeight: 40,
-                    fontWeight: '800',
+                    fontWeight: fw('800'),
                     color: COLORS.textPrimary,
                   }}
                 />
@@ -399,13 +504,16 @@ export default function DashboardScreen() {
                 accessibilityLabel={`${allExpiringOrPast.length} items (${expiringUnitCount} units) need date attention. Tap to view.`}
                 onPress={() => {
                   cueTap();
-                  router.push('/expiring-soon');
+                  router.push("/expiring-soon");
                 }}
                 style={({ pressed }) => ({
                   opacity: pressed ? 0.85 : 1,
-                  backgroundColor: pastDateItems.length > 0 ? '#FBEAE8' : '#FFF2DB',
+                  backgroundColor:
+                    pastDateItems.length > 0 ? "#FBEAE8" : "#FFF2DB",
                   borderColor:
-                    pastDateItems.length > 0 ? COLORS.statusCritical : COLORS.statusWarning,
+                    pastDateItems.length > 0
+                      ? COLORS.statusCritical
+                      : COLORS.statusWarning,
                 })}
                 className="min-h-[52px] flex-row items-center justify-between gap-2.5 rounded-lg border px-3.5 py-3"
               >
@@ -413,27 +521,37 @@ export default function DashboardScreen() {
                   <MaterialCommunityIcons
                     name="clock-alert-outline"
                     size={22}
-                    color={pastDateItems.length > 0 ? COLORS.statusCritical : '#80500E'}
+                    color={
+                      pastDateItems.length > 0
+                        ? COLORS.statusCritical
+                        : "#80500E"
+                    }
                   />
                   <Text
                     variant="label"
                     className="flex-1 font-bold"
                     style={{
-                      color: pastDateItems.length > 0 ? COLORS.statusCritical : '#80500E',
+                      color:
+                        pastDateItems.length > 0
+                          ? COLORS.statusCritical
+                          : "#80500E",
                     }}
                   >
                     {pastDateItems.length > 0 && usableSoonItems.length > 0
                       ? `${usableSoonItems.length} expiring soon · ${pastDateItems.length} past date`
                       : pastDateItems.length > 0
-                        ? `${pastDateItems.length} ${pastDateItems.length === 1 ? 'item' : 'items'} past expiration date`
-                        : `${usableSoonItems.length} ${usableSoonItems.length === 1 ? 'item' : 'items'} (${expiringUnitCount} units) to pack first`}
+                        ? `${pastDateItems.length} ${pastDateItems.length === 1 ? "item" : "items"} past expiration date`
+                        : `${usableSoonItems.length} ${usableSoonItems.length === 1 ? "item" : "items"} (${expiringUnitCount} units) to pack first`}
                   </Text>
                 </View>
                 <Text
                   variant="micro"
                   className="font-bold"
                   style={{
-                    color: pastDateItems.length > 0 ? COLORS.statusCritical : '#80500E',
+                    color:
+                      pastDateItems.length > 0
+                        ? COLORS.statusCritical
+                        : "#80500E",
                   }}
                 >
                   Review →
@@ -441,7 +559,8 @@ export default function DashboardScreen() {
               </Pressable>
             ) : (
               <Text variant="label" tone="soft">
-                All shelf stock is well within your {settings.expirationWarningDays}-day window.
+                All shelf stock is well within your{" "}
+                {settings.expirationWarningDays}-day window.
               </Text>
             )}
           </Card>
@@ -463,11 +582,11 @@ export default function DashboardScreen() {
                   Items Running Low
                 </Text>
               </View>
-              <Pressable
+              <Tappable
                 accessibilityRole="button"
                 onPress={() => {
                   cueTap();
-                  router.push('/(tabs)/needs');
+                  router.push("/(tabs)/needs");
                 }}
                 hitSlop={8}
                 className="min-h-[48px] justify-center py-1"
@@ -475,7 +594,7 @@ export default function DashboardScreen() {
                 <Text variant="label" tone="brand" className="font-bold">
                   Ask Donors →
                 </Text>
-              </Pressable>
+              </Tappable>
             </View>
 
             <Text variant="body" tone="soft">
@@ -490,7 +609,7 @@ export default function DashboardScreen() {
                   accessibilityLabel={`${item.label}: need ${item.deficit} more. Tap to ask donors.`}
                   onPress={() => {
                     cueTap();
-                    router.push('/(tabs)/needs');
+                    router.push("/(tabs)/needs");
                   }}
                   className="min-h-[60px] flex-row items-center justify-between rounded-lg border border-hairline bg-canvas p-3.5"
                 >
@@ -499,7 +618,7 @@ export default function DashboardScreen() {
                       category={item.category}
                       size="md"
                       shape="square"
-                      tone={item.isLimiting ? 'critical' : 'secondary'}
+                      tone={item.isLimiting ? "critical" : "secondary"}
                     />
                     <View className="flex-1">
                       <Text variant="body" className="font-bold">
@@ -532,7 +651,7 @@ export default function DashboardScreen() {
               accessibilityRole="button"
               onPress={() => {
                 cueTap();
-                router.push('/reports');
+                router.push("/reports");
               }}
               hitSlop={8}
               className="min-h-[48px] justify-center"
@@ -547,7 +666,8 @@ export default function DashboardScreen() {
             {activities.length === 0 ? (
               <View className="p-4">
                 <Text variant="body" tone="soft">
-                  Activity appears here as volunteers scan donations, weigh crates, or pack boxes.
+                  Activity appears here as volunteers scan donations, weigh
+                  crates, or pack boxes.
                 </Text>
               </View>
             ) : (
@@ -586,3 +706,43 @@ export default function DashboardScreen() {
     </Screen>
   );
 }
+
+/**
+ * The volunteer's own last scan, cross-faded in over the fallback shelf once
+ * it has actually downloaded — rather than the card flashing from one photo to
+ * the other, or to blank while the signed link loads.
+ */
+function FadeInImage({ uri }: { uri: string }) {
+  const opacity = useSharedValue(0);
+  React.useEffect(() => {
+    opacity.value = 0;
+  }, [uri, opacity]);
+  const style = useAnimatedStyle(() => ({ opacity: opacity.value }));
+  return (
+    <Animated.Image
+      source={{ uri }}
+      resizeMode="cover"
+      accessibilityIgnoresInvertColors
+      onLoad={() => {
+        // A fade, not movement, so it plays with reduced motion on too.
+        opacity.value = withTiming(1, { duration: 400, reduceMotion: ReduceMotion.Never });
+      }}
+      style={[StyleSheet.absoluteFill, { borderRadius: 16 }, style]}
+    />
+  );
+}
+
+const PANTRY_SHELF = require("../../assets/images/pantry-cabinet-full.jpg");
+
+const styles = StyleSheet.create({
+  scanCard: { minHeight: 152, borderRadius: 16, overflow: 'hidden' },
+  scanPress: { flex: 1, minHeight: 152, justifyContent: 'flex-end' },
+  pressed: { opacity: 0.85 },
+  scanRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
+});

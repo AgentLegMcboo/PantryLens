@@ -1,14 +1,23 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState, useEffect } from 'react';
-import { Alert, Platform, Pressable, View } from 'react-native';
+import { Alert, Platform, View } from 'react-native';
+import Animated, {
+  Easing,
+  useAnimatedStyle,
+  useSharedValue,
+  withSequence,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
-import { windowEndISO } from '../lib/expiry';
 import { cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
+import { useUnreadCount } from '../lib/notifications';
 import { offlineQueue } from '../lib/offline-queue';
 import { useAccessibilityStore } from '../lib/accessibility';
+import { PRESS_SCALE_ROW, Tappable } from './motion';
 import { Row } from './ui/row';
 import { Sheet } from './ui/sheet';
 import { Text } from './ui/text';
@@ -40,12 +49,12 @@ export function AppHeader({ title }: { title: string }) {
     return offlineQueue.subscribe((count) => setPendingCount(count));
   }, []);
 
-  // Same ISO window the Expiring Soon screen and dashboard use, so the badge
-  // never disagrees with the screen it opens.
-  const warningStr = windowEndISO(settings.expirationWarningDays);
-  const expiringCount = inventory.filter(
-    (i) => i.count > 0 && !!i.expiration && i.expiration <= warningStr,
-  ).length;
+  // Unread notifications: opening the Notifications page marks them read.
+  const unreadCount = useUnreadCount(
+    settings.pantryId,
+    inventory,
+    settings.expirationWarningDays,
+  );
 
   const close = () => {
     setMenuOpen(false);
@@ -67,7 +76,8 @@ export function AppHeader({ title }: { title: string }) {
   return (
     <View style={{ paddingTop: insets.top }} className="bg-canvas">
       {pendingCount > 0 && (
-        <Pressable
+        <Tappable
+          scaleTo={PRESS_SCALE_ROW}
           onPress={() => {
             offlineQueue.processQueue().then((res) => {
               if (res.processed > 0) {
@@ -90,7 +100,7 @@ export function AppHeader({ title }: { title: string }) {
           <Text variant="micro" tone="brand" className="font-bold">
             Sync now →
           </Text>
-        </Pressable>
+        </Tappable>
       )}
 
       <View className="flex-row items-center gap-2 px-gutter pb-0 pt-3">
@@ -98,14 +108,15 @@ export function AppHeader({ title }: { title: string }) {
             an identity you recognise at a glance, and the whole thing is the
             tap target for switching or signing out — which is what a volunteer
             who belongs to two pantries reaches for. */}
-        <Pressable
+        <Tappable
+          scaleTo={PRESS_SCALE_ROW}
           onPress={() => {
             cueTap();
             setMenuOpen(true);
           }}
           accessibilityRole="button"
           accessibilityLabel={`${settings.pantryName || 'PantryLens'}, ${title}. Opens pantry menu.`}
-          className="mr-auto min-h-[48px] flex-1 flex-row items-center gap-2.5 py-1"
+          className="min-h-[48px] flex-1 flex-row items-center gap-2.5 py-1"
         >
           <View className="h-11 w-11 items-center justify-center rounded-lg bg-brand">
             <Text variant="body" tone="on" className="font-bold">
@@ -120,64 +131,67 @@ export function AppHeader({ title }: { title: string }) {
               {settings.pantryName || 'PantryLens'}
             </Text>
           </View>
-        </Pressable>
+        </Tappable>
 
-        {/* Explicit "Aa" text-size toggle so older volunteers immediately recognize
-            what it does and whether Large Text Mode is currently active. */}
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ selected: seniorMode }}
-          accessibilityLabel={
-            seniorMode
-              ? 'Large text mode is on. Tap for standard text size.'
-              : 'Turn on large text and high contrast mode'
-          }
-          onPress={() => {
-            cueTap();
-            toggleSeniorMode();
-          }}
-          className={`h-12 flex-row items-center justify-center gap-1 rounded-lg border px-3 ${
-            seniorMode ? 'border-brand bg-brand' : 'border-hairline bg-card'
-          }`}
-        >
-          <Text
-            variant="label"
-            tone={seniorMode ? 'on' : 'default'}
-            className="font-extrabold"
+        {/* Grouped and pushed right as one block, so the buttons sit on the
+            right edge whatever the title beside them does. */}
+        <View className="ml-auto flex-row items-center gap-2.5">
+          {/* Explicit "Aa" text-size toggle so older volunteers immediately recognize
+              what it does and whether Large Text Mode is currently active. */}
+          <Tappable
+            accessibilityRole="button"
+            accessibilityState={{ selected: seniorMode }}
+            accessibilityLabel={
+              seniorMode
+                ? 'Large text mode is on. Tap for standard text size.'
+                : 'Turn on large text and high contrast mode'
+            }
+            onPress={() => {
+              cueTap();
+              toggleSeniorMode();
+            }}
+            className={`h-12 flex-row items-center justify-center gap-1 rounded-lg border px-3 ${
+              seniorMode ? 'border-brand bg-brand' : 'border-hairline bg-card'
+            }`}
           >
-            Aa
-          </Text>
-          <MaterialCommunityIcons
-            name={seniorMode ? 'check' : 'plus'}
-            size={15}
-            color={seniorMode ? COLORS.textOnPrimary : COLORS.primary}
-          />
-        </Pressable>
+            <Text
+              variant="label"
+              tone={seniorMode ? 'on' : 'default'}
+              className="font-extrabold"
+            >
+              Aa
+            </Text>
+            <MaterialCommunityIcons
+              name={seniorMode ? 'check' : 'plus'}
+              size={15}
+              color={seniorMode ? COLORS.textOnPrimary : COLORS.primary}
+            />
+          </Tappable>
 
-        <HeaderButton
-          icon="bell-outline"
-          label="Expiring soon"
-          badge={expiringCount}
-          onPress={() => router.push('/expiring-soon')}
-        />
-        <HeaderButton
-          icon="dots-vertical"
-          label="More options"
-          onPress={() => setMenuOpen(true)}
-        />
+          <HeaderButton
+            icon="bell-outline"
+            label="Notifications"
+            badge={unreadCount}
+            onPress={() => router.push('/expiring-soon')}
+          />
+          <HeaderButton
+            icon="dots-vertical"
+            label="More options"
+            onPress={() => setMenuOpen(true)}
+          />
+        </View>
       </View>
 
       <Sheet
         visible={menuOpen}
         onClose={close}
         title={settings.pantryName || 'Pantry Menu'}
-        subtitle="Reports, settings, team, and pantry switching"
       >
         <View>
           <Row
             icon="format-size"
             label={seniorMode ? 'Large Text Mode: ON' : 'Large Text Mode: OFF'}
-            hint="Bigger fonts and higher contrast for easier reading"
+            hint="Large text and high contrast"
             onPress={() => {
               cueTap();
               toggleSeniorMode();
@@ -186,7 +200,7 @@ export function AppHeader({ title }: { title: string }) {
           <Row
             icon="chart-box-outline"
             label="Reports & Activity"
-            hint="Food given out, food wasted, and CSV export"
+            hint="Given out, wasted, CSV export"
             onPress={() => {
               close();
               router.push('/reports');
@@ -195,7 +209,7 @@ export function AppHeader({ title }: { title: string }) {
           <Row
             icon="cog-outline"
             label="Pantry settings"
-            hint="Box rules, thresholds, text size & sound"
+            hint="Box rules, thresholds, sound"
             onPress={() => {
               close();
               router.push('/(tabs)/settings');
@@ -204,7 +218,7 @@ export function AppHeader({ title }: { title: string }) {
           <Row
             icon="account-multiple-outline"
             label="Team"
-            hint={`People in ${settings.pantryName || 'this pantry'} and what they've done`}
+            hint="Members and their activity"
             onPress={() => {
               close();
               router.push('/team');
@@ -215,8 +229,8 @@ export function AppHeader({ title }: { title: string }) {
             label="Switch pantry"
             hint={
               pantries.length > 1
-                ? `${pantries.length} pantries · now in ${settings.pantryName || 'this one'}`
-                : 'You belong to one pantry'
+                ? `${pantries.length} pantries`
+                : "You're in one pantry"
             }
             onPress={
               pantries.length > 1
@@ -227,11 +241,14 @@ export function AppHeader({ title }: { title: string }) {
                 : undefined
             }
           />
+          {/* The list opens in place under the row, so switching is two taps
+              and never leaves the menu for a separate screen. */}
           {switchOpen &&
             pantries.map((p) => {
               const current = p.id === settings.pantryId;
               return (
-                <Pressable
+                <Tappable
+                  scaleTo={PRESS_SCALE_ROW}
                   key={p.id}
                   accessibilityRole="button"
                   accessibilityState={{ selected: current }}
@@ -248,20 +265,23 @@ export function AppHeader({ title }: { title: string }) {
                     color={current ? COLORS.primary : COLORS.borderStrong}
                   />
                   <View className="flex-1">
-                    <Text variant="body" className={current ? 'font-bold' : 'font-semibold'}>
+                    <Text
+                      variant="heading"
+                      className={current ? "font-bold" : "font-semibold"}
+                    >
                       {p.name}
                     </Text>
-                    <Text variant="micro" tone="soft" className="capitalize">
+                    <Text variant="label" tone="soft" className="capitalize">
                       {p.role}
                     </Text>
                   </View>
-                </Pressable>
+                </Tappable>
               );
             })}
           <Row
             icon="plus-circle-outline"
             label="Add or create pantry"
-            hint="Join one with a code, or start a new one"
+            hint="Join with a code or start one"
             onPress={() => {
               close();
               setAddingPantry(true);
@@ -293,7 +313,7 @@ function HeaderButton({
   onPress: () => void;
 }) {
   return (
-    <Pressable
+    <Tappable
       accessibilityRole="button"
       accessibilityLabel={badge ? `${label}, ${badge} items` : label}
       onPress={() => {
@@ -307,14 +327,44 @@ function HeaderButton({
         size={22}
         color={COLORS.textPrimary}
       />
-      {!!badge && badge > 0 && (
-        <View className="absolute -right-1 -top-1 min-w-[20px] items-center justify-center rounded-md bg-warn px-1.5 py-0.5">
-          <Text variant="micro" tone="on" className="font-bold">
-            {badge > 99 ? '99+' : badge}
-          </Text>
-        </View>
-      )}
-    </Pressable>
+      {!!badge && badge > 0 && <CountBadge count={badge} />}
+    </Tappable>
+  );
+}
+
+/**
+ * The count on the bell. It pops once when the number changes — something
+ * new is expiring — and sits still otherwise; it never animates on first
+ * render. The number itself is the lasting cue, so with reduced motion on it
+ * just changes.
+ */
+function CountBadge({ count }: { count: number }) {
+  const scale = useSharedValue(1);
+  const previous = React.useRef(count);
+  useEffect(() => {
+    if (previous.current === count) return;
+    previous.current = count;
+    scale.value = withSequence(
+      withTiming(1.3, { duration: 120, easing: Easing.out(Easing.quad) }),
+      withSpring(1, { dampingRatio: 1, duration: 300 }),
+    );
+  }, [count, scale]);
+  const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
+
+  return (
+    // Red, outlined in white, so it reads from across the room: the point is
+    // that nobody has to remember to check the bell.
+    <Animated.View
+      style={[
+        style,
+        { backgroundColor: COLORS.statusCritical, borderWidth: 2, borderColor: COLORS.cardSurface },
+      ]}
+      className="absolute -right-2 -top-2 min-h-[24px] min-w-[24px] items-center justify-center rounded-full px-1.5"
+    >
+      <Text variant="micro" tone="on" className="font-extrabold" style={{ fontSize: 12, lineHeight: 15 }}>
+        {count > 99 ? '99+' : count}
+      </Text>
+    </Animated.View>
   );
 }
 /**
@@ -348,7 +398,7 @@ export function StackHeader({
       className="bg-canvas"
     >
       <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
-        <Pressable
+        <Tappable
           accessibilityRole="button"
           accessibilityLabel="Go back"
           onPress={() => {
@@ -362,7 +412,7 @@ export function StackHeader({
             size={26}
             color={COLORS.textPrimary}
           />
-        </Pressable>
+        </Tappable>
 
         <Text
           variant="headline"

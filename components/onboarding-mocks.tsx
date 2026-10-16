@@ -3,7 +3,9 @@ import React, { useEffect } from "react";
 import { Image, StyleSheet, View } from "react-native";
 import Animated, {
   Easing,
+  ReduceMotion,
   useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
   withDelay,
   withTiming,
@@ -12,6 +14,7 @@ import { ProgressBar } from "./motion";
 import {
   Button,
   Card,
+  cardRing,
   CategoryIcon,
   ItemThumb,
   Text,
@@ -38,13 +41,10 @@ const EASE = Easing.bezier(0.16, 1, 0.3, 1);
  * the page and read as a picture of the app rather than part of the screen
  * you're on.
  */
-const MOCK_SHADOW = {
-  shadowColor: COLORS.shadow,
-  shadowOpacity: 0.18,
-  shadowRadius: 18,
-  shadowOffset: { width: 0, height: 10 },
-  elevation: 8,
-};
+const MOCK_DEPTH = "0 10px 36px 0 rgba(107, 74, 47, 0.18)";
+const MOCK_SHADOW = { boxShadow: MOCK_DEPTH };
+/** The same lift on a card, keeping the card's edge ring. */
+const MOCK_CARD = { boxShadow: `${cardRing()}, ${MOCK_DEPTH}` };
 const noop = () => {};
 
 /** Eases a piece up into place, tilted slightly so it reads as laid on the page. */
@@ -60,20 +60,26 @@ function Float({
   style?: object;
 }) {
   const enter = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
   useEffect(() => {
+    // Forced to run: with reduced motion only the fade is left (below), and
+    // Reanimated's default would snap that too.
     enter.value = withDelay(
       delay,
-      withTiming(1, { duration: 620, easing: EASE }),
+      withTiming(1, { duration: 620, easing: EASE, reduceMotion: ReduceMotion.Never }),
+      ReduceMotion.Never,
     );
   }, [delay, enter]);
 
   const animated = useAnimatedStyle(() => ({
     opacity: enter.value,
-    transform: [
-      { translateY: (1 - enter.value) * 20 },
-      { scale: 0.95 + enter.value * 0.05 },
-      { rotate },
-    ],
+    transform: reduceMotion
+      ? [{ rotate }]
+      : [
+          { translateY: (1 - enter.value) * 20 },
+          { scale: 0.95 + enter.value * 0.05 },
+          { rotate },
+        ],
   }));
 
   return (
@@ -167,7 +173,7 @@ function Tag({
 }) {
   const color = TAG_COLORS[tone];
   return (
-    <Card style={MOCK_SHADOW} className="flex-row items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5">
+    <Card style={MOCK_CARD} className="flex-row items-center gap-2 rounded-full py-1.5 pl-1.5 pr-3.5">
       <View
         className="h-7 w-7 items-center justify-center rounded-full"
         style={{ backgroundColor: `${color}22` }}
@@ -235,7 +241,7 @@ export function CameraMock() {
           <View className="items-center pb-2">
             <View className="rounded-full px-3 py-1" style={{ backgroundColor: glass }}>
               <Text variant="micro" className="font-semibold text-white">
-                2 of 6 · a big pile reads better in sections
+                2 of 6 · shoot big piles in sections
               </Text>
             </View>
           </View>
@@ -291,7 +297,7 @@ export function ScanMock() {
     <Stage
       layout={{ tilt: "3.5deg", tr: { top: -62, right: 10, rotate: "-5deg" }, bl: { bottom: -60, left: 2, rotate: "4.5deg" } }}
       main={
-        <Card style={MOCK_SHADOW} className="w-[312px] gap-3 p-4">
+        <Card style={MOCK_CARD} className="w-[312px] gap-3 p-4">
           <View className="flex-row items-center gap-2">
             <View className="h-7 w-7 items-center justify-center rounded-md bg-brand">
               <MaterialCommunityIcons name="camera" size={15} color={COLORS.textOnPrimary} />
@@ -335,7 +341,7 @@ export function BoxesMock() {
     <Stage
       layout={{ tilt: "-3.5deg", tr: { top: -60, right: -4, rotate: "5deg" }, bl: { bottom: -58, left: 6, rotate: "-4.5deg" } }}
       main={
-        <Card style={MOCK_SHADOW} className="w-[312px] gap-3 p-4">
+        <Card style={MOCK_CARD} className="w-[312px] gap-3 p-4">
           <View className="flex-row items-baseline gap-2">
             <Text variant="display" tone="brand">
               6

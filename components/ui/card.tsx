@@ -1,6 +1,5 @@
 import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
-import { COLORS } from '../../constants/theme';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
 
@@ -16,32 +15,40 @@ import { Text } from './text';
  * dirt, which is a surprisingly big part of why the old palette felt muddy.
  */
 /**
- * Barely there, and deliberately so.
+ * The card's edge, drawn as a 1px shadow ring rather than a border.
  *
- * The edge defines the card; the shadow only settles it onto the page. The
- * border is a single warm outline, matching the Stitch export. A light shadow
- * separates the white surface from the cream canvas without heavy framing.
+ * White on cream is 1.08:1, so the edge is what actually delineates a card. As
+ * a ring it is the same warm line (0.18 of the shadow brown over cream lands on
+ * the old `borderSoft`), but it sits outside the box and softens into the depth
+ * layers below it instead of being a hard stroke on top of them.
  */
-export const cardShadow = {
-  shadowColor: COLORS.shadow,
-  shadowOpacity: 0.07,
-  shadowRadius: 8,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 2,
-};
+export const cardRing = (opacity = 0.18) => `0 0 0 1px rgba(107, 74, 47, ${opacity})`;
 
 /**
- * The card's edge, set as a style so it always renders: a 1px warm outline,
- * just enough to separate a white card from the cream page in a list without
- * framing it.
+ * The lift: a tight contact shadow plus a soft ambient one, both in the warm
+ * shadow brown — grey over sand reads as dirt. Use this alone on a surface that
+ * already has a real border (a bordered button tile); `Card` adds the ring.
  */
-const cardEdge = { borderWidth: 1, borderColor: COLORS.borderSoft } as const;
+const DEPTH = '0 1px 2px -1px rgba(107, 74, 47, 0.10), 0 3px 16px 0 rgba(107, 74, 47, 0.07)';
+export const cardShadow = { boxShadow: DEPTH };
+
+/** Ring plus lift, for anything that should read as a card. */
+export const cardSurface = (ringOpacity?: number) => ({
+  boxShadow: `${cardRing(ringOpacity)}, ${DEPTH}`,
+});
+
+/**
+ * A transparent border under the ring, so the box measures the same as it did
+ * with a real border, and so a caller can still colour it (a selected row, a
+ * verified item) without the card changing size.
+ */
+const cardEdge = { borderWidth: 1, borderColor: 'transparent' } as const;
 
 export function Card({ className, style, ...props }: ViewProps) {
   return (
     <View
       className={cn('rounded-lg bg-card p-card', className)}
-      style={[cardEdge, cardShadow, style]}
+      style={[cardEdge, cardSurface(), style]}
       {...props}
     />
   );

@@ -19,7 +19,7 @@ The working UI retains the cream, brown and terracotta theme. These changes exte
 
 - **better-ui:** preserve project tokens and the established tactile button treatment. Quantity controls now have explicit 48-by-48 dimensions, preventing animated wrappers from collapsing their touch targets on web; press scale is 0.96. Shared sheets have an explicit viewport height limit and a shrinking scroll area so lengthy intake forms keep their header visible.
 - **apple-design:** direct labels, progressive detail sheets, visible progress, reversible combinations, explicit count previews and immediate press feedback. Working data is not animated for decoration.
-- **animate:** the invoked skill targets web and explicitly refers React Native work to its companion. The existing Reanimated implementation is reused. The new progress state uses an opacity-only crossfade of 180 ms, or 100 ms with reduced motion, with `cubic-bezier(0.23, 1, 0.32, 1)`. It skips the initial render. Camera flash is suppressed with reduced motion. Lists and quantity values update immediately.
+- **animate:** the invoked skill targets web and explicitly refers React Native work to its companion. The existing Reanimated implementation is reused. The added three-step progress banner was subsequently removed at the user's request; review retains its compact confirmed count and existing controls. Camera flash is suppressed with reduced motion. Lists and quantity values update immediately.
 - **find-skills:** discovered and read the native companion guidance at https://github.com/emilkowalski/skills/blob/main/skills/animate-expo/SKILL.md. No skill, runtime dependency, or extra animation library was installed.
 
 ## Verification

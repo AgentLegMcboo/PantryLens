@@ -1,4 +1,6 @@
 const { COLORS, RADII } = require('./constants/palette');
+// NativeWind builds this CSS once per platform with NATIVEWIND_OS set.
+const ANDROID = process.env.NATIVEWIND_OS === 'android';
 
 /**
  * Tailwind theme for NativeWind.
@@ -20,6 +22,15 @@ module.exports = {
   presets: [require('nativewind/preset')],
   theme: {
     extend: {
+      // Android one step heavier than iOS. SF Pro renders every weight visibly
+      // heavier than Roboto, so the same `font-semibold` looked thin on Android
+      // next to the iOS build the team prefers. iOS keeps the standard values.
+      fontWeight: {
+        medium: ANDROID ? '600' : '500',
+        semibold: ANDROID ? '700' : '600',
+        bold: ANDROID ? '800' : '700',
+        extrabold: ANDROID ? '900' : '800',
+      },
       colors: {
         brand: {
           DEFAULT: COLORS.primary,

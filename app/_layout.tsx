@@ -155,7 +155,7 @@ export default function RootLayout() {
         <Stack.Screen name="bulk-intake" options={{ title: 'Bulk Donation', presentation: 'modal' }} />
         <Stack.Screen name="item-detail" options={{ title: 'Item Details', presentation: 'modal' }} />
         <Stack.Screen name="packing-checklist" options={{ title: 'Packing Checklist', presentation: 'card' }} />
-        <Stack.Screen name="expiring-soon" options={{ title: 'Expiring Soon', presentation: 'card' }} />
+        <Stack.Screen name="expiring-soon" options={{ title: 'Notifications', presentation: 'card' }} />
         <Stack.Screen name="reports" options={{ title: 'Reports', presentation: 'card' }} />
         <Stack.Screen name="team" options={{ title: 'Team', presentation: 'card' }} />
         <Stack.Screen name="member" options={{ title: 'Member', presentation: 'card' }} />

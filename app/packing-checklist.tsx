@@ -2,12 +2,12 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { COLORS, RULE_BELOW } from '../constants/theme';
 import { computeAllocation, isBulkUnit } from '../lib/allocation';
 import { DIET_TAG_LABELS, normaliseDietTags } from '../lib/diet';
 import { normaliseRules } from '../lib/box-presets';
-import { FadeInUp, ProgressBar } from '../components/motion';
+import { FadeInUp, PRESS_SCALE_ROW, ProgressBar, Tappable } from '../components/motion';
 import { Badge, Button, Card, CategoryIcon, EmptyState, Screen, Text } from '../components/ui';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { type PackLine, usePantryStore } from '../lib/store';
@@ -261,7 +261,7 @@ export default function PackingChecklistScreen() {
                   </Text>
                 </View>
                 {groupKeys.length > 1 && (
-                  <Pressable
+                  <Tappable
                     onPress={() => {
                       cueTap();
                       setChecked(prev => {
@@ -283,7 +283,7 @@ export default function PackingChecklistScreen() {
                     <Text variant="micro" tone={groupAllChecked ? 'good' : 'brand'} className="font-bold">
                       {groupAllChecked ? 'All picked' : 'Check all'}
                     </Text>
-                  </Pressable>
+                  </Tappable>
                 )}
               </View>
 
@@ -297,7 +297,8 @@ export default function PackingChecklistScreen() {
                 )?.name;
 
                 return (
-                  <Pressable
+                  <Tappable
+                    scaleTo={PRESS_SCALE_ROW}
                     key={key}
                     onPress={() => toggle(key)}
                     accessibilityRole="checkbox"
@@ -357,7 +358,7 @@ export default function PackingChecklistScreen() {
                         ×{item.count}
                       </Text>
                     </View>
-                  </Pressable>
+                  </Tappable>
                 );
               })}
             </Card>

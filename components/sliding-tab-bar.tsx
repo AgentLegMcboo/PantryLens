@@ -8,7 +8,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
+import { COLORS, fw } from '../constants/theme';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { cueTap } from '../lib/feedback';
 import { GlassSurface } from './ui/glass-surface';
@@ -54,7 +54,9 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
     x.value =
       reduceMotion || itemWidth === 0
         ? target
-        : withSpring(target, { damping: 27, stiffness: 240, mass: 0.8 });
+        : // Critically damped: it arrives and stops. A tab switch is the most
+          // frequent thing anyone does here, so no overshoot to wait out.
+          withSpring(target, { dampingRatio: 1, duration: 250 });
   }, [activeIndex, itemWidth, reduceMotion, x]);
 
   const pill = useAnimatedStyle(() => ({ transform: [{ translateX: x.value }] }));
@@ -143,7 +145,7 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
               <Animated.Text
                 style={{
                   fontSize: seniorMode ? 15 : 12,
-                  fontWeight: focused || seniorMode ? '700' : '600',
+                  fontWeight: fw(focused || seniorMode ? '700' : '600'),
                   color,
                 }}
                 numberOfLines={1}

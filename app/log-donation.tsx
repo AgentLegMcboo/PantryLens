@@ -1,12 +1,12 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Text } from '../components/ui';
+import { Button, Sheet, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
 import { processImageScan, ScanError } from '../lib/ai_vision';
 import { cuePress, cueTap, cueWarn } from '../lib/feedback';
@@ -14,6 +14,8 @@ import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { startScan, uploadScanPhotos } from '../lib/scan-history';
 import { SOURCE_ORG_LABELS, type SourceOrg, usePantryStore } from '../lib/store';
+import { shelfLabels } from '../lib/shelves';
+import { PRESS_SCALE, Tappable } from '../components/motion';
 
 /**
  * Photographing a donation — the camera IS the screen.
@@ -45,8 +47,26 @@ export default function LogDonationScreen() {
   const setDraftSource = usePantryStore((state) => state.setDraftSource);
   const setCurrentScan = usePantryStore((state) => state.setCurrentScan);
   const settings = usePantryStore((state) => state.settings);
+  const setAuditDraft = usePantryStore((state) => state.setAuditDraft);
+  const locations = usePantryStore((state) => state.locations);
+  /**
+   * Counting a shelf uses this same camera. Opened with `mode=audit` and the
+   * shelf's id, it skips the donation source and hands the reading to the
+   * count review instead of the intake review.
+   */
+  const params = useLocalSearchParams<{ mode?: string; location?: string }>();
+  const auditLocation = params.mode === 'audit' && params.location ? params.location : null;
+  const auditName = auditLocation ? shelfLabels(locations)[auditLocation] ?? 'this shelf' : null;
 
   const [permission, requestPermission] = useCameraPermissions();
+  /**
+   * The camera-access sheet. Normally it opens only while access hasn't been
+   * granted; ALWAYS_ASK_FOR_CAMERA shows it on every visit so the design can be
+   * checked on a phone that already allowed the camera. Turn it off before
+   * release.
+   */
+  const ALWAYS_ASK_FOR_CAMERA = false;
+  const [askDismissed, setAskDismissed] = useState(false);
   const camera = useRef<CameraView>(null);
   const [torch, setTorch] = useState(false);
   const [capturing, setCapturing] = useState(false);
@@ -147,7 +167,7 @@ export default function LogDonationScreen() {
       // still recorded. Best-effort: a null record changes nothing that follows.
       const record = await startScan({
         pantryId: settings.pantryId,
-        mode: 'donation',
+        mode: auditLocation ? 'shelf_audit' : 'donation',
         photosSent,
         photosRead,
         durationMs: Date.now() - startedAt,
@@ -155,6 +175,34 @@ export default function LogDonationScreen() {
       });
       setCurrentScan(record);
       uploadScanPhotos(settings.pantryId, record?.scanId ?? null, shots);
+
+      if (auditLocation) {
+        // Same item-by-item check as a donation (Review & Verify, with the
+        // boxes on the photos), then the confirmed counts are compared with
+        // what the books say for this shelf.
+        const toCount = () => {
+          setDraft(
+            candidates as any,
+            shots.map((s) => ({ uri: s.uri, width: s.width, height: s.height })),
+          );
+          router.replace({ pathname: '/review-verify', params: { audit: auditLocation } });
+        };
+        if (photosRead < photosSent) {
+          cueWarn();
+          Alert.alert(
+            `Only read ${photosRead} of ${photosSent} photos`,
+            'Anything in the unread part of the shelf will look like it has gone missing.',
+            [
+              { text: 'Take more photos', style: 'cancel' },
+              { text: 'Review anyway', onPress: toCount },
+            ],
+          );
+          return;
+        }
+        toCount();
+        return;
+      }
+
       // The photos travel with the draft: review draws the detection boxes back
       // onto them, so the item and the thing on the shelf stay connected.
       setDraft(
@@ -181,8 +229,16 @@ export default function LogDonationScreen() {
         err instanceof ScanError
           ? err.message
           : 'Something went wrong while scanning. You can still add these items by hand.';
-      Alert.alert('Could not scan', message, [
-        { text: 'Add by hand', onPress: () => router.replace('/(tabs)/inventory') },
+      Alert.alert(auditLocation ? 'Could not read the shelf' : 'Could not scan', message, [
+        auditLocation
+          ? {
+              text: 'Count by hand',
+              onPress: () => {
+                setAuditDraft({ locationId: auditLocation, photos: 0, counted: [] });
+                router.replace('/audit-review');
+              },
+            }
+          : { text: 'Add by hand', onPress: () => router.replace('/(tabs)/inventory') },
         { text: 'Try again', style: 'cancel' },
       ]);
     } finally {
@@ -193,38 +249,27 @@ export default function LogDonationScreen() {
   // Still finding out whether we may use the camera.
   if (!permission) return <View className="flex-1 bg-black" />;
 
-  if (!permission.granted && shots.length === 0) {
-    return (
-      <View className="flex-1 items-center justify-center gap-4 bg-black px-8">
-        <MaterialCommunityIcons name="camera-off-outline" size={44} color="#FFFFFF" />
-        <Text variant="title" className="text-center text-white">
-          Camera access needed
-        </Text>
-        <Text variant="body" className="text-center text-white/75">
-          PantryLens reads donation labels from photos. Nothing is saved until you check every line.
-        </Text>
-        <Button label="Allow the camera" onPress={requestPermission} />
-        <Button label="Choose from library instead" variant="ghost" onPress={handlePickFromLibrary} />
-        <Pressable onPress={() => router.back()} hitSlop={10} className="mt-2">
-          <Text variant="label" className="font-semibold text-white/70">
-            Go back
-          </Text>
-        </Pressable>
-      </View>
-    );
-  }
-
   const hint = isAnalyzing
-    ? 'Reading labels…'
+    ? auditLocation
+      ? 'Checking the shelf…'
+      : 'Reading labels…'
     : atLimit
       ? `${MAX_PHOTOS} photos — that's the most for one scan`
-      : shots.length === 0
-        ? 'Lay items out so the labels face the camera'
-        : `${shots.length} of ${MAX_PHOTOS} · review counts before saving`;
+      : auditLocation
+        ? shots.length === 0
+          ? `Stock check: ${auditName} · shoot left to right`
+          : `${shots.length} of ${MAX_PHOTOS} · overlap each photo a little`
+        : shots.length === 0
+          ? 'Lay items out so the labels face the camera'
+          : `${shots.length} of ${MAX_PHOTOS} · review counts before saving`;
 
   return (
     <View className="flex-1 bg-black">
-      {permission.granted ? <CameraView ref={camera} style={{ flex: 1 }} facing="back" enableTorch={torch} /> : <View className="flex-1 bg-black" />}
+      {permission.granted ? (
+        <CameraView ref={camera} style={{ flex: 1 }} facing="back" enableTorch={torch} />
+      ) : (
+        <View style={{ flex: 1 }} />
+      )}
 
       {/* Capture flash */}
       <Animated.View pointerEvents="none" className="absolute inset-0 bg-white" style={flashStyle} />
@@ -291,7 +336,7 @@ export default function LogDonationScreen() {
               <View key={`${shot.uri}-${i}`}>
                 <Text variant="micro" className="font-bold text-white">Group {shot.group + 1}</Text>
                 <Image source={{ uri: shot.uri }} className="h-16 w-16 rounded-lg border-2 border-white" />
-                <Pressable
+                <Tappable
                   disabled={busy}
                   onPress={() => removeShot(i)}
                   hitSlop={10}
@@ -300,13 +345,14 @@ export default function LogDonationScreen() {
                   className="absolute -right-2 -top-2 h-8 w-8 items-center justify-center rounded-lg border border-white/60 bg-black"
                 >
                   <MaterialCommunityIcons name="close" size={18} color="#FFFFFF" />
-                </Pressable>
+                </Tappable>
               </View>
             ))}
           </ScrollView>
         )}
 
-        {/* Where it came from — optional, one tap */}
+        {/* Where it came from — optional, one tap. Not asked when counting. */}
+        {!auditLocation && (
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -316,7 +362,7 @@ export default function LogDonationScreen() {
           {SOURCES.map((src) => {
             const on = sourceOrg === src;
             return (
-              <Pressable
+              <Tappable
                 key={src}
                 onPress={() => {
                   cueTap();
@@ -330,10 +376,11 @@ export default function LogDonationScreen() {
                 <Text variant="label" className={on ? 'font-bold text-ink' : 'font-semibold text-white'}>
                   {SOURCE_ORG_LABELS[src]}
                 </Text>
-              </Pressable>
+              </Tappable>
             );
           })}
         </ScrollView>
+        )}
 
         {/* Bottom bar: library · shutter · detect */}
         <View className="px-gutter" style={{ paddingBottom: insets.bottom + 14 }}>
@@ -368,7 +415,7 @@ export default function LogDonationScreen() {
               </View>
             </Pressable>
 
-            <Pressable
+            <Tappable
               onPress={handleDetectItems}
               disabled={shots.length === 0 || busy}
               accessibilityRole="button"
@@ -389,13 +436,57 @@ export default function LogDonationScreen() {
               )}
               {shots.length > 0 && (
                 <Text variant="label" className="font-bold" style={{ color: COLORS.primary }}>
-                  Detect {shots.length}
+                  {auditLocation ? 'Count' : 'Detect'} {shots.length}
                 </Text>
               )}
-            </Pressable>
+            </Tappable>
           </View>
         </View>
       </View>
+      {/* Camera access, as a sheet over the camera rather than a page of its
+          own: the volunteer stays where they were going, and can still reach
+          the library from here. */}
+      <Sheet
+        visible={(!permission.granted || ALWAYS_ASK_FOR_CAMERA) && !askDismissed}
+        onClose={() => {
+          setAskDismissed(true);
+          if (!permission.granted) router.back();
+        }}
+        title="Allow the camera?"
+        subtitle="To photograph donations"
+      >
+        <View className="flex-row items-start gap-3">
+          <View className="h-11 w-11 items-center justify-center rounded-lg bg-secondary-tint">
+            <MaterialCommunityIcons name="camera-outline" size={24} color={COLORS.secondaryDark} />
+          </View>
+          <Text variant="body" tone="soft" className="flex-1">
+            PantryLens reads the labels in your photos. Nothing is added until you check every
+            line.
+          </Text>
+        </View>
+        <Button
+          label="Allow the camera"
+          block
+          className="rounded-md"
+          onPress={async () => {
+            if (!permission.granted) {
+              const res = await requestPermission();
+              if (!res.granted) return;
+            }
+            setAskDismissed(true);
+          }}
+        />
+        <Button
+          label="Choose from library instead"
+          variant="secondary"
+          block
+          className="rounded-md"
+          onPress={() => {
+            setAskDismissed(true);
+            handlePickFromLibrary();
+          }}
+        />
+      </Sheet>
     </View>
   );
 }
@@ -414,7 +505,7 @@ function RoundButton({
   disabled?: boolean;
 }) {
   return (
-    <Pressable
+    <Tappable
       onPress={onPress}
       disabled={disabled}
       hitSlop={6}
@@ -423,11 +514,11 @@ function RoundButton({
       className="h-12 w-12 items-center justify-center rounded-full"
       style={{
         backgroundColor: active ? COLORS.textOnPrimary : GLASS,
-        opacity: disabled ? 0.45 : 1,
+        opacity: disabled ? 0.4 : 1,
       }}
     >
       <MaterialCommunityIcons name={icon} size={22} color={active ? COLORS.textPrimary : '#FFFFFF'} />
-    </Pressable>
+    </Tappable>
   );
 }
 

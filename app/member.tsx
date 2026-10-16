@@ -1,10 +1,10 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Alert, Image, Pressable, RefreshControl, View } from 'react-native';
+import { ActivityIndicator, Alert, Image, RefreshControl, View } from 'react-native';
 import { COLORS } from '../constants/theme';
-import { FadeInUp } from '../components/motion';
-import { Button, Card, CardHeader, Row, Screen, Segmented, Text } from '../components/ui';
+import { FadeInUp, PRESS_SCALE_ROW, Tappable } from '../components/motion';
+import { Button, Card, CardHeader, ImageEdge, Row, Screen, Segmented, Text } from '../components/ui';
 import { cueSuccess, cueTap } from '../lib/feedback';
 import { log } from '../lib/log';
 import { canEditPantry, canManageTeam, ROLE_BLURBS, ROLE_ICONS, ROLE_LABELS } from '../lib/permissions';
@@ -297,13 +297,17 @@ export default function MemberScreen() {
                       key={scan.id}
                       style={i > 0 ? { borderTopWidth: 1, borderTopColor: COLORS.borderSoft } : undefined}
                     >
-                      <Pressable
+                      <Tappable
+                        scaleTo={PRESS_SCALE_ROW}
                         onPress={() => toggleScan(scan.id)}
                         accessibilityRole="button"
                         className="flex-row items-center gap-3 py-3"
                       >
                         {thumb ? (
-                          <Image source={{ uri: thumb }} className="h-12 w-12 rounded-md bg-muted" />
+                          <View className="h-12 w-12">
+                            <Image source={{ uri: thumb }} className="h-full w-full rounded-md bg-muted" />
+                            <ImageEdge radius={8} />
+                          </View>
                         ) : (
                           <View className="h-12 w-12 items-center justify-center rounded-md bg-subtle">
                             <MaterialCommunityIcons
@@ -330,7 +334,7 @@ export default function MemberScreen() {
                           size={20}
                           color={COLORS.textSecondary}
                         />
-                      </Pressable>
+                      </Tappable>
                       {open && (
                         <View className="mb-3 gap-1.5 rounded-md bg-subtle px-3 py-2.5">
                           {!scanItems[scan.id] ? (

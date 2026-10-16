@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
+import { Alert, Image, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RULE_ABOVE } from '../constants/theme';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
@@ -14,8 +14,7 @@ import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
 import { nextRowToCheck } from '../lib/review-order';
 import { attachItemPhotos, type PhotoJob } from '../lib/item-photos';
 import type { DetectionBox, ScanCandidate } from '../lib/scan-normalize';
-import { fromRegion, itemsRegion, toRegion } from '../lib/box-geometry';
-import { cropForDisplay } from '../lib/photo';
+import { fromRegion, itemsRegion, toRegion, zoomWindow } from '../lib/box-geometry';
 import { describeTags, normaliseDietTags } from '../lib/diet';
 import { finishScan, verdictFor, type DetectedSnapshot } from '../lib/scan-history';
 import {
@@ -25,10 +24,12 @@ import {
   isUsableCondition,
   usePantryStore,
 } from '../lib/store';
+import { orderShelves, shelfLabels } from '../lib/shelves';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { canCombineIntake, parsePrintedDate, splitInspection } from '../lib/intake';
 import { log } from '../lib/log';
+import { Tappable } from '../components/motion';
 
 /**
  * Confirming what the scanner found, against the photo it found it in.
@@ -85,7 +86,13 @@ const CATEGORIES = ['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygi
 
 export default function ReviewVerifyScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ source?: string }>();
+  const params = useLocalSearchParams<{ source?: string; audit?: string }>();
+  /**
+   * Set when this review is part of a stock check: the confirmed items are
+   * then compared with what the books say for that shelf (audit-review)
+   * instead of being added to inventory.
+   */
+  const auditLocation = params.audit ?? null;
   const {
     currentDraft,
     setDraft,
@@ -100,6 +107,7 @@ export default function ReviewVerifyScreen() {
     setPendingBarcode,
     currentScan,
     setCurrentScan,
+    setAuditDraft,
   } = usePantryStore();
   const { height: windowHeight } = useWindowDimensions();
   const seniorMode = useAccessibilityStore((s) => s.seniorMode);
@@ -199,30 +207,22 @@ export default function ReviewVerifyScreen() {
   // Space left for the photo, so it can be sized to fit without scrolling.
   const [photoArea, setPhotoArea] = useState({ w: 0, h: 0 });
   /**
-   * Each photo cropped to the part that holds the donation, for display.
-   * Worked out once from where the scan found things, so the picture doesn't
-   * jump about while boxes are being nudged. Boxes are shown and edited in the
-   * crop's coordinates and stored back in the full photo's.
+   * The part of each photo that holds the donation, worked out once from where
+   * the scan found things (so it doesn't jump while boxes are nudged). The
+   * whole photo is shown; everything outside this is dimmed, not cropped, so
+   * the picture fills the space instead of shrinking to a strip.
    */
-  const [crops, setCrops] = useState<
-    Record<number, { region: DetectionBox; uri: string; width: number; height: number }>
-  >({});
-  useEffect(() => {
-    let cancelled = false;
-    currentScanPhotos.forEach(async (p, index) => {
-      if (!p?.uri || !p.width || !p.height) return;
+  const [focusRegions] = useState<Record<number, DetectionBox>>(() => {
+    const out: Record<number, DetectionBox> = {};
+    currentScanPhotos.forEach((_p: unknown, index: number) => {
       const boxes = currentDraft
         .filter((item: any) => (item.imageIndex ?? 0) === index && item.box)
         .map((item: any) => item.box as DetectionBox);
       const region = itemsRegion(boxes);
-      if (!region) return;
-      const cropped = await cropForDisplay({ uri: p.uri, width: p.width, height: p.height }, region);
-      if (cropped && !cancelled) setCrops((prev) => ({ ...prev, [index]: { region, ...cropped } }));
+      if (region) out[index] = region;
     });
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    return out;
+  });
 
   useEffect(() => {
     log.debug(
@@ -622,6 +622,24 @@ export default function ReviewVerifyScreen() {
     }
   };
 
+  /** Stock check: hand the confirmed counts to the shelf comparison. */
+  const toShelfCheck = () => {
+    if (!auditLocation) return;
+    setAuditDraft({
+      locationId: auditLocation,
+      photos: currentScanPhotos.length,
+      counted: draftItems.map((row) => ({
+        name: row.name ?? '',
+        category: (row.category as any) ?? null,
+        count: row.count ?? 1,
+        expiration: row.expiration ?? null,
+        // A line the volunteer confirmed is as certain as it gets.
+        confidence: verifiedIds[row.uid] ? 1 : row.confidence,
+      })),
+    });
+    router.replace('/audit-review');
+  };
+
   const handleSaveToInventory = () => {
     if (draftItems.length === 0 || saving) return;
 
@@ -646,7 +664,8 @@ export default function ReviewVerifyScreen() {
       Alert.alert('Finish checking the items', `${unverified} items still need confirmation. Check the count, printed date and condition before saving.`);
       return;
     }
-    commit();
+    if (auditLocation) toShelfCheck();
+    else commit();
   };
 
   if (savedSummary) return (
@@ -676,6 +695,19 @@ export default function ReviewVerifyScreen() {
   const selectedIndex = selectedId ? draftItems.findIndex((i) => i.uid === selectedId) : -1;
   const selectedItem = selectedIndex >= 0 ? draftItems[selectedIndex] : null;
 
+  /**
+   * The photo zoomed so the donation fills as much of the space as it can,
+   * with the dimmed surroundings filling the rest. Shape matches the space the
+   * photo has, so nothing is letterboxed.
+   */
+  function viewportFor(index: number): DetectionBox | null {
+    const p = currentScanPhotos[index];
+    const f = focusRegions[index];
+    if (!f || !p?.width || !p?.height || photoArea.w <= 0 || photoArea.h <= 0) return null;
+    return zoomWindow(f, p.width, p.height, photoArea.w / photoArea.h);
+  }
+  const viewport = viewportFor(photoIndex);
+
   // Only what was found in the photo currently on screen.
   const overlayItems: OverlayItem[] = draftItems
     .map((item, i) => ({ item, i }))
@@ -684,7 +716,7 @@ export default function ReviewVerifyScreen() {
       id: item.uid,
       label: item.name ?? 'Item',
       count: item.count ?? 1,
-      box: item.box ? (crops[photoIndex] ? toRegion(item.box, crops[photoIndex].region) : item.box) : null,
+      box: item.box ? (viewport ? toRegion(item.box, viewport) : item.box) : null,
       verified: !!verifiedIds[item.uid],
       needsAttention: (item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition),
     }));
@@ -774,10 +806,10 @@ export default function ReviewVerifyScreen() {
 
   // The photo is sized to whatever height is left, never wider than the screen,
   // so the whole review fits without scrolling.
-  const crop = crops[photoIndex];
-  const shownUri = crop?.uri ?? photo?.uri;
-  const aspect = crop
-    ? crop.width / crop.height
+  const shownUri = photo?.uri;
+  const focus = focusRegions[photoIndex] ?? null;
+  const aspect = viewport && photo?.width && photo?.height
+    ? (viewport.width * photo.width) / (viewport.height * photo.height)
     : photo?.width && photo?.height
       ? photo.width / photo.height
       : 4 / 3;
@@ -797,8 +829,8 @@ export default function ReviewVerifyScreen() {
           <Text variant="body" className="font-bold">
             {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
           </Text>
-          {locations.length > 0 && (
-            <Pressable
+          {locations.length > 0 && !auditLocation && (
+            <Tappable
               onPress={() => {
                 cueTap();
                 setFilingOpen(true);
@@ -810,13 +842,13 @@ export default function ReviewVerifyScreen() {
               <MaterialCommunityIcons name="map-marker-outline" size={15} color={COLORS.textSecondary} />
               <Text variant="micro" className="font-semibold" numberOfLines={1}>
                 {batchLocation
-                  ? locations.find((l) => l.id === batchLocation)?.name ?? 'Filed'
+                  ? shelfLabels(locations)[batchLocation] ?? 'Filed'
                   : autoFiles
                     ? 'Suggested shelf'
                     : 'Choose shelf'}
               </Text>
               <MaterialCommunityIcons name="chevron-down" size={15} color={COLORS.textSecondary} />
-            </Pressable>
+            </Tappable>
           )}
         </View>
         <View className="h-1.5 overflow-hidden rounded-sm bg-muted">
@@ -833,6 +865,23 @@ export default function ReviewVerifyScreen() {
         style={{ height: photo ? Math.min(260, Math.max(140, windowHeight * 0.25)) : 60 }}
         onLayout={(e) => setPhotoArea({ w: e.nativeEvent.layout.width - 40, h: e.nativeEvent.layout.height })}
       >
+        {/* The space the photo doesn't fill, filled with the photo itself —
+            blurred and darkened — so a wide shot sits in a moody frame rather
+            than floating on blank cream, and nothing of it is cropped. */}
+        {shownUri ? (
+          <View
+            pointerEvents="none"
+            className="absolute bottom-0 left-gutter right-gutter top-0 overflow-hidden rounded-lg"
+          >
+            <Image
+              source={{ uri: shownUri }}
+              blurRadius={28}
+              resizeMode="cover"
+              style={StyleSheet.absoluteFill}
+            />
+            <View style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(26, 18, 14, 0.55)' }]} />
+          </View>
+        ) : null}
         {photo && photoWidth > 0 ? (
           <View style={{ width: photoWidth }}>
             <DetectionOverlay
@@ -846,8 +895,10 @@ export default function ReviewVerifyScreen() {
                 cueTap();
                 setSelectedId(id);
               }}
-              onBoxChange={(id, box) => handleBoxChange(id, crop ? fromRegion(box, crop.region) : box)}
-              onDraw={(box) => handleDrawBox(crop ? fromRegion(box, crop.region) : box)}
+              onBoxChange={(id, box) => handleBoxChange(id, viewport ? fromRegion(box, viewport) : box)}
+              onDraw={(box) => handleDrawBox(viewport ? fromRegion(box, viewport) : box)}
+              viewport={viewport}
+              focus={focus && viewport ? toRegion(focus, viewport) : focus}
               onDragStateChange={() => {}}
             />
             {/* Controls sit on the picture itself, so nothing appears or
@@ -862,7 +913,7 @@ export default function ReviewVerifyScreen() {
               ) : (
                 <View />
               )}
-              <Pressable
+              <Tappable
                 onPress={() => {
                   cueTap();
                   setDrawMode((m) => !m);
@@ -877,7 +928,7 @@ export default function ReviewVerifyScreen() {
                 <Text variant="micro" className="font-bold text-white">
                   {drawMode ? 'Cancel' : 'Add missed'}
                 </Text>
-              </Pressable>
+              </Tappable>
             </View>
             {currentScanPhotos.length > 1 && !drawMode && (
               <View className="absolute bottom-2 left-2 flex-row items-center rounded-full bg-black/55">
@@ -931,7 +982,7 @@ export default function ReviewVerifyScreen() {
             const flagged = !checked && ((item.confidence ?? 1) < 0.7 || !isUsableCondition(item.condition));
             const current = item.uid === selectedId;
             return (
-              <Pressable
+              <Tappable
                 key={item.uid}
                 onPress={() => {
                   cueTap();
@@ -953,7 +1004,7 @@ export default function ReviewVerifyScreen() {
                 <Text variant="label" numberOfLines={1} className={current ? 'font-bold' : 'font-semibold'}>
                   {item.name?.trim() || 'Unnamed'}
                 </Text>
-              </Pressable>
+              </Tappable>
             );
           })}
         </ScrollView>
@@ -1010,7 +1061,7 @@ export default function ReviewVerifyScreen() {
                   </Text>
                   <Text variant="micro" tone="soft">·</Text>
                   {/* Category cycles on tap; the full list is under details. */}
-                  <Pressable
+                  <Tappable
                     onPress={() => {
                       cueTap();
                       setMoreOpen(true);
@@ -1024,19 +1075,19 @@ export default function ReviewVerifyScreen() {
                       {selectedItem.category ?? 'unknown'}
                     </Text>
                     <MaterialCommunityIcons name="chevron-down" size={15} color={COLORS.textSecondary} />
-                  </Pressable>
+                  </Tappable>
                   <Text variant="micro" tone="soft">·</Text>
                   <Text variant="micro" tone={damaged ? 'critical' : 'soft'} className="font-semibold">
                     {CONDITION_LABELS[selectedItem.condition || 'ok']}
                   </Text>
                   {(() => {
                     const locId = resolveLocationForRow(selectedItem);
-                    const locName = locId ? locations.find((l) => l.id === locId)?.name : null;
+                    const locName = locId ? shelfLabels(locations)[locId] : null;
                     if (!locName) return null;
                     return (
                       <>
                         <Text variant="micro" tone="soft">·</Text>
-                        <Pressable
+                        <Tappable
                           onPress={() => {
                             cueTap();
                             setFilingOpen(true);
@@ -1057,7 +1108,7 @@ export default function ReviewVerifyScreen() {
                           >
                             {locName}
                           </Text>
-                        </Pressable>
+                        </Tappable>
                       </>
                     );
                   })()}
@@ -1069,6 +1120,11 @@ export default function ReviewVerifyScreen() {
             <View className="flex-row items-center justify-between gap-3">
               <Text variant="label" tone="soft" className="font-semibold">Quantity</Text>
               <Stepper value={selectedItem.count ?? 1} min={1} onChange={(count) => updateItemAtIndex(selectedIndex, { count })} />
+            </View>
+            <View className="flex-row flex-wrap gap-2">
+              {[6, 12, 24].map(pack => (
+                <Button key={pack} label={`+${pack}`} accessibilityLabel={`Add ${pack} more units`} variant="secondary" size="compact" onPress={() => updateItemAtIndex(selectedIndex, { count: (selectedItem.count ?? 1) + pack })} />
+              ))}
             </View>
             <View className="flex-row gap-2">
               <View className="flex-1"><Button label="Previous item" size="compact" variant="ghost" disabled={currentIndex <= 0} onPress={() => focusRow(draftItems[currentIndex - 1])} /></View>
@@ -1124,16 +1180,16 @@ export default function ReviewVerifyScreen() {
           </View>
           <View className="flex-[2]">
             <Button
-              label="Save items"
+              label={auditLocation ? 'Review shelf count' : 'Save items'}
               disabled={!allVerified}
-              accessibilityLabel={`Add ${draftItems.length} ${draftItems.length === 1 ? 'item' : 'items'} to inventory`}
+              accessibilityLabel={auditLocation ? `Check ${draftItems.length} against the shelf` : `Add ${draftItems.length} ${draftItems.length === 1 ? 'item' : 'items'} to inventory`}
               block
               variant={allVerified ? 'primary' : 'secondary'}
               loading={saving}
               className="px-3"
               icon={
                 <MaterialCommunityIcons
-                  name="tray-arrow-down"
+                  name={auditLocation ? 'clipboard-check-outline' : 'tray-arrow-down'}
                   size={19}
                   color={allVerified ? COLORS.textOnPrimary : COLORS.textPrimary}
                 />
@@ -1258,10 +1314,10 @@ export default function ReviewVerifyScreen() {
         title={autoFiles ? 'Send the whole batch to one place?' : 'Where is this going?'}
       >
         <View className="flex-row flex-wrap gap-2">
-          {locations.map((loc) => (
+          {orderShelves(locations).map(({ loc, label }) => (
             <Chip
               key={loc.id}
-              label={loc.name}
+              label={label}
               selected={batchLocation === loc.id}
               onPress={() => setBatchLocation(batchLocation === loc.id ? null : loc.id)}
             />
@@ -1294,7 +1350,7 @@ function PhotoArrow({
   label?: string;
 }) {
   return (
-    <Pressable
+    <Tappable
       onPress={() => {
         cueTap();
         onPress();
@@ -1304,10 +1360,10 @@ function PhotoArrow({
       accessibilityRole="button"
       accessibilityLabel={label ?? (icon === 'chevron-left' ? 'Previous photo' : 'Next photo')}
       className={dark ? 'h-12 w-12 items-center justify-center rounded-md bg-subtle' : 'h-11 w-11 items-center justify-center'}
-      style={{ opacity: disabled ? 0.35 : 1 }}
+      style={{ opacity: disabled ? 0.4 : 1 }}
     >
       <MaterialCommunityIcons name={icon} size={24} color={dark ? COLORS.textPrimary : '#FFFFFF'} />
-    </Pressable>
+    </Tappable>
   );
 }
 
@@ -1371,7 +1427,7 @@ function ItemEditor({
           )}
           <View className="flex-row items-center gap-4">
             {verified && (
-              <Pressable
+              <Tappable
                 onPress={onUndoConfirm}
                 hitSlop={8}
                 accessibilityRole="button"
@@ -1382,9 +1438,9 @@ function ItemEditor({
                 <Text variant="label" tone="brand" className="font-bold">
                   Undo confirm
                 </Text>
-              </Pressable>
+              </Tappable>
             )}
-            <Pressable
+            <Tappable
               onPress={confirmRemove}
               hitSlop={8}
               accessibilityRole="button"
@@ -1395,7 +1451,7 @@ function ItemEditor({
               <Text variant="label" tone="critical" className="font-bold">
                 Remove
               </Text>
-            </Pressable>
+            </Tappable>
           </View>
         </View>
 
@@ -1521,7 +1577,7 @@ function ItemEditor({
           {/* Up here, well away from the confirm bar, so undoing is always
               deliberate and never the side effect of tapping quickly. */}
           {verified && (
-            <Pressable
+            <Tappable
               onPress={onUndoConfirm}
               hitSlop={8}
               accessibilityLabel="Undo confirm"
@@ -1531,18 +1587,18 @@ function ItemEditor({
               <Text variant="micro" tone="brand" className="font-bold">
                 Undo confirm
               </Text>
-            </Pressable>
+            </Tappable>
           )}
-          <Pressable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove this item">
+          <Tappable onPress={onRemove} hitSlop={8} accessibilityLabel="Remove this item">
             <MaterialCommunityIcons
               name="trash-can-outline"
               size={20}
               color={COLORS.textSecondary}
             />
-          </Pressable>
-          <Pressable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
+          </Tappable>
+          <Tappable onPress={onClose} hitSlop={8} accessibilityLabel="Close">
             <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
-          </Pressable>
+          </Tappable>
         </View>
       </View>
 

@@ -1,3 +1,5 @@
+import { Platform, type TextStyle } from 'react-native';
+
 export const COLORS = {
   // Core Brand Colors
   primary: '#9C4226',
@@ -85,27 +87,6 @@ export const FONTS = {
 } as const;
 
 /**
- * The shared card treatment for screens still written in StyleSheet.
- *
- * Mirrors `cardShadow` + the border in components/ui/card.tsx so a screen that
- * has not been ported does not look like it came from a different app. A
- * visible warm edge does the defining; the shadow only lifts the card slightly
- * off the page — white on cream is 1.08:1, so an edge is the only thing that
- * can actually delineate one.
- */
-export const CARD_ELEVATION = {
-  borderWidth: 1,
-  // Match the shared card's light outline.
-  borderBottomWidth: 1,
-  borderColor: COLORS.borderSoft,
-  shadowColor: COLORS.shadow,
-  shadowOpacity: 0.07,
-  shadowRadius: 8,
-  shadowOffset: { width: 0, height: 3 },
-  elevation: 2,
-} as const;
-
-/**
  * One-sided rules, as style objects.
  *
  * The className pairs (`border-b border-hairline`, `border-t border-hairline`)
@@ -118,3 +99,24 @@ export const RULE_ABOVE = { borderTopWidth: 1, borderTopColor: COLORS.borderSoft
 /** The same rules at 60%, for the lighter dividers on pantry selection. */
 export const RULE_BELOW_FAINT = { borderBottomWidth: 1, borderBottomColor: 'rgba(224,205,187,0.6)' } as const;
 export const RULE_ABOVE_FAINT = { borderTopWidth: 1, borderTopColor: 'rgba(224,205,187,0.6)' } as const;
+
+type Weight = '400' | '500' | '600' | '700' | '800' | '900';
+const ANDROID_WEIGHT: Record<Weight, Weight> = {
+  '400': '400',
+  '500': '600',
+  '600': '700',
+  '700': '800',
+  '800': '900',
+  '900': '900',
+};
+
+/**
+ * A font weight for an inline style, one step heavier on Android.
+ *
+ * SF Pro renders every weight visibly heavier than Roboto, so the same weight
+ * looked thin on Android. tailwind.config.js does the same for the `font-*`
+ * classes; this covers styles written by hand. iOS gets the weight as given.
+ */
+export function fw(weight: Weight): NonNullable<TextStyle['fontWeight']> {
+  return Platform.OS === 'android' ? ANDROID_WEIGHT[weight] : weight;
+}

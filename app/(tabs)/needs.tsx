@@ -2,12 +2,11 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
-import { Alert, Pressable, Share, View } from "react-native";
-import { COLORS } from "../../constants/theme";
+import { Alert, Share, View } from "react-native";
+import { COLORS, fw } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
-import { FadeInUp, ProgressBar } from "../../components/motion";
+import { AnimatedCounter, FadeInUp, ProgressBar, Tappable } from "../../components/motion";
 import {
-  Badge,
   Button,
   Card,
   CategoryIcon,
@@ -181,7 +180,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             {/* The assumption behind every "stopping boxes going out" figure,
                 said out loud. It was the number 12, hardcoded, and a pantry
                 reading these amounts had no way to know what they were for. */}
-            <Pressable
+            <Tappable
               onPress={() => router.push("/(tabs)/settings")}
               accessibilityRole="button"
               className="mt-3 min-h-[44px] flex-row items-center gap-2"
@@ -196,35 +195,46 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                 {settings.boxTarget === 1 ? "" : "es"} of {settings.defaultFamilySize}
                 . Change that in Settings →
               </Text>
-            </Pressable>
+            </Tappable>
           </View>
         </FadeInUp>
 
-        {/* Tighter than the page rhythm: these are one list, not separate blocks. */}
-        <View className="gap-2.5">
+        {/* One list. Each card: what, a hint of what counts, and how many
+            more — the number is the thing a donor acts on, so it gets the
+            weight; the bar and one line of counts sit under it. Red (number
+            and bar) marks the category holding up boxes. */}
+        <View className="gap-3">
           {deficits.map((item, i) => {
             const isLimiting = item.reason === "Stopping boxes going out";
+            const accent = isLimiting ? COLORS.statusCritical : COLORS.primary;
             return (
               <FadeInUp key={item.category} index={i + 1}>
-                <Card className="gap-3 p-4">
-                  <View className="flex-row items-start gap-3.5">
+                <Card className="gap-3.5 p-4">
+                  <View className="flex-row items-center gap-3">
                     <CategoryIcon
                       category={item.category}
-                      size="md"
                       tone={isLimiting ? "critical" : "brand"}
                     />
                     <View className="flex-1">
-                      <View className="flex-row items-center justify-between gap-2">
-                        <Text variant="heading" className="font-bold capitalize">
-                          {item.category}
+                      <Text variant="heading" className="font-bold capitalize">
+                        {item.category}
+                      </Text>
+                      <Text variant="label" tone="soft" numberOfLines={1}>
+                        {EXAMPLES[item.category] ?? "Any shelf-stable items"}
+                      </Text>
+                    </View>
+                    <View className="items-end">
+                      <View className="flex-row items-baseline">
+                        <Text variant="title" className="font-bold" style={{ color: accent }}>
+                          +
                         </Text>
-                        <Badge
-                          label={`Need ${item.deficit} more`}
-                          tone={isLimiting ? "critical" : "warn"}
+                        <AnimatedCounter
+                          value={item.deficit}
+                          style={{ fontSize: 22, lineHeight: 28, fontWeight: fw('700'), color: accent }}
                         />
                       </View>
-                      <Text variant="label" tone="soft" className="mt-1">
-                        {EXAMPLES[item.category] ?? "Any shelf-stable items"}
+                      <Text variant="micro" tone="soft">
+                        needed
                       </Text>
                     </View>
                   </View>
@@ -235,16 +245,10 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                       color={isLimiting ? COLORS.statusCritical : COLORS.primaryLight}
                       height={6}
                     />
-                    <View className="flex-row items-center justify-between">
-                      <Text variant="micro" tone="soft" className="font-semibold">
-                        {item.current} usable on shelf · goal {item.goal}
-                      </Text>
-                      {isLimiting && (
-                        <Text variant="micro" tone="critical" className="font-bold">
-                          Stopping boxes going out
-                        </Text>
-                      )}
-                    </View>
+                    <Text variant="micro" tone="soft">
+                      {item.current} of {item.goal} on the shelf
+                      {isLimiting ? " · holding up boxes" : ""}
+                    </Text>
                   </View>
                 </Card>
               </FadeInUp>
@@ -257,7 +261,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             <View className="flex-row gap-2.5">
               <View className="flex-1">
                 <Button
-                  label="Share with donors"
+                  label="Share"
                   block
                   icon={
                     <MaterialCommunityIcons
@@ -285,7 +289,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                 />
               </View>
             </View>
-            <Pressable
+            <Tappable
               onPress={() => setFlyerOpen(true)}
               accessibilityRole="button"
               className="min-h-[48px] justify-center self-start px-1 py-2"
@@ -293,7 +297,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
               <Text variant="label" tone="brand" className="font-bold">
                 Preview donor message →
               </Text>
-            </Pressable>
+            </Tappable>
           </View>
         </FadeInUp>
       </Screen>
@@ -310,7 +314,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
           </Text>
         </Panel>
         {!dropoff && (
-          <Pressable
+          <Tappable
             onPress={() => {
               setFlyerOpen(false);
               router.push("/(tabs)/settings");
@@ -326,7 +330,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             <Text variant="micro" tone="brand" className="flex-1 font-semibold">
               Add your drop-off location and hours in Settings so donors know where to go.
             </Text>
-          </Pressable>
+          </Tappable>
         )}
         <Button
           label={copied ? "Copied" : "Copy it"}

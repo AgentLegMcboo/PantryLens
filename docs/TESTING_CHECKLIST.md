@@ -74,7 +74,7 @@ The 6/4 examples describe deterministic combining rules; real photos may produce
 3. Choose **Count by hand instead**. Enter a physical count of **9** for the existing test batch. Review must show **Recorded 12 → Counted 9 → Change −3** before saving.
 4. Save and approve the count. Reopen Inventory: the shelf should contain 9. In activity/reporting, the change should be an inventory correction, not food distributed to a family.
 5. Repeat with a deliberately omitted item. **Still on shelf** must preserve it; **It's gone** requires an explicit decision to remove that missing quantity. Do not mark unphotographed stock gone just because the AI missed it.
-6. Repeat via shelf photos and **Count this shelf**. Overlap left/middle/right photos and review each proposed change. Other shelves must not be changed by this count.
+6. Repeat using **Photograph [shelf name]**, then detect and confirm the photographed items before reviewing the shelf count. Overlap left/middle/right photos and review each proposed change. Other shelves must not be changed by this count.
 
 ## 9. Monthly food-bank report / Feeding America
 

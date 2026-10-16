@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Button,
@@ -21,6 +21,7 @@ import { normaliseDietTags } from '../lib/diet';
 import { cueSuccess, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { usePantryStore } from '../lib/store';
+import { Tappable } from '../components/motion';
 
 const BARCODE_TYPES = ['upc_a', 'ean13', 'ean8', 'upc_e', 'itf14'] as const;
 
@@ -246,7 +247,7 @@ export default function BarcodeScanScreen() {
             className="flex-row items-center justify-between px-gutter"
             style={{ paddingTop: insets.top + 8 }}
           >
-            <Pressable
+            <Tappable
               onPress={() => router.back()}
               accessibilityRole="button"
               accessibilityLabel="Close the scanner"
@@ -254,8 +255,8 @@ export default function BarcodeScanScreen() {
               className="h-12 w-12 items-center justify-center rounded-lg bg-black/60"
             >
               <MaterialCommunityIcons name="close" size={24} color="#FFFFFF" />
-            </Pressable>
-            <Pressable
+            </Tappable>
+            <Tappable
               onPress={() => setTorch((value) => !value)}
               disabled={busy || !!candidate || manual}
               accessibilityRole="button"
@@ -268,7 +269,7 @@ export default function BarcodeScanScreen() {
                 size={24}
                 color="#FFFFFF"
               />
-            </Pressable>
+            </Tappable>
           </View>
           <View className="flex-1 items-center justify-center" pointerEvents="none">
             {!candidate && (
@@ -280,7 +281,7 @@ export default function BarcodeScanScreen() {
                 <Text variant="label" className="mt-5 text-center text-white">
                   {busy ? 'Looking it up…' : 'Hold one barcode steady'}
                 </Text>
-                <Text variant="micro" className="mt-2 px-gutter text-center text-white/70">
+                <Text variant="micro" className="mt-2 px-gutter text-center" style={{ color: "rgba(255,255,255,0.7)" }}>
                   Keep all the bars visible. Move back a little if blurry.
                 </Text>
               </>

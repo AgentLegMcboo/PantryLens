@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { COLORS } from '../constants/theme';
 import {
   BOX_CATEGORIES,
@@ -23,6 +23,7 @@ import { cueSuccess, cueTap } from '../lib/feedback';
 import { type BoxRules, type BoxTemplate, usePantryStore } from '../lib/store';
 import { FolderChips, FolderManager } from './box-folders';
 import { Button, categoryIcon, Chip, Input, Row, Sheet, Stepper, Text, Toggle } from './ui';
+import { Tappable } from './motion';
 
 /** What Build is packing: a saved template, or a preset used as-is. */
 export type BoxSelection = { kind: 'template'; id: string } | { kind: 'preset'; key: string };
@@ -413,7 +414,7 @@ export function BoxPicker({
         divider={!isLast}
         onPress={() => pick({ kind: 'template', id: template.id })}
         right={
-          <Pressable
+          <Tappable
             onPress={() => editTemplate(template)}
             hitSlop={10}
             accessibilityRole="button"
@@ -421,7 +422,7 @@ export function BoxPicker({
             className="h-12 w-12 items-center justify-center rounded-lg bg-secondary-tint"
           >
             <MaterialCommunityIcons name="pencil-outline" size={20} color={COLORS.secondaryDark} />
-          </Pressable>
+          </Tappable>
         }
       />
     );
@@ -438,7 +439,7 @@ export function BoxPicker({
         <Text variant="label" tone="soft" className="font-semibold">
           Your boxes
         </Text>
-        <Pressable
+        <Tappable
           onPress={() => {
             cueTap();
             setMode('folders');
@@ -451,7 +452,7 @@ export function BoxPicker({
           <Text variant="micro" tone="brand" className="font-bold">
             Folders
           </Text>
-        </Pressable>
+        </Tappable>
       </View>
 
       {boxTemplates.length === 0 ? (
@@ -466,7 +467,7 @@ export function BoxPicker({
             </View>
           ) : (
             <View key={section.id}>
-              <Pressable
+              <Tappable
                 onPress={() => {
                   cueTap();
                   setCollapsed(prev => ({ ...prev, [section.id]: !prev[section.id] }));
@@ -491,7 +492,7 @@ export function BoxPicker({
                 <Text variant="micro" tone="soft">
                   {section.items.length}
                 </Text>
-              </Pressable>
+              </Tappable>
               {!collapsed[section.id] && (
                 <View className="pl-2">
                   {section.items.map((t, i) => renderTemplate(t, i === section.items.length - 1))}
@@ -517,7 +518,7 @@ export function BoxPicker({
               divider={i < BOX_PRESETS.length - 1}
               onPress={() => pick({ kind: 'preset', key: preset.key })}
               right={
-                <Pressable
+                <Tappable
                   onPress={() => startFrom(preset)}
                   hitSlop={10}
                   accessibilityLabel={`Save a copy of ${preset.name}`}
@@ -525,7 +526,7 @@ export function BoxPicker({
                   <Text variant="micro" tone="brand" className="font-bold">
                     Save a copy
                   </Text>
-                </Pressable>
+                </Tappable>
               }
             />
           );

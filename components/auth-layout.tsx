@@ -2,10 +2,10 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { Image, StyleSheet, View } from "react-native";
-import { COLORS } from "../constants/theme";
+import { COLORS, fw } from "../constants/theme";
 import { GoogleLogo } from "./google-logo";
 import { KeyboardScreen } from "./keyboard-screen";
-import { Button, Card, Text } from "./ui";
+import { Button, Card, cardRing, Text } from "./ui";
 
 /**
  * The pantry behind the glass.
@@ -56,7 +56,7 @@ export function AuthBrand({
         style={{
           fontSize: 32,
           lineHeight: 40,
-          fontWeight: "800",
+          fontWeight: fw('800'),
           letterSpacing: -0.6,
           color: COLORS.textPrimary,
         }}
@@ -114,13 +114,7 @@ export function AuthLayout({
             photograph rather than off the cream page. */}
         <Card
           className="gap-5"
-          style={{
-            shadowColor: "#2B2420",
-            shadowOpacity: 0.15,
-            shadowRadius: 10,
-            shadowOffset: { width: 0, height: 1 },
-            elevation: 2,
-          }}
+          style={{ boxShadow: `${cardRing()}, 0 1px 20px 0 rgba(43, 36, 32, 0.15)` }}
         >
           <View>
             <Text variant="title">{cardTitle}</Text>
