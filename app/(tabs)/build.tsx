@@ -1,8 +1,10 @@
+import { ReadyBoxesContent } from "../../components/ready-boxes-content";
+import { ResponsiveRow } from "../../components/ui/responsive-row";
+import { useAppAppearance } from "../../lib/appearance";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
-import { LinearGradient } from "expo-linear-gradient";
+import { View } from "react-native";
 import { COLORS, fw } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
 import { useDismissible } from "../../lib/dismissals";
@@ -27,6 +29,7 @@ import {
   Chip,
   Panel,
   Screen,
+  Segmented,
   Sheet,
   Stepper,
   Text,
@@ -47,7 +50,16 @@ import { BoxRules, usePantryStore } from "../../lib/store";
  * because it explains the answer rather than being the answer.
  */
 export default function BuildBoxesScreen() {
+  useAppAppearance((state) => state.scheme);
   const router = useRouter();
+  const params = useLocalSearchParams<{ section?: string }>();
+  const [section, setSection] = useState<"plan" | "ready">("plan");
+  useEffect(() => {
+    if (params.section === "ready") {
+      setSection("ready");
+      router.setParams({ section: undefined });
+    }
+  }, [params.section, router]);
   const { inventory, bulkLots, boxRules, boxTemplates, readyBoxes, settings } =
     usePantryStore();
   const readyCount = readyBoxes.reduce(
@@ -173,417 +185,316 @@ export default function BuildBoxesScreen() {
   };
 
   return (
-    <>
-      <Screen>
-        {/* The answer. */}
-        <FadeInUp index={0}>
-          <View
-            className="overflow-hidden rounded-lg"
-            // A soft warm lift. The old 6px bottom lip rendered as a separate
-            // dark band under the card on Android.
-            style={{ boxShadow: "0 4px 18px 0 rgba(107, 74, 47, 0.22)" }}
-          >
-            <LinearGradient
-              colors={["#B0512F", "#9C4226"]}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={StyleSheet.absoluteFill}
-            />
-
-            <View className="p-card">
-              <Text variant="label" tone="on" className="font-semibold" style={{ opacity: 0.9 }}>
-                You can pack right now
-              </Text>
-
-              <View className="mt-1 flex-row items-baseline gap-2">
-                <AnimatedCounter
-                  value={plan.achievableBoxes}
-                  style={{
-                    fontSize: 60,
-                    fontWeight: fw('800'),
-                    color: COLORS.textOnPrimary,
-                    letterSpacing: -2,
-                  }}
-                />
-                <Text variant="title" className="text-ink-on">
-                  {plan.achievableBoxes === 1 ? "box" : "boxes"}
-                </Text>
-              </View>
-
-              <View className="my-4 h-px bg-white/20" />
-
+    <View style={{ flex: 1 }}>
+      <View className="px-gutter pt-3 pb-1">
+        <Segmented
+          value={section}
+          options={[
+            { value: "plan", label: "Plan boxes" },
+            {
+              value: "ready",
+              label:
+                readyCount > 0 ? `Ready to go (${readyCount})` : "Ready to go",
+            },
+          ]}
+          onChange={setSection}
+        />
+      </View>
+      {section === "plan" ? (
+        <Screen>
+          {/* What's being packed, then how many and for whom. */}
+          <FadeInUp index={1}>
+            <Card className="gap-4">
               <Tappable
-                scaleTo={PRESS_SCALE_ROW}
                 onPress={() => {
                   cueTap();
-                  setBreakdownOpen(true);
+                  setPickerOpen(true);
                 }}
                 accessibilityRole="button"
-                accessibilityLabel="See per-category breakdown for this box"
-                className="min-h-[48px] flex-row items-center justify-between gap-3"
+                accessibilityLabel={`Box: ${box.name}. Tap to change.`}
+                className="min-h-[52px] flex-row items-center gap-3"
               >
-                <Text variant="label" tone="on" className="flex-1" style={{ opacity: 0.92 }}>
-                  {isShort ? (
-                    <>
-                      <Text
-                        variant="label"
-                        className="font-bold capitalize text-ink-on"
-                      >
-                        {plan.limitingCategory}
-                      </Text>{" "}
-                      runs out first — short{" "}
-                      {plan.shortfallPerCategory[plan.limitingCategory]} for{" "}
-                      {requestedBoxes}
-                    </>
-                  ) : (
-                    `Enough of everything for ${requestedBoxes}`
-                  )}
-                </Text>
-                <View className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-white/20 px-3.5 py-2">
-                  <Text variant="label" className="font-bold text-ink-on">
-                    Why
-                  </Text>
+                <View className="h-11 w-11 items-center justify-center rounded-md bg-secondary-tint">
                   <MaterialCommunityIcons
-                    name="chevron-right"
-                    size={16}
-                    color={COLORS.textOnPrimary}
+                    name="package-variant-closed"
+                    size={22}
+                    color={COLORS.secondaryDark}
                   />
                 </View>
+                <View className="flex-1">
+                  <Text variant="body" className="font-bold">
+                    {box.name}
+                  </Text>
+                </View>
+                <Text variant="label" tone="brand" className="font-bold">
+                  Change
+                </Text>
               </Tappable>
 
-              {/* The action lives with the answer it acts on. White on the
-                  orange so it's the one thing the eye lands on next. */}
-              <Pressable
-                onPress={canPack ? startPacking : undefined}
-                disabled={!canPack}
-                accessibilityRole="button"
-                accessibilityState={{ disabled: !canPack }}
-                style={({ pressed }) => ({
-                  marginTop: 16,
-                  borderBottomWidth: canPack ? (pressed ? 2 : 4) : 0,
-                  borderBottomColor: "rgba(94,36,17,0.45)",
-                  transform: [{ translateY: pressed && canPack ? 2 : 0 }],
-                })}
-                className={`min-h-[50px] flex-row items-center justify-center gap-2 rounded-lg ${
-                  canPack ? "bg-white" : "bg-white/20"
-                }`}
-              >
-                <MaterialCommunityIcons
-                  name="clipboard-check-outline"
-                  size={19}
-                  color={canPack ? COLORS.primary : COLORS.textOnPrimary}
-                />
-                <Text
-                  variant="body"
-                  className="font-bold tracking-wide"
-                  style={{
-                    color: canPack ? COLORS.primary : COLORS.textOnPrimary,
-                  }}
-                >
-                  {canPack
-                    ? `Pack ${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? "box" : "boxes"}`
-                    : "Nothing to pack yet"}
+              {box.scales ? (
+                <View className="gap-2">
+                  <Text variant="body" className="font-semibold">
+                    How big are the families?
+                  </Text>
+                  <View className="flex-row flex-wrap gap-2">
+                    {[2, 4, 6].map((size) => (
+                      <Chip
+                        key={size}
+                        label={`${size} people`}
+                        selected={familySize === size}
+                        onPress={() => setFamilySize(size)}
+                      />
+                    ))}
+                  </View>
+                </View>
+              ) : (
+                <Text variant="micro" tone="soft">
+                  This box doesn&apos;t scale: every household gets the same
+                  amounts.
                 </Text>
-              </Pressable>
-            </View>
-          </View>
-        </FadeInUp>
+              )}
+              <ResponsiveRow className="flex-row items-center justify-between gap-3">
+                <Text variant="body" className="flex-1 font-semibold">
+                  How many boxes do you need?
+                </Text>
+                <Stepper
+                  value={requestedBoxes}
+                  min={1}
+                  max={200}
+                  onChange={(next) => {
+                    touchedBoxes.current = true;
+                    setRequestedBoxes(next);
+                  }}
+                />
+              </ResponsiveRow>
+            </Card>
+          </FadeInUp>
 
-        {/* Stock a volunteer can see on the shelf but the plan will not use.
+          {/* The answer. */}
+          <FadeInUp index={0}>
+            <View
+              className="overflow-hidden rounded-lg bg-card"
+              // A soft warm lift. The old 6px bottom lip rendered as a separate
+              // dark band under the card on Android.
+              style={{ borderWidth: 1, borderColor: COLORS.borderSoft }}
+            >
+              <View className="p-card">
+                <Text
+                  variant="label"
+                  tone="default"
+                  className="font-semibold"
+                  style={{ opacity: 0.9 }}
+                >
+                  You can pack right now
+                </Text>
+
+                <View className="mt-1 flex-row items-baseline gap-2">
+                  <AnimatedCounter
+                    value={plan.achievableBoxes}
+                    style={{
+                      fontSize: 60,
+                      fontWeight: fw("700"),
+                      color: COLORS.textPrimary,
+                      letterSpacing: -2,
+                    }}
+                  />
+                  <Text variant="title" className="text-ink">
+                    {plan.achievableBoxes === 1 ? "box" : "boxes"}
+                  </Text>
+                </View>
+
+                <View className="my-4 h-px bg-hairline" />
+
+                <Tappable
+                  scaleTo={PRESS_SCALE_ROW}
+                  onPress={() => {
+                    cueTap();
+                    setBreakdownOpen(true);
+                  }}
+                  accessibilityRole="button"
+                  accessibilityLabel="See per-category breakdown for this box"
+                  className="min-h-[48px] flex-row items-center justify-between gap-3"
+                >
+                  <Text
+                    variant="label"
+                    tone="default"
+                    className="flex-1"
+                    style={{ opacity: 0.92 }}
+                  >
+                    {isShort ? (
+                      <>
+                        <Text
+                          variant="label"
+                          className="font-bold capitalize text-ink"
+                        >
+                          {plan.limitingCategory}
+                        </Text>{" "}
+                        runs out first — short{" "}
+                        {plan.shortfallPerCategory[plan.limitingCategory]} for{" "}
+                        {requestedBoxes}
+                      </>
+                    ) : (
+                      `Enough of everything for ${requestedBoxes}`
+                    )}
+                  </Text>
+                  <View className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-subtle px-3.5 py-2">
+                    <Text variant="label" className="font-bold text-ink">
+                      Why
+                    </Text>
+                    <MaterialCommunityIcons
+                      name="chevron-right"
+                      size={16}
+                      color={COLORS.textPrimary}
+                    />
+                  </View>
+                </Tappable>
+
+                {/* The action lives with the answer it acts on. White on the
+                  orange so it's the one thing the eye lands on next. */}
+                <Button
+                  label={
+                    canPack
+                      ? `Pack ${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? "box" : "boxes"}`
+                      : "Nothing to pack yet"
+                  }
+                  disabled={!canPack}
+                  block
+                  onPress={startPacking}
+                  className="mt-4"
+                />
+              </View>
+            </View>
+          </FadeInUp>
+
+          {/* Stock a volunteer can see on the shelf but the plan will not use.
             Left unsaid, this reads as the engine being broken — the shelf has
             twelve tins of beans and Build insists it has none. */}
-        {/* Food this BOX cannot take, as opposed to food nothing can. Separate
+          {/* Food this BOX cannot take, as opposed to food nothing can. Separate
             panel and separate sentence: nothing is wrong with it, it just is not
             for this household, and conflating the two would read as waste. */}
-        {plan.excluded.dietary.units > 0 && (
-          <FadeInUp index={1}>
-            <Panel className="flex-row gap-3">
-              <MaterialCommunityIcons
-                name="shield-alert-outline"
-                size={18}
-                color={COLORS.statusWarning}
-              />
-              <View className="flex-1 gap-1">
-                <Text variant="micro" tone="soft">
-                  <Text variant="micro" className="font-bold">
-                    {plan.excluded.dietary.units} good unit
-                    {plan.excluded.dietary.units === 1 ? "" : "s"} held back by
-                    this box&apos;s rules.
-                  </Text>{" "}
-                  {box.requires.length > 0
-                    ? `Only food recorded as ${box.requires
-                        .map((t) => DIET_TAG_LABELS[t].toLowerCase())
-                        .join(
-                          " and ",
-                        )} can go in, and anything untagged does not qualify.`
-                    : `Anything known to contain ${box.excludes
-                        .map((t) => DIET_TAG_LABELS[t].toLowerCase())
-                        .join(" or ")} is left out.`}
-                </Text>
-                {box.excludes.length > 0 && (
-                  <Text variant="micro" tone="soft">
-                    {EXCLUSION_CAVEAT}
-                  </Text>
-                )}
-              </View>
-            </Panel>
-          </FadeInUp>
-        )}
-
-        {(plan.excluded.pastDate.units > 0 ||
-          plan.excluded.flagged.units > 0) &&
-          heldBackVisible && (
-          <FadeInUp index={1}>
-            <Panel className="flex-row gap-3">
-              <MaterialCommunityIcons
-                name="alert-outline"
-                size={18}
-                color={COLORS.statusWarning}
-              />
-              <View className="flex-1 gap-1">
-                <Text variant="micro" tone="soft">
-                  {[
-                    plan.excluded.pastDate.units > 0
-                      ? `${plan.excluded.pastDate.units} unit${
-                          plan.excluded.pastDate.units === 1 ? "" : "s"
-                        } past their date`
-                      : "",
-                    plan.excluded.flagged.units > 0
-                      ? `${plan.excluded.flagged.units} unit${
-                          plan.excluded.flagged.units === 1 ? "" : "s"
-                        } flagged for inspection`
-                      : "",
-                  ]
-                    .filter(Boolean)
-                    .join(" and ")}{" "}
-                  {plan.excluded.pastDate.units +
-                    plan.excluded.flagged.units ===
-                  1
-                    ? "is"
-                    : "are"}{" "}
-                  on the shelf but left out of this plan.
-                </Text>
-                <Tappable
-                  onPress={() => router.push("/expiring-soon")}
-                  accessibilityRole="button"
-                  className="min-h-[44px] justify-center self-start py-1"
-                >
-                  <Text variant="label" tone="brand" className="font-bold">
-                    See them in Notifications →
-                  </Text>
-                </Tappable>
-              </View>
-              <Tappable
-                onPress={() => {
-                  cueTap();
-                  dismissHeldBack();
-                }}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel="Dismiss. It stays on the Notifications page."
-                className="-mr-1 -mt-1 h-8 w-8 items-center justify-center"
-              >
-                <MaterialCommunityIcons name="close" size={18} color={COLORS.textSecondary} />
-              </Tappable>
-            </Panel>
-          </FadeInUp>
-        )}
-
-        {/* What's being packed, then how many and for whom. */}
-        <FadeInUp index={1}>
-          <Card className="gap-4">
-            <Tappable
-              onPress={() => {
-                cueTap();
-                setPickerOpen(true);
-              }}
-              accessibilityRole="button"
-              accessibilityLabel={`Box: ${box.name}. Tap to change.`}
-              className="min-h-[52px] flex-row items-center gap-3"
-            >
-              <View className="h-11 w-11 items-center justify-center rounded-md bg-secondary-tint">
+          {plan.excluded.dietary.units > 0 && (
+            <FadeInUp index={1}>
+              <Panel className="flex-row gap-3">
                 <MaterialCommunityIcons
-                  name="package-variant-closed"
-                  size={22}
-                  color={COLORS.secondaryDark}
+                  name="shield-alert-outline"
+                  size={18}
+                  color={COLORS.statusWarning}
                 />
-              </View>
-              <View className="flex-1">
-                <Text variant="body" className="font-bold">
-                  {box.name}
-                </Text>
-                <Text
-                  variant="micro"
-                  tone="soft"
-                  numberOfLines={2}
-                  className="mt-0.5"
-                >
-                  {describeRules(box.rules)}
-                </Text>
-              </View>
-              <Text variant="label" tone="brand" className="font-bold">
-                Change
-              </Text>
-            </Tappable>
-
-            <View className="flex-row items-center justify-between gap-3">
-              <Text variant="body" className="flex-1 font-semibold">
-                How many boxes do you need?
-              </Text>
-              <Stepper
-                value={requestedBoxes}
-                min={1}
-                max={200}
-                onChange={(next) => {
-                  touchedBoxes.current = true;
-                  setRequestedBoxes(next);
-                }}
-              />
-            </View>
-
-            {box.scales ? (
-              <View className="gap-2">
-                <Text variant="body" className="font-semibold">
-                  How big are the families?
-                </Text>
-                <View className="flex-row gap-2">
-                  {[2, 4, 6].map((size) => (
-                    <Chip
-                      key={size}
-                      label={`${size} people`}
-                      selected={familySize === size}
-                      onPress={() => setFamilySize(size)}
-                    />
-                  ))}
-                </View>
-              </View>
-            ) : (
-              <Text variant="micro" tone="soft">
-                This box doesn&apos;t scale: every household gets the same
-                amounts.
-              </Text>
-            )}
-          </Card>
-        </FadeInUp>
-
-        {/* Boxes already packed: how many are waiting, and where each batch is
-            in being picked up. Building a plan without seeing what's already
-            on the table invites packing twice. */}
-        <FadeInUp index={3}>
-          <Card className="gap-4">
-            <View className="flex-row items-center justify-between">
-              <Text variant="heading" className="font-bold">
-                Packed boxes
-              </Text>
-              {readyBoxes.length > 0 && (
-                <Tappable
-                  onPress={() => router.push("/ready-boxes")}
-                  hitSlop={8}
-                  accessibilityRole="button"
-                  className="min-h-[48px] justify-center"
-                >
-                  <Text variant="label" tone="brand" className="font-bold">
-                    Hand out →
-                  </Text>
-                </Tappable>
-              )}
-            </View>
-
-            {readyBoxes.length === 0 ? (
-              <Text variant="label" tone="soft">
-                Nothing packed right now. Boxes you pack show up here until
-                families pick them up.
-              </Text>
-            ) : (
-              <>
-                <View className="flex-row gap-3">
-                  <View className="flex-1 rounded-md bg-subtle px-3.5 py-3">
-                    <Text variant="title" className="font-bold">
-                      {readyCount}
-                    </Text>
-                    <Text variant="micro" tone="soft" className="font-semibold">
-                      waiting for pickup
-                    </Text>
-                  </View>
-                  <View className="flex-1 rounded-md bg-subtle px-3.5 py-3">
-                    <Text variant="title" className="font-bold">
-                      {readyBoxes.reduce((n, r) => n + r.boxes_collected, 0)}
-                    </Text>
-                    <Text variant="micro" tone="soft" className="font-semibold">
-                      picked up so far
-                    </Text>
-                  </View>
-                </View>
-
-                {readyBoxes.slice(0, 4).map((run) => {
-                  const left = run.boxes - run.boxes_collected;
-                  const started = run.boxes_collected > 0;
-                  return (
-                    <View key={run.id} className="gap-1.5">
-                      <View className="flex-row items-center justify-between gap-3">
-                        <Text
-                          variant="body"
-                          numberOfLines={1}
-                          className="flex-1 font-semibold"
-                        >
-                          {run.label || run.box_name || "Packed boxes"}
-                        </Text>
-                        <View
-                          className="rounded-sm px-2 py-0.5"
-                          style={{
-                            backgroundColor: started ? "#FFF2DB" : "#EEF4E9",
-                          }}
-                        >
-                          <Text
-                            variant="micro"
-                            className="font-bold"
-                            style={{ color: started ? "#80500E" : "#3C6534" }}
-                          >
-                            {started ? "Picking up" : "Ready"}
-                          </Text>
-                        </View>
-                      </View>
-                      <ProgressBar
-                        progress={
-                          run.boxes > 0 ? run.boxes_collected / run.boxes : 0
-                        }
-                        color={COLORS.statusGood}
-                      />
-                      <Text variant="micro" tone="soft">
-                        {left} of {run.boxes} left · packed{" "}
-                        {packedAgo(run.created_at)}
-                      </Text>
-                    </View>
-                  );
-                })}
-                {readyBoxes.length > 4 && (
+                <View className="flex-1 gap-1">
                   <Text variant="micro" tone="soft">
-                    +{readyBoxes.length - 4} more batches
+                    <Text variant="micro" className="font-bold">
+                      {plan.excluded.dietary.units} good unit
+                      {plan.excluded.dietary.units === 1 ? "" : "s"} held back
+                      by this box&apos;s rules.
+                    </Text>{" "}
+                    {box.requires.length > 0
+                      ? `Only food recorded as ${box.requires
+                          .map((t) => DIET_TAG_LABELS[t].toLowerCase())
+                          .join(
+                            " and ",
+                          )} can go in, and anything untagged does not qualify.`
+                      : `Anything known to contain ${box.excludes
+                          .map((t) => DIET_TAG_LABELS[t].toLowerCase())
+                          .join(" or ")} is left out.`}
                   </Text>
-                )}
-              </>
+                  {box.excludes.length > 0 && (
+                    <Text variant="micro" tone="soft">
+                      {EXCLUSION_CAVEAT}
+                    </Text>
+                  )}
+                </View>
+              </Panel>
+            </FadeInUp>
+          )}
+
+          {(plan.excluded.pastDate.units > 0 ||
+            plan.excluded.flagged.units > 0) &&
+            heldBackVisible && (
+              <FadeInUp index={1}>
+                <Panel className="flex-row gap-3">
+                  <MaterialCommunityIcons
+                    name="alert-outline"
+                    size={18}
+                    color={COLORS.statusWarning}
+                  />
+                  <View className="flex-1 gap-1">
+                    <Text variant="micro" tone="soft">
+                      {[
+                        plan.excluded.pastDate.units > 0
+                          ? `${plan.excluded.pastDate.units} unit${
+                              plan.excluded.pastDate.units === 1 ? "" : "s"
+                            } past their date`
+                          : "",
+                        plan.excluded.flagged.units > 0
+                          ? `${plan.excluded.flagged.units} unit${
+                              plan.excluded.flagged.units === 1 ? "" : "s"
+                            } flagged for inspection`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" and ")}{" "}
+                      {plan.excluded.pastDate.units +
+                        plan.excluded.flagged.units ===
+                      1
+                        ? "is"
+                        : "are"}{" "}
+                      on the shelf but left out of this plan.
+                    </Text>
+                    <Tappable
+                      onPress={() => router.push("/expiring-soon")}
+                      accessibilityRole="button"
+                      className="min-h-[44px] justify-center self-start py-1"
+                    >
+                      <Text variant="label" tone="brand" className="font-bold">
+                        See them in Notifications →
+                      </Text>
+                    </Tappable>
+                  </View>
+                  <Tappable
+                    onPress={() => {
+                      cueTap();
+                      dismissHeldBack();
+                    }}
+                    hitSlop={12}
+                    accessibilityRole="button"
+                    accessibilityLabel="Dismiss. It stays on the Notifications page."
+                    className="-mr-1 -mt-1 h-8 w-8 items-center justify-center"
+                  >
+                    <MaterialCommunityIcons
+                      name="close"
+                      size={18}
+                      color={COLORS.textSecondary}
+                    />
+                  </Tappable>
+                </Panel>
+              </FadeInUp>
             )}
-          </Card>
-        </FadeInUp>
 
-        {isShort && (
-          <Button
-            label="Ask donors for what's short"
-            variant="secondary"
-            size="compact"
-            onPress={() => router.push("/(tabs)/needs")}
-          />
-        )}
+          {isShort && (
+            <Button
+              label="Ask donors for what's short"
+              variant="secondary"
+              size="compact"
+              onPress={() => router.push("/(tabs)/needs")}
+            />
+          )}
 
-        {!canPack && (
-          <FadeInUp index={4}>
-            <Text variant="label" tone="soft" className="px-1">
-              A box needs every category it calls for. Add stock, or choose a
-              smaller box.
-            </Text>
-          </FadeInUp>
-        )}
-      </Screen>
+          {!canPack && (
+            <FadeInUp index={4}>
+              <Text variant="label" tone="soft" className="px-1">
+                A box needs every category it calls for. Add stock, or choose a
+                smaller box.
+              </Text>
+            </FadeInUp>
+          )}
+          <Text variant="micro" tone="soft" className="px-1">
+            Plan a balanced mix from your inventory. Changes here apply to this
+            packing session; Needs uses your saved pantry defaults.
+          </Text>
+        </Screen>
+      ) : (
+        <ReadyBoxesContent onPlan={() => setSection("plan")} />
+      )}
 
       {/* The arithmetic, out of the way until asked for. */}
       <Sheet
@@ -665,16 +576,6 @@ export default function BuildBoxesScreen() {
         selectedKey={box.key}
         onSelect={setSelection}
       />
-    </>
+    </View>
   );
-}
-
-/** "today", "yesterday", "3 days ago" — how long a batch has been waiting. */
-function packedAgo(iso: string): string {
-  const then = new Date(iso);
-  if (Number.isNaN(then.getTime())) return "";
-  const days = Math.floor((Date.now() - then.getTime()) / 86400000);
-  if (days <= 0) return "today";
-  if (days === 1) return "yesterday";
-  return `${days} days ago`;
 }

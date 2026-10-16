@@ -1,3 +1,4 @@
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useState } from 'react';
@@ -18,6 +19,7 @@ import { orderShelves } from '../lib/shelves';
  * volunteer confirms each line. The how-to lives in a popup, not on the page.
  */
 export default function ShelfAuditScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const { locations, inventory, setAuditDraft } = usePantryStore();
   const shelves = orderShelves(locations);

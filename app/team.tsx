@@ -1,3 +1,4 @@
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import React, { useEffect, useState } from 'react';
@@ -43,6 +44,7 @@ function displayName(member: PantryMember): string {
 }
 
 export default function TeamScreen() {
+  useAppAppearance(state => state.scheme);
   const { settings, session, members, fetchMembers } = usePantryStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -84,7 +86,7 @@ export default function TeamScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-canvas">
+      <View className="flex-1 items-center justify-center bg-transparent">
         <ActivityIndicator color={COLORS.primary} />
       </View>
     );

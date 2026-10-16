@@ -1,3 +1,5 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -26,6 +28,7 @@ import { type PackLine, usePantryStore } from '../lib/store';
  * progress you can see is what makes a long pick list bearable.
  */
 export default function PackingChecklistScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const params = useLocalSearchParams();
   const { inventory, bulkLots, boxRules, locations, settings, packBoxes } = usePantryStore();
@@ -170,7 +173,7 @@ export default function PackingChecklistScreen() {
 
   if (total === 0) {
     return (
-      <View className="flex-1 justify-center bg-canvas">
+      <View className="flex-1 justify-center bg-transparent">
         <EmptyState
           icon="package-variant"
           title="Nothing to pick yet"
@@ -188,14 +191,14 @@ export default function PackingChecklistScreen() {
           keep telling you while your eyes are on the shelf. */}
       <FadeInUp index={0}>
         <View className="px-1">
-          <View className="flex-row items-baseline justify-between">
+          <ResponsiveRow className="flex-row items-baseline justify-between">
             <Text variant="headline">
               {doneCount} of {total} picked
             </Text>
             <Text variant="label" tone="soft">
               {plan.achievableBoxes} {plan.achievableBoxes === 1 ? 'box' : 'boxes'}
             </Text>
-          </View>
+          </ResponsiveRow>
 
           <View className="mt-3">
             <ProgressBar

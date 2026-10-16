@@ -40,54 +40,54 @@ AsyncStorage.getItem(SENIOR_MODE_KEY)
 /**
  * Calculates typography and contrast adjustments for older adults when Senior Mode is active.
  *
- * Bumps font sizes by ~20%, bolds labels, and turns soft grey text into high-contrast charcoal
+ * Bumps font sizes by ~20% and increases contrast without making all copy bold.
  * for effortless reading under warehouse fluorescent lighting or without reading glasses.
  */
 export function getSeniorTextStyle(variant?: string | null, tone?: string | null) {
   let fontSize = 19;
   let lineHeight = 26;
-  let fontWeight: '600' | '700' | '800' | undefined = '600';
+  let fontWeight: '400' | '500' | '600' | '700' = '400';
 
   switch (variant) {
     case 'micro':
       fontSize = 15;
       lineHeight = 21;
-      fontWeight = '600';
+      fontWeight = '500';
       break;
     case 'label':
       fontSize = 17;
       lineHeight = 23;
-      fontWeight = '700';
+      fontWeight = '500';
       break;
     case 'body':
       fontSize = 19;
       lineHeight = 26;
-      fontWeight = '600';
+      fontWeight = '400';
       break;
     case 'heading':
       fontSize = 22;
       lineHeight = 29;
-      fontWeight = '700';
+      fontWeight = '600';
       break;
     case 'title':
       fontSize = 26;
       lineHeight = 33;
-      fontWeight = '800';
+      fontWeight = '700';
       break;
     case 'headline':
       fontSize = 30;
       lineHeight = 37;
-      fontWeight = '800';
+      fontWeight = '700';
       break;
     case 'display':
       fontSize = 35;
       lineHeight = 43;
-      fontWeight = '800';
+      fontWeight = '700';
       break;
     default:
       fontSize = 19;
       lineHeight = 26;
-      fontWeight = '600';
+      fontWeight = '400';
       break;
   }
 

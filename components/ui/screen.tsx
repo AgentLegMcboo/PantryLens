@@ -28,15 +28,26 @@ export function Screen({ className, contentContainerClassName, ...props }: Scrol
   const tabOverlayInset = useTabOverlayInset();
   React.useEffect(() => {
     if (!navigation || navigation.getState?.()?.type !== 'tab') return;
-    return navigation.addListener('blur', () => {
-      scroll.current?.scrollTo({ y: 0, animated: false });
+    let focusedKey = navigation.getState().routes[navigation.getState().index]?.key;
+    const stopFocus = navigation.addListener('focus', () => {
+      const state = navigation.getState();
+      focusedKey = state.routes[state.index]?.key;
     });
+    const stopBlur = navigation.addListener('blur', () => {
+      const state = navigation.getState();
+      // A pushed page (such as Notifications) leaves the selected tab intact.
+      // Only reset when the user actually selects a different tab.
+      if (state.routes[state.index]?.key !== focusedKey) {
+        scroll.current?.scrollTo({ y: 0, animated: false });
+      }
+    });
+    return () => { stopFocus(); stopBlur(); };
   }, [navigation]);
 
   return (
     <ScrollView
       ref={scroll}
-      className={cn('flex-1 bg-canvas', className)}
+      className={cn('flex-1 bg-transparent', className)}
       contentContainerClassName={cn('px-gutter pt-gutter gap-gap', contentContainerClassName)}
       // Content scrolls under the floating glass; the last control clears it.
       showsVerticalScrollIndicator={false}

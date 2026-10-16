@@ -1,3 +1,5 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -13,6 +15,7 @@ import { supabase } from '../lib/supabase';
 import { Tappable } from '../components/motion';
 
 export default function PantrySelectionScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const signOut = usePantryStore((state) => state.signOut);
@@ -92,9 +95,9 @@ export default function PantrySelectionScreen() {
   };
 
   return (
-    <View style={{ paddingTop: insets.top }} className="flex-1 bg-canvas">
+    <View style={{ paddingTop: insets.top }} className="flex-1 bg-transparent">
       {/* Top Bar */}
-      <View className="flex-row items-center justify-between bg-canvas px-gutter py-3.5" style={RULE_BELOW_FAINT}>
+      <ResponsiveRow className="flex-row items-center justify-between bg-transparent px-gutter py-3.5" style={RULE_BELOW_FAINT}>
         {/* Back only when adding another pantry. Someone with no pantry yet
             has nowhere to go back to — the root gate keeps them here. */}
         {adding ? (
@@ -132,7 +135,7 @@ export default function PantrySelectionScreen() {
             Sign out
           </Text>
         </Tappable>
-      </View>
+      </ResponsiveRow>
 
       <ScrollView
         contentContainerStyle={{ padding: 20, paddingBottom: 20 + insets.bottom }}

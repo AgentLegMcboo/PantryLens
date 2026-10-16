@@ -1,89 +1,55 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const path = require('node:path');
+const vm = require('node:vm');
+const ts = require('typescript');
 
-// Testing the senior text style transformation logic
-function getSeniorTextStyle(variant, tone) {
-  let fontSize = 19;
-  let lineHeight = 26;
-  let fontWeight = '600';
-
-  switch (variant) {
-    case 'micro':
-      fontSize = 15;
-      lineHeight = 21;
-      fontWeight = '600';
-      break;
-    case 'label':
-      fontSize = 17;
-      lineHeight = 23;
-      fontWeight = '700';
-      break;
-    case 'body':
-      fontSize = 19;
-      lineHeight = 26;
-      fontWeight = '600';
-      break;
-    case 'heading':
-      fontSize = 22;
-      lineHeight = 29;
-      fontWeight = '700';
-      break;
-    case 'title':
-      fontSize = 26;
-      lineHeight = 33;
-      fontWeight = '800';
-      break;
-    case 'headline':
-      fontSize = 30;
-      lineHeight = 37;
-      fontWeight = '800';
-      break;
-    case 'display':
-      fontSize = 35;
-      lineHeight = 43;
-      fontWeight = '800';
-      break;
-    default:
-      fontSize = 19;
-      lineHeight = 26;
-      fontWeight = '600';
-      break;
-  }
-
-  const style = { fontSize, lineHeight };
-  if (fontWeight) style.fontWeight = fontWeight;
-
-  if (tone === 'soft') {
-    style.color = '#2B2420';
-  } else if (!tone || tone === 'default') {
-    style.color = '#1A1412';
-  }
-
-  return style;
-}
+// Exercise the real implementation rather than a copied typography function.
+const compiled = ts.transpileModule(
+  fs.readFileSync(path.join(__dirname, '../lib/accessibility.ts'), 'utf8'),
+  { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } },
+).outputText;
+const moduleExports = {};
+vm.runInNewContext(compiled, {
+  exports: moduleExports,
+  require(name) {
+    if (name === '@react-native-async-storage/async-storage') return { getItem: async () => null };
+    if (name === '../constants/theme') return { fw: weight => weight };
+    if (name === 'zustand') return { create: () => ({ setState() {} }) };
+    throw new Error(`Unexpected import: ${name}`);
+  },
+});
+const { getSeniorTextStyle } = moduleExports;
 
 test('senior text scaling enlarges micro copy from 12px to accessible 15px', () => {
   const microStyle = getSeniorTextStyle('micro', 'soft');
   assert.equal(microStyle.fontSize, 15);
   assert.equal(microStyle.lineHeight, 21);
-  assert.equal(microStyle.fontWeight, '600');
+  assert.equal(microStyle.fontWeight, '500');
   // High contrast charcoal rather than soft grey
   assert.equal(microStyle.color, '#2B2420');
 });
 
-test('senior text scaling bolds labels and headings for older adult vision', () => {
+test('large text keeps the mockup weight hierarchy without bolding every label', () => {
   const labelStyle = getSeniorTextStyle('label', 'default');
   assert.equal(labelStyle.fontSize, 17);
-  assert.equal(labelStyle.fontWeight, '700');
-  assert.equal(labelStyle.color, '#1A1412');
+  assert.equal(labelStyle.fontWeight, '500');
+  assert.equal(labelStyle.color, undefined);
 
   const headingStyle = getSeniorTextStyle('heading', 'default');
   assert.equal(headingStyle.fontSize, 22);
-  assert.equal(headingStyle.fontWeight, '700');
+  assert.equal(headingStyle.fontWeight, '600');
 });
 
 test('senior body text scales to 19px with generous line height to prevent fatigue', () => {
   const bodyStyle = getSeniorTextStyle('body', 'default');
   assert.equal(bodyStyle.fontSize, 19);
   assert.equal(bodyStyle.lineHeight, 26);
+  assert.equal(bodyStyle.fontWeight, '400');
+});
+
+test('large titles use bold rather than extra-bold and on-brand text keeps its color', () => {
+  assert.equal(getSeniorTextStyle('title').fontWeight, '700');
+  assert.equal(getSeniorTextStyle('headline', 'on').color, undefined);
 });

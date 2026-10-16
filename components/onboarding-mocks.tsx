@@ -300,7 +300,7 @@ export function ScanMock() {
         <Card style={MOCK_CARD} className="w-[312px] gap-3 p-4">
           <View className="flex-row items-center gap-2">
             <View className="h-7 w-7 items-center justify-center rounded-md bg-brand">
-              <MaterialCommunityIcons name="camera" size={15} color={COLORS.textOnPrimary} />
+              <MaterialCommunityIcons name="camera" size={15} color={COLORS.textOnAccent} />
             </View>
             <Text variant="label" className="flex-1 font-bold">
               Found in your photo
@@ -330,11 +330,11 @@ export function ScanMock() {
 }
 
 /** Phase 4 — what the shelf can make, and which category is holding it back. */
-export function BoxesMock() {
+export function BoxesMock({ limitLabel = 'Not enough beans', stockLabel = 'Add 12 cans for 12 boxes' }: { limitLabel?: string; stockLabel?: string } = {}) {
   const rows = [
     { category: "grain", label: "Grain", have: 33, need: 24 },
     { category: "vegetable", label: "Vegetable", have: 40, need: 24 },
-    { category: "protein", label: "Protein", have: 13, need: 24 },
+    { category: "protein", label: "Beans", have: 12, need: 24 },
   ];
 
   return (
@@ -384,12 +384,12 @@ export function BoxesMock() {
       topRight={
         <Tag
           icon="alert-circle-outline"
-          label="Protein is the limit"
+          label={limitLabel}
           tone="critical"
         />
       }
       bottomLeft={
-        <Tag icon="bullhorn-outline" label="Ask donors for protein" />
+        <Tag icon="bullhorn-outline" label={stockLabel} />
       }
     />
   );

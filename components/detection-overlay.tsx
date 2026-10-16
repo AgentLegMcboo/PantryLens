@@ -278,7 +278,7 @@ function EditableBox({
             {item.verified && (
               <Text style={[styles.tagTick, seniorMode && { fontSize: 13 }]}>✓</Text>
             )}
-            <Text style={[styles.tagText, seniorMode && { fontSize: 14 }]} numberOfLines={1}>
+            <Text style={[styles.tagText, !item.verified && !item.needsAttention && { color: COLORS.textOnAccent }, seniorMode && { fontSize: 14 }]} numberOfLines={1}>
               {item.count > 1 ? `${item.count}× ` : ''}
               {item.label}
             </Text>

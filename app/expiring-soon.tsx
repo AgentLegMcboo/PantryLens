@@ -1,3 +1,5 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useEffect, useState } from 'react';
@@ -27,6 +29,7 @@ function urgency(days: number) {
 }
 
 export default function ExpiringSoonScreen() {
+  useAppAppearance(state => state.scheme);
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const { inventory, locations, settings, recordExit } = usePantryStore();
@@ -138,7 +141,7 @@ export default function ExpiringSoonScreen() {
             <Badge label={state.label} tone={state.tone} />
           </View>
 
-          <View className="flex-row items-center justify-between gap-2 pt-1">
+          <ResponsiveRow className="flex-row items-center justify-between gap-2 pt-1">
             <Text variant="micro" tone={days < 0 ? 'critical' : 'soft'} className="flex-1">
               {days < 0
                 ? 'Automatically held out of family boxes'
@@ -162,14 +165,14 @@ export default function ExpiringSoonScreen() {
                 Take off shelf
               </Text>
             </Pressable>
-          </View>
+          </ResponsiveRow>
         </Card>
       </FadeInUp>
     );
   };
 
   return (
-    <View className="flex-1 bg-canvas">
+    <View className="flex-1 bg-transparent">
       <FlatList
         data={expiring}
         keyExtractor={item => item.id}
@@ -196,7 +199,7 @@ export default function ExpiringSoonScreen() {
                     <View key={item.id} className="flex-row items-center gap-3 py-2.5" style={RULE_ABOVE}>
                       <CategoryIcon category={item.category} tone="critical" />
                       <View className="flex-1">
-                        <Text variant="body" className="font-semibold" numberOfLines={1}>
+                        <Text variant="body" className="font-semibold">
                           {item.name}
                         </Text>
                         <Text variant="micro" tone="critical" className="font-bold">
@@ -285,8 +288,11 @@ export default function ExpiringSoonScreen() {
             tone="good"
             title="Nothing on the clock"
             body={`No stock expires in the next ${settings.expirationWarningDays} days. This page fills itself in when something does.`}
-            actionLabel="Back to the shelf"
-            onAction={() => router.push('/(tabs)/inventory')}
+            actionLabel="Go back"
+            onAction={() => {
+              if (router.canGoBack()) router.back();
+              else router.replace('/(tabs)');
+            }}
           />
           )
         }

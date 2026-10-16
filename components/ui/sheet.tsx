@@ -83,6 +83,7 @@ export function Sheet({
   title,
   subtitle,
   onClose,
+  onDismiss,
   children,
   className,
 }: {
@@ -90,6 +91,7 @@ export function Sheet({
   title: string;
   subtitle?: string;
   onClose: () => void;
+  onDismiss?: () => void;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -105,6 +107,9 @@ export function Sheet({
    * until the closing spring reports back.
    */
   const [mounted, setMounted] = React.useState(visible);
+  React.useEffect(() => {
+    if (!mounted) onDismiss?.();
+  }, [mounted, onDismiss]);
 
   /** Distance below resting position, in px. 0 is open, `height` is gone. */
   const translateY = useSharedValue(screenHeight);
@@ -282,10 +287,10 @@ export function Sheet({
                 so its header never gets pushed off the top of the screen. */}
             <Animated.View
               onLayout={e => onSheetLayout(e.nativeEvent.layout.height)}
-              style={[{ width: '100%', maxWidth: 640, alignSelf: 'center', maxHeight: screenHeight * 0.85, flexShrink: 1, backgroundColor: 'transparent', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }, sheetStyle]}
+              style={[{ width: '100%', maxWidth: 640, alignSelf: 'center', maxHeight: screenHeight * 0.85, flexShrink: 1, backgroundColor: 'transparent', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }, sheetStyle]}
               className={cn('max-h-[85%] shrink rounded-t-lg', className)}
             >
-              <GlassBackdrop radius={16} />
+              <GlassBackdrop radius={28} material="regular" />
               {/* The grabber. It means what it looks like now. Generously
                   padded, because the thing you grab should be bigger than the
                   thing you see. */}

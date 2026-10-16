@@ -2,31 +2,33 @@
 // resolves against. It must be imported exactly once, at the app root.
 import '../global.css';
 
-import { Stack, useRouter, useSegments } from 'expo-router';
+import { Stack, useRouter, useSegments, useGlobalSearchParams, ThemeProvider, DefaultTheme, DarkTheme } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 // Required for react-native-gesture-handler to receive touches at all. Without
 // it the box drag/resize handles in Review & Verify are inert on Android.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import { COLORS } from '../constants/theme';
+import { COLORS, LIGHT_COLORS, DARK_COLORS } from '../constants/theme';
+import { vars } from 'nativewind';
+import { useAppAppearance } from '../lib/appearance';
+import { AppBackground } from '../components/app-background';
 import { usePantryStore } from '../lib/store';
 import { loadFeedbackPrefs } from '../lib/feedback';
 import { GrainOverlay } from '../components/motion';
 import { Asset } from 'expo-asset';
-import { useFonts } from 'expo-font';
-// Imported per weight, not from the package root — the root re-exports every
-// Newsreader cut and Metro would bundle ~2.5MB of fonts we never load.
-import { Newsreader_500Medium } from '@expo-google-fonts/newsreader/500Medium';
-import { Newsreader_600SemiBold } from '@expo-google-fonts/newsreader/600SemiBold';
-import { Newsreader_500Medium_Italic } from '@expo-google-fonts/newsreader/500Medium_Italic';
 import { BrandSplash } from '../components/brand-splash';
 import { StackHeader } from '../components/app-header';
-import { View } from 'react-native';
+import { StatusBar, View } from 'react-native';
 
 /** Dev only: replay onboarding on every launch, signed in or not. */
 const REPLAY_INTRO_IN_DEV = true;
 
 export default function RootLayout() {
+  const scheme = useAppAppearance(state => state.scheme);
+  const palette = scheme === 'dark' ? DARK_COLORS : LIGHT_COLORS;
+  const themeVariables = vars(Object.fromEntries(Object.entries(palette)
+    .filter((entry): entry is [string, string] => typeof entry[1] === 'string')
+    .map(([key, hex]) => [`--color-${key}`, [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16)).join(' ')])));
   const initialize = usePantryStore(state => state.initialize);
   const isLoaded = usePantryStore(state => state.isLoaded);
   const session = usePantryStore(state => state.session);
@@ -36,6 +38,7 @@ export default function RootLayout() {
   const addingPantry = usePantryStore(state => state.addingPantry);
   
   const segments = useSegments();
+  const { replay } = useGlobalSearchParams<{ replay?: string }>();
   const router = useRouter();
 
   // Plays on every launch. Also covers the gap while the session and pantry
@@ -54,16 +57,11 @@ export default function RootLayout() {
       // A failed preload is not fatal — the image still loads on demand.
     });
   }, []);
-  const [fontsLoaded] = useFonts({
-    Newsreader_500Medium,
-    Newsreader_600SemiBold,
-    Newsreader_500Medium_Italic,
-  });
   /**
    * What the splash is allowed to wait for.
    *
-   * Only local, fast work: fonts are bundled, and `onboarded` is one AsyncStorage
-   * read. Pantry data is deliberately NOT here. Gating on `isLoaded` meant the
+   * Only local, fast work: `onboarded` is one AsyncStorage read.
+   * Pantry data is deliberately NOT here. Gating on `isLoaded` meant the
    * splash stayed up through a session read plus every Supabase round trip — a
    * measured ten seconds on a cold launch, for an animation lasting one.
    *
@@ -71,7 +69,7 @@ export default function RootLayout() {
    * anything, so nothing can redirect early. The dashboard may show zeroes for a
    * beat while data lands, which is the ordinary trade and much the better one.
    */
-  const ready = fontsLoaded && onboarded !== null;
+  const ready = onboarded !== null;
 
   useEffect(() => {
     initialize();
@@ -83,6 +81,7 @@ export default function RootLayout() {
     if (!isLoaded || onboarded === null) return;
 
     const onOnboarding = segments[0] === 'onboarding';
+    if (onOnboarding && replay === '1') return;
     const inAuthGroup =
       segments[0] === '(auth)' ||
       segments[0] === 'login' ||
@@ -118,10 +117,13 @@ export default function RootLayout() {
       // is only for someone who doesn't belong to a pantry yet.
       router.replace('/(tabs)');
     }
-  }, [isLoaded, session, pantryId, segments, onboarded, addingPantry]);
+  }, [isLoaded, session, pantryId, segments, onboarded, addingPantry, replay]);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
+    <GestureHandlerRootView style={[{ flex: 1, backgroundColor: COLORS.background }, themeVariables]}>
+    <StatusBar barStyle={scheme === 'dark' ? 'light-content' : 'dark-content'} />
+    <AppBackground />
+    <ThemeProvider value={{ ...(scheme === 'dark' ? DarkTheme : DefaultTheme), colors: { ...(scheme === 'dark' ? DarkTheme.colors : DefaultTheme.colors), background: 'transparent', card: COLORS.cardSurface, text: COLORS.textPrimary, border: COLORS.borderSoft, primary: COLORS.primary } }}>
     <SafeAreaProvider>
       {ready ? (
       <Stack
@@ -136,7 +138,7 @@ export default function RootLayout() {
             />
           ),
           contentStyle: {
-            backgroundColor: COLORS.background,
+            backgroundColor: 'transparent',
           },
         })}
       >
@@ -176,9 +178,10 @@ export default function RootLayout() {
         <View style={{ flex: 1, backgroundColor: COLORS.background }} />
       )}
       {/* Sits above every screen. Non-interactive, so it never eats a tap. */}
-      <GrainOverlay opacity={0.45} />
+      <GrainOverlay opacity={0.12} />
       {!splashDone && <BrandSplash hold={!ready} onDone={() => setSplashDone(true)} />}
     </SafeAreaProvider>
+    </ThemeProvider>
     </GestureHandlerRootView>
   );
 }

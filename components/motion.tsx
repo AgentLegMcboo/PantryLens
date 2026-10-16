@@ -1,6 +1,5 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
-import React, { useCallback, useContext, useEffect, useRef, useState } from 'react';
-import { NavigationContext } from 'expo-router/react-navigation';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   Image,
   Pressable,
@@ -167,109 +166,17 @@ export function Tappable({
   );
 }
 
-/** Content that eases up into place. Stagger with `index` for list entrances. */
-export function FadeInUp({
-  children,
-  index = 0,
-  distance = 12,
-  duration = 300,
-  style,
-}: {
+/** Keep page content immediately visible across native screen freezes and tab switches.
+ * Legacy entrance props remain accepted so existing screens need no rewiring. */
+export function FadeInUp({ children, style }: {
   children: React.ReactNode;
   index?: number;
   distance?: number;
   duration?: number;
   style?: ViewStyle | ViewStyle[];
 }) {
-  const progress = useSharedValue(0);
-  const reduceMotion = useReducedMotion();
-  // Set once the entrance should be over, and from then on the content is
-  // pinned visible by an ordinary prop rather than the animation.
-  //
-  // The animation alone wasn't enough: switching tabs mid-fade can detach the
-  // screen on Android, the native animation's last frame never lands, and the
-  // block stays at opacity 0 — a whole Home screen came back blank. A plain
-  // `opacity: 1` prop always reaches the view, so a missed frame can no longer
-  // strand content invisible.
-  const [settled, setSettled] = useState(false);
-  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  /**
-   * Fades the block in from where it is. `quick` is the shorter version used
-   * when a tab is returned to, so switching back feels lively, not slow.
-   */
-  const play = useCallback(
-    (quick = false) => {
-      // Cap the stagger so a long list never leaves the last row waiting. With
-      // motion reduced the stagger goes too: a cascade is itself movement.
-      const delay = reduceMotion ? 0 : Math.min(index * (quick ? 25 : 100), quick ? 100 : 400);
-      const length = reduceMotion ? 160 : quick ? Math.min(duration, 220) : duration;
-      if (timer.current) clearTimeout(timer.current);
-      // `Never`, because with reduced motion on there is no travel left to
-      // remove — the transform is already gone below — and Reanimated's default
-      // would otherwise snap the fade too, so the content would pop in.
-      progress.value = withDelay(
-        delay,
-        withTiming(1, { duration: length, easing: EASE_OUT, reduceMotion: ReduceMotion.Never }),
-        ReduceMotion.Never,
-      );
-      timer.current = setTimeout(() => setSettled(true), delay + length + 60);
-    },
-    [index, duration, progress, reduceMotion],
-  );
-
-  useEffect(() => {
-    play();
-    return () => {
-      if (timer.current) clearTimeout(timer.current);
-    };
-  }, [play]);
-
-  // Tab screens stay mounted, so a mount-only entrance played once per launch.
-  // To replay it on every return without a flicker, the block is put back to
-  // its hidden start WHILE the tab is out of view (blur), and only animated
-  // when the tab is shown again (focus). Resetting on focus instead made the
-  // content blink out and back in front of the volunteer.
-  //
-  // Read from the context rather than useIsFocused so it is safe anywhere —
-  // inside a sheet, or outside any navigator — and only for tabs: coming back
-  // from a pushed screen shouldn't make the page reassemble itself.
-  const navigation = useContext(NavigationContext);
-  useEffect(() => {
-    if (!navigation || navigation.getState?.()?.type !== 'tab') return;
-    let away = false;
-    const offBlur = navigation.addListener('blur', () => {
-      away = true;
-      if (timer.current) clearTimeout(timer.current);
-      progress.value = 0;
-      setSettled(false);
-    });
-    const offFocus = navigation.addListener('focus', () => {
-      if (!away) return;
-      away = false;
-      play(true);
-    });
-    return () => {
-      offBlur();
-      offFocus();
-    };
-  }, [navigation, play, progress]);
-
-  const animatedStyle = useAnimatedStyle(() => ({
-    opacity: progress.value,
-    // A cross-fade with no travel, which is exactly what reduced motion asks
-    // for: keep the opacity change that aids comprehension, drop the slide.
-    transform: reduceMotion
-      ? []
-      : [{ translateY: interpolate(progress.value, [0, 1], [distance, 0]) }],
-  }));
-
-  return (
-    <Animated.View style={[style, settled ? SETTLED : animatedStyle]}>{children}</Animated.View>
-  );
+  return <View style={style}>{children}</View>;
 }
-
-const SETTLED = { opacity: 1, transform: [] };
 
 /**
  * Number that counts up when it changes, so a stat visibly *moves* when stock
@@ -457,7 +364,7 @@ export function ProgressBar({
   }));
 
   return (
-    <View style={[styles.progressTrack, { height, borderRadius: height }]}>
+    <View style={[styles.progressTrack, { height, borderRadius: height, backgroundColor: COLORS.surfaceVariant }]}>
       <Animated.View
         style={[{ height, borderRadius: height, backgroundColor: color }, animatedStyle]}
       />

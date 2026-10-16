@@ -1,3 +1,5 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -85,6 +87,7 @@ const nextUid = () => `row-${++uidCounter}`;
 const CATEGORIES = ['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygiene', 'baby'];
 
 export default function ReviewVerifyScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const params = useLocalSearchParams<{ source?: string; audit?: string }>();
   /**
@@ -669,7 +672,7 @@ export default function ReviewVerifyScreen() {
   };
 
   if (savedSummary) return (
-    <View className="flex-1 justify-center gap-5 bg-canvas px-gutter">
+    <View className="flex-1 justify-center gap-5 bg-transparent px-gutter">
       <Text variant="headline">Donation added</Text>
       <Text variant="body">{savedSummary.units} units recorded · {savedSummary.held} held for inspection · {savedSummary.unknownDates} batches with unknown dates.</Text>
       <Button label="View inventory" block onPress={() => router.replace('/(tabs)/inventory')} />
@@ -678,7 +681,7 @@ export default function ReviewVerifyScreen() {
 
   if (draftItems.length === 0) {
     return (
-      <View className="flex-1 items-center justify-center bg-canvas px-10">
+      <View className="flex-1 items-center justify-center bg-transparent px-10">
         <MaterialCommunityIcons name="camera-off-outline" size={44} color={COLORS.textSecondary} />
         <Text variant="title" className="mt-4">
           Nothing to review
@@ -818,14 +821,14 @@ export default function ReviewVerifyScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-      className="flex-1 bg-canvas"
+      className="flex-1 bg-transparent"
     >
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
       {/* Progress, and where the batch is going. One slim row instead of a
           title block, a paragraph and a progress card. */}
       <View className="gap-2 px-gutter pb-2 pt-2">
         <Button label={`View all ${draftItems.length} items`} variant="secondary" size="compact" onPress={() => setListOpen(true)} />
-        <View className="flex-row items-center justify-between gap-3">
+        <ResponsiveRow className="flex-row items-center justify-between gap-3">
           <Text variant="body" className="font-bold">
             {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
           </Text>
@@ -850,7 +853,7 @@ export default function ReviewVerifyScreen() {
               <MaterialCommunityIcons name="chevron-down" size={15} color={COLORS.textSecondary} />
             </Tappable>
           )}
-        </View>
+        </ResponsiveRow>
         <View className="h-1.5 overflow-hidden rounded-sm bg-muted">
           <View
             className={allVerified ? 'h-full rounded-sm bg-good' : 'h-full rounded-sm bg-brand-light'}
@@ -1117,19 +1120,19 @@ export default function ReviewVerifyScreen() {
             </View>
 
             <Button label={`${selectedItem.expiration ? `Date: ${selectedItem.expiration}` : 'Date unknown'} · ${damaged ? 'Inspect damage' : 'Check condition'}`} variant="secondary" size="compact" onPress={() => setMoreOpen(true)} />
-            <View className="flex-row items-center justify-between gap-3">
+            <ResponsiveRow className="flex-row items-center justify-between gap-3">
               <Text variant="label" tone="soft" className="font-semibold">Quantity</Text>
               <Stepper value={selectedItem.count ?? 1} min={1} onChange={(count) => updateItemAtIndex(selectedIndex, { count })} />
-            </View>
+            </ResponsiveRow>
             <View className="flex-row flex-wrap gap-2">
               {[6, 12, 24].map(pack => (
                 <Button key={pack} label={`+${pack}`} accessibilityLabel={`Add ${pack} more units`} variant="secondary" size="compact" onPress={() => updateItemAtIndex(selectedIndex, { count: (selectedItem.count ?? 1) + pack })} />
               ))}
             </View>
-            <View className="flex-row gap-2">
+            <ResponsiveRow className="flex-row gap-2">
               <View className="flex-1"><Button label="Previous item" size="compact" variant="ghost" disabled={currentIndex <= 0} onPress={() => focusRow(draftItems[currentIndex - 1])} /></View>
               <View className="flex-1"><Button label="Next item" size="compact" variant="ghost" disabled={currentIndex >= draftItems.length - 1} onPress={() => focusRow(draftItems[currentIndex + 1])} /></View>
-            </View>
+            </ResponsiveRow>
           </>
         ) : (
           <Text variant="label" tone="soft">
@@ -1414,7 +1417,7 @@ function ItemEditor({
   if (compact) {
     return (
       <View className="gap-4">
-        <View className="flex-row items-center justify-between">
+        <ResponsiveRow className="flex-row items-center justify-between">
           {item.resolvedBy === 'barcode' ? (
             <Badge label="From the barcode" tone="good" />
           ) : item.resolvedBy === 'catalogue' ? (
@@ -1453,7 +1456,7 @@ function ItemEditor({
               </Text>
             </Tappable>
           </View>
-        </View>
+        </ResponsiveRow>
 
         <Input
           label="Item name"
@@ -1558,7 +1561,7 @@ function ItemEditor({
 
   return (
     <Card style={{ borderColor: verified ? COLORS.statusGood : COLORS.primaryLight }}>
-      <View className="flex-row items-center justify-between">
+      <ResponsiveRow className="flex-row items-center justify-between">
         {/* WHERE this name came from, not just how sure something is about it.
             "The manufacturer says so" and "your pantry has called it this a
             dozen times" are different kinds of trustworthy, and both are
@@ -1600,7 +1603,7 @@ function ItemEditor({
             <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
           </Tappable>
         </View>
-      </View>
+      </ResponsiveRow>
 
       {/* What the product database knows about allergens, when a barcode named
           this. Read-only here — this screen is for getting the item right, and
@@ -1691,7 +1694,7 @@ function ItemEditor({
         )}
       </View>
 
-      <View className="mt-5 flex-row gap-4">
+      <ResponsiveRow className="mt-5 flex-row gap-4">
         <View className="gap-2">
           <Text variant="label" tone="soft">
             Quantity
@@ -1707,7 +1710,7 @@ function ItemEditor({
             onChangeText={(txt) => onChange({ expiration: txt })}
           />
         </View>
-      </View>
+      </ResponsiveRow>
 
       {/* Offered on every row that a barcode has not already settled — a
           volunteer who doubts a confident-looking reading should not have to

@@ -147,7 +147,7 @@ export function PlacesManager() {
             newShelf.trim() ? '' : 'opacity-40'
           }`}
         >
-          <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
+          <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnAccent} />
         </Tappable>
       </View>
 
@@ -198,7 +198,7 @@ export function PlacesManager() {
                   newSub.trim() ? '' : 'opacity-40'
                 }`}
               >
-                <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
+                <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnAccent} />
               </Tappable>
             </View>
           </View>

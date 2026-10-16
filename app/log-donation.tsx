@@ -1,3 +1,4 @@
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -41,6 +42,7 @@ const SOURCES: SourceOrg[] = ['grocery', 'food_bank', 'drive', 'individual', 'ot
 const GLASS = 'rgba(20,16,14,0.55)';
 
 export default function LogDonationScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const setDraft = usePantryStore((state) => state.setDraft);

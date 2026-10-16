@@ -1,3 +1,4 @@
+import { useAppAppearance } from '../lib/appearance';
 import { Link } from 'expo-router';
 import React, { useState } from 'react';
 import { Alert } from 'react-native';
@@ -8,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { Tappable } from '../components/motion';
 
 export default function SignUpScreen() {
+  useAppAppearance(state => state.scheme);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);

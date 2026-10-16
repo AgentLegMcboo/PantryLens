@@ -16,7 +16,7 @@ export function BrandMark() {
   return (
     <View className="flex-row items-center gap-2.5" accessibilityRole="header" accessibilityLabel="PantryLens">
       <View className="h-8 w-8 items-center justify-center rounded-md bg-brand">
-        <MaterialCommunityIcons name="camera-iris" size={17} color={COLORS.textOnPrimary} />
+        <MaterialCommunityIcons name="camera-iris" size={17} color={COLORS.textOnAccent} />
       </View>
       <Text
         style={{

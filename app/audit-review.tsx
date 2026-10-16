@@ -1,3 +1,5 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -80,6 +82,7 @@ const SECTION_BLURB: Record<AuditStatus, string> = {
 };
 
 export default function AuditReviewScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const { auditDraft, locations, inventory, applyShelfAudit, setAuditDraft, currentScan, setCurrentScan } =
     usePantryStore();
@@ -387,7 +390,7 @@ export default function AuditReviewScreen() {
                     className="gap-3 py-3"
                     style={i < group.length - 1 ? RULE_BELOW : undefined}
                   >
-                    <View className="flex-row items-center gap-3">
+                    <ResponsiveRow className="flex-row items-center gap-3">
                       <ItemThumb
                         imageUrl={line.imageUrl}
                         category={line.category}
@@ -407,7 +410,7 @@ export default function AuditReviewScreen() {
                       </View>
 
                       <Badge label={STATUS_LABEL[status]} tone={STATUS_TONE[status]} />
-                    </View>
+                    </ResponsiveRow>
 
                     <View className="flex-row items-center gap-3">
                       <Text variant="label" tone="soft" className="flex-1 font-semibold">
@@ -431,7 +434,7 @@ export default function AuditReviewScreen() {
                           You had {line.expected} of these. The count did not find{' '}
                           {line.expected === 1 ? 'it' : 'any'}. Did you look?
                         </Text>
-                        <View className="flex-row gap-2">
+                        <ResponsiveRow className="flex-row gap-2">
                           <Chip
                             label="Still on the shelf"
                             selected={!line.confirmedGone}
@@ -442,7 +445,7 @@ export default function AuditReviewScreen() {
                             selected={!!line.confirmedGone}
                             onPress={() => edit(line.key, { confirmedGone: true })}
                           />
-                        </View>
+                        </ResponsiveRow>
                         <Text variant="micro" tone="soft">
                           {line.confirmedGone
                             ? `All ${line.expected} will be removed and recorded as a correction.`

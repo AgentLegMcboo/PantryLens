@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Platform } from 'react-native';
-import { useAccessibilityStore } from './accessibility';
 
 /** Prefer an opaque surface until the device's accessibility settings are known. */
 export function useOpaqueGlass() {
-  const seniorMode = useAccessibilityStore(state => state.seniorMode);
   const [opaque, setOpaque] = useState(true);
 
   useEffect(() => {
@@ -36,5 +34,7 @@ export function useOpaqueGlass() {
     return () => { active = false; listener?.remove(); };
   }, []);
 
-  return seniorMode || opaque;
+  // Text size and transparency are independent preferences. Keep larger text
+  // available with glass, but always honor the system's contrast/transparency setting.
+  return opaque;
 }

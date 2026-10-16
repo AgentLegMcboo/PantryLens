@@ -1,3 +1,4 @@
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -26,6 +27,7 @@ import { Tappable } from '../components/motion';
 const BARCODE_TYPES = ['upc_a', 'ean13', 'ean8', 'upc_e', 'itf14'] as const;
 
 export default function BarcodeScanScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { uid } = useLocalSearchParams<{ uid?: string }>();
@@ -192,7 +194,7 @@ export default function BarcodeScanScreen() {
   if (!permission?.granted) {
     return (
       <>
-        <View className="flex-1 justify-center bg-canvas">
+        <View className="flex-1 justify-center bg-transparent">
           {!permission ? (
             <ActivityIndicator color={COLORS.primaryLight} />
           ) : (

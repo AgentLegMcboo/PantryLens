@@ -1,35 +1,36 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useAppAppearance } from "../lib/appearance";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
-  StyleSheet,
+  useWindowDimensions,
   View,
-} from 'react-native';
+} from "react-native";
 import Animated, {
   Easing,
-  interpolateColor,
   ReduceMotion,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
-} from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { AuthBackdrop } from '../components/auth-layout';
-import { BrandMark } from '../components/brand-mark';
-import { BoxesMock, CameraMock, ScanMock } from '../components/onboarding-mocks';
-import { Button, Text } from '../components/ui';
-import { COLORS, fw } from '../constants/theme';
-import { useAccessibilityStore } from '../lib/accessibility';
-import { cueSuccess, cueTap } from '../lib/feedback';
-import { usePantryStore } from '../lib/store';
-
-const { width: SCREEN_W } = Dimensions.get('window');
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AuthBackdrop } from "../components/auth-layout";
+import { BrandMark } from "../components/brand-mark";
+import { AppearanceControl } from "../components/appearance-control";
+import {
+  BoxesMock,
+  CameraMock,
+  ScanMock,
+} from "../components/onboarding-mocks";
+import { Button, Text } from "../components/ui";
+import { COLORS, fw } from "../constants/theme";
+import { cueSuccess, cueTap } from "../lib/feedback";
+import { usePantryStore } from "../lib/store";
 
 /**
  * Each phase shows a live miniature of the screen it describes, so a volunteer
@@ -43,38 +44,43 @@ const { width: SCREEN_W } = Dimensions.get('window');
  */
 const PHASES = [
   {
-    key: 'camera',
+    key: "camera",
     Mock: CameraMock,
-    lead: 'Point',
-    title: 'the camera at the pantry.',
-    body: 'A donation pile or a whole shelf. Take as many photos as it needs without leaving the camera.',
-    tint: '#F6ECE2',
+    lead: "Step 1 · Take photos",
+    title: "A donation pile or a whole shelf.",
+    body: "Photograph a donation pile or a shelf. We’ll guide you through each step to make inventory simple and stress-free.",
+    tint: "#F6ECE2",
   },
   {
-    key: 'scan',
+    key: "scan",
     Mock: ScanMock,
-    lead: 'Every label',
-    title: 'read for you.',
-    body: 'PantryLens turns the photos into an item list, so nobody writes counts on paper.',
-    tint: '#F7EBDF',
+    lead: "Step 2 · Review your items",
+    title: "Your photos. An item spreadsheet.",
+    body: "PantryLens turns your photos into an item spreadsheet automatically. Check the names and quantities—no need to type every item by hand.",
+    tint: "#F7EBDF",
   },
   {
-    key: 'boxes',
+    key: "boxes",
     Mock: BoxesMock,
-    lead: 'Know',
-    title: "what's holding you back.",
-    body: 'See how many balanced boxes you can really pack, which category is blocking the rest, and exactly what to ask donors for.',
-    tint: '#F7E9E4',
+    lead: "Pack with confidence",
+    title: "See what you can pack.",
+    body: "Set limits for food close to expiry. Plan boxes with a balanced mix from your current inventory, and see exactly what’s missing.",
+    tint: "#F7E9E4",
   },
 ] as const;
 
 export default function OnboardingScreen() {
+  useAppAppearance((state) => state.scheme);
+  const { width, height } = useWindowDimensions();
+  const artworkHeight = Math.min(280, height * 0.32);
+  const artworkScale = Math.min(0.62, (width - 56) / 430, artworkHeight / 450);
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const completeOnboarding = usePantryStore(state => state.completeOnboarding);
+  const completeOnboarding = usePantryStore(
+    (state) => state.completeOnboarding,
+  );
   // Signed in only when the intro is replayed in development.
-  const signedIn = usePantryStore(state => !!state.session);
-  const seniorMode = useAccessibilityStore(s => s.seniorMode);
+  const signedIn = usePantryStore((state) => !!state.session);
   const [page, setPage] = useState(0);
 
   const isLast = page === PHASES.length - 1;
@@ -84,22 +90,22 @@ export default function OnboardingScreen() {
     // Must land before the navigation, or the root gate still sees the intro
     // as incomplete and sends us straight back here.
     await completeOnboarding();
-    router.replace(signedIn ? '/(tabs)' : '/login');
+    router.replace(signedIn ? "/(tabs)" : "/login");
   };
 
   const next = () => {
     if (isLast) return finish();
-    scrollRef.current?.scrollTo({ x: (page + 1) * SCREEN_W, animated: true });
+    scrollRef.current?.scrollTo({ x: (page + 1) * width, animated: true });
   };
 
   const skip = async () => {
     cueTap();
     await completeOnboarding();
-    router.replace(signedIn ? '/(tabs)' : '/login');
+    router.replace(signedIn ? "/(tabs)" : "/login");
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextPage = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+    const nextPage = Math.round(e.nativeEvent.contentOffset.x / width);
     if (nextPage !== page) {
       setPage(nextPage);
       cueTap();
@@ -107,15 +113,15 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <View className="flex-1 bg-canvas">
+    <View className="flex-1 bg-transparent">
       {/* The pantry photo sits far back — enough to feel like a place, not
           enough to compete with the mocks in front of it. */}
       <AuthBackdrop blurRadius={3} />
-      <PhaseTint page={page} />
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <View className="flex-row items-center justify-between px-gutter pt-2">
           <BrandMark />
+          <AppearanceControl />
 
           {!isLast && (
             <Pressable
@@ -140,57 +146,107 @@ export default function OnboardingScreen() {
           onMomentumScrollEnd={onScroll}
           className="flex-1"
         >
-          {PHASES.map(phase => {
+          {PHASES.map((phase) => {
             const Mock = phase.Mock;
+            const firstSlide = phase.key === "camera";
+            const imageHeight = firstSlide ? Math.min(260, height * 0.30) : artworkHeight;
+            const imageScale = firstSlide
+              ? Math.min(0.60, (width - 64) / 430, imageHeight / 450)
+              : artworkScale;
             return (
-              <View key={phase.key} style={{ width: SCREEN_W }} className="flex-1 px-gutter">
-                <View className="min-h-[260px] flex-1 items-center justify-center">
-                  <View className="absolute h-[268px] w-[268px] rounded-2xl border border-hairline/40 bg-card opacity-70" />
-                  <Mock />
+              <ScrollView
+                key={phase.key}
+                style={{ width }}
+                contentContainerStyle={{
+                  flexGrow: 1,
+                  justifyContent: firstSlide ? "center" : undefined,
+                  paddingHorizontal: 24,
+                  paddingTop: firstSlide ? 24 : 16,
+                  paddingBottom: firstSlide ? 24 : 28,
+                }}
+                showsVerticalScrollIndicator={false}
+              >
+                <View
+                  accessible
+                  accessibilityLabel={
+                    phase.key === "boxes"
+                      ? "Example: not enough beans. Add 12 cans to pack all 12 boxes."
+                      : undefined
+                  }
+                  style={{
+                    height: imageHeight,
+                    flexShrink: 0,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: firstSlide ? 20 : 28,
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 430,
+                      height: 430,
+                      flexShrink: 0,
+                      transform: [{ scale: imageScale }],
+                    }}
+                  >
+                    {phase.key === "boxes" ? (
+                      <BoxesMock
+                        limitLabel="Not enough beans"
+                        stockLabel="Add 12 cans for 12 boxes"
+                      />
+                    ) : (
+                      <Mock />
+                    )}
+                  </View>
                 </View>
 
-                <View className="pb-3">
+                <View style={{ gap: firstSlide ? 10 : 12, paddingBottom: firstSlide ? 0 : 12 }}>
+                  <Text
+                    variant="label"
+                    tone="brand"
+                    style={{ fontWeight: "600" }}
+                  >
+                    {phase.lead}
+                  </Text>
                   <Text
                     variant="display"
                     style={{
-                      fontSize: seniorMode ? 33 : 30,
-                      lineHeight: seniorMode ? 40 : 37,
-                      fontWeight: fw('700'),
+                      fontSize: 28,
+                      lineHeight: 34,
+                      fontWeight: fw("700"),
                       letterSpacing: -0.5,
                       color: COLORS.textPrimary,
                     }}
                   >
-                    <Text
-                      variant="display"
-                      style={{
-                        fontSize: seniorMode ? 33 : 30,
-                        lineHeight: seniorMode ? 40 : 37,
-                        fontWeight: fw('700'),
-                        color: COLORS.primaryLight,
-                      }}
-                    >
-                      {phase.lead}{' '}
-                    </Text>
                     {phase.title}
                   </Text>
-                  <Text variant="body" tone="soft" className="mt-2.5 pr-2">
+                  <Text
+                    variant="body"
+                    tone="soft"
+                    style={{ fontSize: 16, lineHeight: 24 }}
+                  >
                     {phase.body}
                   </Text>
                 </View>
-              </View>
+              </ScrollView>
             );
           })}
         </ScrollView>
 
         <View className="gap-3.5 px-gutter pb-2">
-          <View className="flex-row items-center gap-1.5">
-            {PHASES.map((p, i) => (
-              <Dot key={p.key} active={i === page} />
-            ))}
+          <View className="flex-row items-center justify-between">
+            <View className="flex-row items-center gap-1.5">
+              {PHASES.map((p, i) => (
+                <Dot key={p.key} active={i === page} />
+              ))}
+            </View>
+            <Text variant="micro" tone="soft">
+              {page + 1} of {PHASES.length}
+            </Text>
           </View>
 
           <Button
-            label={isLast ? 'Get started' : 'Next'}
+            label={isLast ? "Get started" : "Next"}
             block
             icon={
               <MaterialCommunityIcons
@@ -201,38 +257,10 @@ export default function OnboardingScreen() {
             }
             onPress={next}
           />
-
-          <Text variant="micro" tone="soft" className="text-center">
-            Built for community food pantries &amp; volunteer teams.
-          </Text>
         </View>
       </SafeAreaView>
     </View>
   );
-}
-
-/** Wash of colour that cross-fades per phase, so swiping visibly changes mood. */
-function PhaseTint({ page }: { page: number }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    // A colour cross-fade, not movement, so it plays with reduced motion too.
-    progress.value = withTiming(page, {
-      duration: 420,
-      easing: Easing.out(Easing.quad),
-      reduceMotion: ReduceMotion.Never,
-    });
-  }, [page, progress]);
-
-  const style = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      progress.value,
-      PHASES.map((_, i) => i),
-      PHASES.map(p => p.tint),
-    ),
-  }));
-
-  return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style, { opacity: 0.3 }]} />;
 }
 
 function Dot({ active }: { active: boolean }) {
@@ -257,7 +285,10 @@ function Dot({ active }: { active: boolean }) {
 
   return (
     <Animated.View
-      style={[{ height: 7, borderRadius: 4, backgroundColor: COLORS.primaryLight }, style]}
+      style={[
+        { height: 7, borderRadius: 4, backgroundColor: COLORS.primaryLight },
+        style,
+      ]}
     />
   );
 }

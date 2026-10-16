@@ -45,12 +45,12 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
     return style?.display !== 'none';
   });
   const activeKey = state.routes[state.index]?.key;
-  const activeIndex = Math.max(0, visible.findIndex((r) => r.key === activeKey));
+  const activeIndex = visible.findIndex((r) => r.key === activeKey);
   const itemWidth = visible.length ? rowWidth / visible.length : 0;
 
   const x = useSharedValue(0);
   React.useEffect(() => {
-    const target = activeIndex * itemWidth;
+    const target = Math.max(0, activeIndex) * itemWidth;
     x.value =
       reduceMotion || itemWidth === 0
         ? target
@@ -83,7 +83,7 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
         style={{ flex: 1, width: '100%', flexDirection: 'row', alignItems: 'stretch' }}
         onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
       >
-        {itemWidth > 0 && (
+        {itemWidth > 0 && activeIndex >= 0 && (
           <Animated.View
             pointerEvents="none"
             style={[
@@ -94,9 +94,9 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
                 left: PILL_INSET,
                 width: itemWidth - PILL_INSET * 2,
                 borderRadius: 16,
-                backgroundColor: COLORS.surfaceContainer,
+                backgroundColor: COLORS.primaryLight,
                 borderWidth: 1,
-                borderColor: 'rgba(156,66,38,0.16)',
+                borderColor: COLORS.primaryDeep,
               },
               pill,
             ]}
@@ -107,7 +107,7 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
           const { options } = descriptors[route.key];
           const focused = route.key === activeKey;
           const color = focused
-            ? COLORS.primary
+            ? COLORS.textOnAccent
             : seniorMode
               ? COLORS.textPrimary
               : COLORS.textSecondary;

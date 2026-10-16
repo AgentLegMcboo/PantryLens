@@ -83,7 +83,7 @@ function AddFolderField({
           name.trim() && !busy ? '' : 'opacity-40'
         }`}
       >
-        <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
+        <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnAccent} />
       </Tappable>
       {onCancel ? (
         <Tappable

@@ -110,13 +110,14 @@ export function Button({
       {...props}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={solid ? '#FFFFFF' : COLORS.primaryDark} />
+        <ActivityIndicator size="small" color={variant === 'primary' ? COLORS.textOnAccent : solid ? '#FFFFFF' : COLORS.primaryDark} />
       ) : (
         <>
-          {icon ? <View>{icon}</View> : null}
+          {icon ? <View>{variant === 'primary' && React.isValidElement<{ color?: string }>(icon) ? React.cloneElement(icon, { color: COLORS.textOnAccent }) : icon}</View> : null}
           <Text
             variant={size === 'compact' ? 'label' : 'body'}
             tone={labelTone[variant ?? 'primary']}
+            style={variant === 'primary' ? { color: COLORS.textOnAccent } : undefined}
             // Bold and slightly tracked, as in the reference. Not uppercased —
             // "CHECK" carries that well, "PHOTOGRAPH A DONATION" shouts.
             className="shrink text-center font-semibold"

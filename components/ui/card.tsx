@@ -2,6 +2,7 @@ import * as React from 'react';
 import { View, type ViewProps } from 'react-native';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
+import { ResponsiveRow } from './responsive-row';
 
 /**
  * The surface almost everything sits on.
@@ -78,7 +79,7 @@ export function CardHeader({
   className?: string;
 }) {
   return (
-    <View className={cn('mb-4 flex-row items-start justify-between gap-3', className)}>
+    <ResponsiveRow className={cn('mb-4 gap-3', className)}>
       <View className="flex-1">
         <Text variant="heading">{title}</Text>
         {subtitle ? (
@@ -88,6 +89,6 @@ export function CardHeader({
         ) : null}
       </View>
       {right}
-    </View>
+    </ResponsiveRow>
   );
 }

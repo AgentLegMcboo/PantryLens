@@ -2,6 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { View } from 'react-native';
 import { COLORS, fw } from '../../constants/theme';
+import { useAppAppearance } from '../../lib/appearance';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccessibilityStore } from '../../lib/accessibility';
 import { AppHeader } from '../../components/app-header';
@@ -9,6 +10,7 @@ import { TabOverlayInsetContext } from '../../lib/tab-overlay';
 import { SlidingTabBar, TAB_BAR_BODY, TAB_BAR_BODY_SENIOR } from '../../components/sliding-tab-bar';
 
 export default function TabLayout() {
+  useAppAppearance(state => state.scheme);
   const insets = useSafeAreaInsets();
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
   const barBodyHeight = seniorMode ? TAB_BAR_BODY_SENIOR : TAB_BAR_BODY;
@@ -20,7 +22,8 @@ export default function TabLayout() {
         // Warm glass material with a persistent selected-tab highlight.
         tabBar={(props) => <SlidingTabBar {...props} />}
         screenOptions={{
-          tabBarActiveTintColor: COLORS.primary,
+          sceneStyle: { backgroundColor: 'transparent' },
+          tabBarActiveTintColor: COLORS.primaryDark,
           tabBarInactiveTintColor: seniorMode ? COLORS.textPrimary : COLORS.textSecondary,
           tabBarStyle: {
             position: 'absolute',
@@ -73,7 +76,7 @@ export default function TabLayout() {
         <Tabs.Screen
           name="build"
           options={{
-            title: 'Build',
+            title: 'Boxes',
             tabBarIcon: ({ focused, color, size }) => (
               <MaterialCommunityIcons
                 name={focused ? "cube" : "cube-outline"}

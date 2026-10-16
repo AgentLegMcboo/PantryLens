@@ -9,13 +9,13 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withDelay,
+  cancelAnimation,
   ReduceMotion,
   useReducedMotion,
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { COLORS, FONTS, fw } from "../constants/theme";
+import { COLORS, fw } from "../constants/theme";
 import { cueTap } from "../lib/feedback";
 
 const { width: W, height: H } = Dimensions.get("window");
@@ -167,7 +167,7 @@ export function BrandSplash({
       pointerEvents={SPLASH_DEBUG ? "auto" : "none"}
     >
       <LinearGradient
-        colors={[COLORS.primaryLight, COLORS.primary, COLORS.primaryDark]}
+        colors={[COLORS.primaryLight, COLORS.primary, COLORS.primaryDeep]}
         locations={[0, 0.55, 1]}
         style={StyleSheet.absoluteFill}
       />
@@ -227,22 +227,22 @@ type Falling = {
   w: number;
   /** Milliseconds for one full top-to-bottom pass. */
   fall: number;
-  /** Milliseconds before this can first enters. */
-  delay: number;
+  /** Seed across the screen so even a fast launch shows the can wash. */
+  phase: number;
   rot: number;
   op: number;
 };
 
 const FALLING: Falling[] = [
-  { x: 0.08, w: 40, fall: 1500, delay: 0, rot: -18, op: 0.26 },
-  { x: 0.78, w: 46, fall: 1750, delay: 120, rot: 14, op: 0.24 },
-  { x: 0.44, w: 32, fall: 1320, delay: 240, rot: 22, op: 0.19 },
-  { x: 0.24, w: 50, fall: 1950, delay: 360, rot: -11, op: 0.21 },
-  { x: 0.9, w: 30, fall: 1240, delay: 480, rot: 18, op: 0.22 },
-  { x: 0.6, w: 44, fall: 1640, delay: 620, rot: -20, op: 0.19 },
-  { x: 0.02, w: 28, fall: 1180, delay: 760, rot: 12, op: 0.18 },
-  { x: 0.68, w: 36, fall: 1440, delay: 900, rot: -15, op: 0.18 },
-  { x: 0.34, w: 42, fall: 1820, delay: 1040, rot: 16, op: 0.18 },
+  { x: 0.08, w: 40, fall: 1500, phase: 0.16, rot: -18, op: 0.48 },
+  { x: 0.78, w: 46, fall: 1750, phase: 0.72, rot: 14, op: 0.46 },
+  { x: 0.44, w: 32, fall: 1320, phase: 0.38, rot: 22, op: 0.38 },
+  { x: 0.24, w: 50, fall: 1950, phase: 0.90, rot: -11, op: 0.44 },
+  { x: 0.9, w: 30, fall: 1240, phase: 0.28, rot: 18, op: 0.42 },
+  { x: 0.6, w: 44, fall: 1640, phase: 0.58, rot: -20, op: 0.40 },
+  { x: 0.02, w: 28, fall: 1180, phase: 0.48, rot: 12, op: 0.36 },
+  { x: 0.68, w: 36, fall: 1440, phase: 0.20, rot: -15, op: 0.38 },
+  { x: 0.34, w: 42, fall: 1820, phase: 0.80, rot: 16, op: 0.38 },
 ];
 
 /**
@@ -298,33 +298,35 @@ function CanShape() {
 const CAN_RATIO = 1.34;
 
 function FallingItem({ cfg }: { cfg: Falling }) {
-  const p = useSharedValue(0);
+  const p = useSharedValue(cfg.phase);
 
   useEffect(() => {
-    p.value = withDelay(
-      cfg.delay,
-      withRepeat(
-        // Accelerating, like something actually dropping.
-        withTiming(1, { duration: cfg.fall, easing: Easing.in(Easing.quad) }),
-        -1,
-        false,
-      ),
+    p.value = cfg.phase;
+    p.value = withRepeat(
+      withTiming(cfg.phase + 1, { duration: cfg.fall, easing: Easing.linear }),
+      -1,
+      false,
     );
+    return () => cancelAnimation(p);
   }, [cfg, p]);
 
   const h = cfg.w * CAN_RATIO;
   // Starts fully off the top and ends fully past the bottom — never mid-screen.
   const travel = H + h * 2 + 120;
 
-  const style = useAnimatedStyle(() => ({
+  const style = useAnimatedStyle(() => {
+    // Wrap at the edge of the screen, not at each can's seeded start position.
+    const phase = p.value % 1;
+    return {
     // Fades in on entry and out before it wraps, so the reset is never visible.
-    opacity: interpolate(p.value, [0, 0.12, 0.85, 1], [0, cfg.op, cfg.op, 0]),
+    opacity: interpolate(phase, [0, 0.12, 0.85, 1], [0, cfg.op, cfg.op, 0]),
     transform: [
-      { translateY: -h - 100 + p.value * travel },
+      { translateY: -h - 100 + phase * travel },
       // Keeps turning the whole way down — it is falling, not landing.
-      { rotate: `${cfg.rot * (0.4 + p.value)}deg` },
+      { rotate: `${cfg.rot * (0.4 + phase)}deg` },
     ],
-  }));
+    };
+  });
 
   return (
     <Animated.View
@@ -358,7 +360,7 @@ const styles = StyleSheet.create({
     fontSize: 30,
     fontWeight: fw('800'),
     letterSpacing: -0.6,
-    color: COLORS.textOnPrimary,
+    color: COLORS.textOnAccent,
   },
   tag: {
     marginTop: 6,
