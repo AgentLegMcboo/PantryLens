@@ -118,7 +118,7 @@ export default function AuditReviewScreen() {
       <Screen>
         <EmptyState
           icon="clipboard-search-outline"
-          title="No count in progress"
+          title="No stock check in progress"
           body="Start from Audit a shelf, take your photos, and the count lands here."
           actionLabel="Count a shelf"
           actionVariant="primary"

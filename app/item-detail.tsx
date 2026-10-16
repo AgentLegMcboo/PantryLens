@@ -9,12 +9,11 @@ import { FadeInUp, Tappable } from '../components/motion';
 import {
   Button,
   Card,
-  CardHeader,
   Chip,
   EmptyState,
+  InfoLabel,
   Input,
   ItemThumb,
-  Panel,
   Stepper,
   Text,
 } from '../components/ui';
@@ -225,10 +224,10 @@ export default function ItemDetailScreen() {
   const usable = isUsableCondition(condition);
 
   return (
-    <KeyboardScreen>
+    <KeyboardScreen contentContainerClassName="gap-3 pt-4">
       <FadeInUp index={0}>
-        <Card className="gap-5">
-          <View className="flex-row items-center gap-4">
+        <Card className="gap-3.5 p-4">
+          <View className="flex-row items-center gap-3">
             <Tappable
               onPress={handlePhotoPress}
               disabled={photoBusy}
@@ -255,8 +254,10 @@ export default function ItemDetailScreen() {
               </View>
             </Tappable>
             <View className="flex-1">
+              <Text variant="label" className="mb-1.5 font-bold">
+                Name
+              </Text>
               <Input
-                label="What is it?"
                 value={name}
                 onChangeText={setName}
                 placeholder="Canned black beans 15 oz"
@@ -265,13 +266,14 @@ export default function ItemDetailScreen() {
           </View>
 
           <View className="gap-2">
-            <Text variant="label" tone="soft" className="font-semibold">
+            <Text variant="label" className="font-bold">
               Category
             </Text>
             <View className="flex-row flex-wrap gap-2">
               {CATEGORIES.map(cat => (
                 <Chip
                   key={cat}
+                  className="min-h-[40px] px-3 py-1.5"
                   label={cat.charAt(0).toUpperCase() + cat.slice(1)}
                   selected={category === cat}
                   onPress={() => setCategory(cat)}
@@ -283,51 +285,49 @@ export default function ItemDetailScreen() {
       </FadeInUp>
 
       <FadeInUp index={1}>
-        <Card className="gap-5">
+        <Card className="gap-3.5 p-4">
           <View className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
-              <Text variant="body" className="font-semibold">
-                How many on the shelf?
-              </Text>
-              <Text variant="micro" tone="soft" className="mt-0.5">
-                Counting down to zero removes the item.
-              </Text>
+              <InfoLabel
+                variant="body"
+                label="On the shelf"
+                tip="Counting down to zero takes the item off the shelf."
+              />
             </View>
             <Stepper value={count} min={0} onChange={setCount} />
           </View>
 
-          <Input
-            label="Date printed on it"
-            value={expiration}
-            onChangeText={setExpiration}
-            placeholder="YYYY-MM-DD"
-            hint="Leave it blank if there is no date to read."
-          />
+          <View className="gap-1.5">
+            <Text variant="label" className="font-bold">
+              Best by
+            </Text>
+            <Input
+              value={expiration}
+              onChangeText={setExpiration}
+              placeholder="2027-06-30 · blank if there's no date"
+            />
+          </View>
 
           {locations.length > 0 ? (
             <View className="gap-2">
-              <Text variant="label" tone="soft" className="font-semibold">
-                Where does it live?
+              <Text variant="label" className="font-bold">
+                Shelf
               </Text>
               <View className="flex-row flex-wrap gap-2">
                 {orderShelves(locations).map(({ loc, label }) => (
                   <Chip
                     key={loc.id}
+                    className="min-h-[40px] px-3 py-1.5"
                     label={label}
                     selected={locationId === loc.id}
                     onPress={() => setLocationId(locationId === loc.id ? null : loc.id)}
                   />
                 ))}
               </View>
-              <Text variant="micro" tone="soft">
-                {locationId
-                  ? 'Saved with the rest of your changes.'
-                  : 'Not filed anywhere yet.'}
-              </Text>
             </View>
           ) : (
             <Text variant="micro" tone="soft">
-              Add shelves and bins in Settings to file this somewhere.
+              No shelves yet. Add them from Inventory to file this somewhere.
             </Text>
           )}
         </Card>
@@ -338,10 +338,11 @@ export default function ItemDetailScreen() {
           stuck that way for good, and the shelf slowly filled with stock the
           allocator refused to touch. */}
       <FadeInUp index={2}>
-        <Card>
-          <CardHeader
-            title="Is it fit to give out?"
-            subtitle="Anything but Good is held back from every box until someone clears it."
+        <Card className="gap-2.5 p-4">
+          <InfoLabel
+            variant="body"
+            label="Fit to give out?"
+            tip="Anything but Good is held out of every box until someone marks it Good again."
           />
 
           <View className="flex-row flex-wrap gap-2">
@@ -353,13 +354,9 @@ export default function ItemDetailScreen() {
                   key={cond}
                   label={CONDITION_LABELS[cond]}
                   selected={active}
-                  className={
-                    active
-                      ? good
-                        ? 'border-good bg-good'
-                        : 'border-critical bg-critical'
-                      : undefined
-                  }
+                  className={`${'min-h-[40px] px-3 py-1.5'} ${
+                    active ? (good ? 'border-good bg-good' : 'border-critical bg-critical') : ''
+                  }`}
                   onPress={() => {
                     (good ? cueTap : cueWarn)();
                     setCondition(cond);
@@ -370,16 +367,16 @@ export default function ItemDetailScreen() {
           </View>
 
           {!usable && (
-            <Panel className="mt-4 flex-row gap-3">
+            <View className="flex-row items-center gap-2">
               <MaterialCommunityIcons
                 name="alert-circle-outline"
-                size={18}
+                size={16}
                 color={COLORS.statusCritical}
               />
-              <Text variant="label" tone="critical" className="flex-1">
-                Held out of box building until someone marks it Good again.
+              <Text variant="micro" tone="critical" className="flex-1 font-bold">
+                Held out of boxes until someone marks it Good.
               </Text>
-            </Panel>
+            </View>
           )}
         </Card>
       </FadeInUp>
@@ -390,23 +387,19 @@ export default function ItemDetailScreen() {
           whoever is holding the tin — and they are the two that decide whether a
           parcel is food or a problem for someone living in a car. */}
       <FadeInUp index={3}>
-        <Card>
-          <CardHeader
-            title="Who can eat it"
-            subtitle="Used to build boxes for households with an allergy, a diet, or nowhere to cook."
+        <Card className="gap-3 p-4">
+          <InfoLabel
+            variant="body"
+            label="Who can eat it"
+            tip={'Used to build boxes for households with an allergy, a diet, or nowhere to cook. Tick only what you know: unticked means nobody checked, never that the food is free of it.'}
           />
 
           {DIET_TAG_GROUPS.map((group, groupIndex) => (
             <View
               key={group.title}
-              className={groupIndex < DIET_TAG_GROUPS.length - 1 ? 'gap-2 pb-4' : 'gap-2'}
+              className="gap-1.5"
             >
-              <Text variant="label" className="font-semibold">
-                {group.title}
-              </Text>
-              <Text variant="micro" tone="soft">
-                {group.hint}
-              </Text>
+              <InfoLabel label={group.title} tip={group.hint} />
               <View className="flex-row flex-wrap gap-2">
                 {group.tags.map(tag => {
                   const on = dietTags.includes(tag);
@@ -415,7 +408,7 @@ export default function ItemDetailScreen() {
                       key={tag}
                       label={DIET_TAG_LABELS[tag]}
                       selected={on}
-                      className={on && isAllergenTag(tag) ? 'border-warn bg-warn' : undefined}
+                      className={`min-h-[40px] px-3 py-1.5 ${on && isAllergenTag(tag) ? 'border-warn bg-warn' : ''}`}
                       onPress={() => {
                         cueTap();
                         setDietTags(prev =>
@@ -429,17 +422,6 @@ export default function ItemDetailScreen() {
             </View>
           ))}
 
-          <Panel className="mt-2 flex-row gap-3">
-            <MaterialCommunityIcons
-              name="information-outline"
-              size={18}
-              color={COLORS.textSecondary}
-            />
-            <Text variant="micro" tone="soft" className="flex-1">
-              Ticking something means you know it is true. Leaving it unticked means nobody has
-              checked — never that the food is free of it.
-            </Text>
-          </Panel>
         </Card>
       </FadeInUp>
 
@@ -455,8 +437,8 @@ export default function ItemDetailScreen() {
       </FadeInUp>
 
       <FadeInUp index={4}>
-        <View className="gap-3">
-          <Button label="Save changes" block onPress={handleSave} />
+        <View className="gap-1">
+          <Button label="Save changes" block className="rounded-md" onPress={handleSave} />
           <Button
             label="Remove from the shelf"
             variant="criticalGhost"

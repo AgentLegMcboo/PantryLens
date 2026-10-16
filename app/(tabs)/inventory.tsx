@@ -154,7 +154,7 @@ const SORTS = [
  * row only re-renders when its own props change.
  */
 const ROW_EDGE = { borderWidth: 1, borderColor: "rgba(224,205,187,0.7)" } as const;
-const SELECTED_EDGE = { borderWidth: 1, borderColor: COLORS.primary } as const;
+const SELECTED_EDGE = { borderWidth: 1.5, borderColor: COLORS.primary } as const;
 
 const InventoryRow = React.memo(function InventoryRow({
   item,
@@ -218,9 +218,8 @@ const InventoryRow = React.memo(function InventoryRow({
           one — "No expiry recorded" on every tin of soap was just noise. */}
       <View
         className={
-          isSelected
-            ? "mb-2 rounded-lg bg-subtle px-3.5 py-3"
-            : "mb-2 rounded-lg bg-card px-3.5 py-3"
+          // Selected keeps the white card; only the edge changes.
+          "mb-2 rounded-lg bg-card px-3.5 py-3"
         }
         // A lighter edge than other cards: in a long list a full-strength
         // outline on every row adds up to a lot of lines.
@@ -322,9 +321,10 @@ const InventoryRow = React.memo(function InventoryRow({
     </GestureDetector>
   );
 
-  // Swiping while picking would fight the selection, so the gesture is only
-  // live when a tap means "open this".
-  if (picking) return row;
+  // Swiping while picking would fight the selection, so it is switched off
+  // then, not removed. Removing it swapped every row's wrapper on entering or
+  // leaving selection, which rebuilt each visible row (photo, gesture,
+  // stepper) and made Select, the X, and picking feel stuck.
 
   // Captured from renderLeftActions so the row can be sprung shut again once
   // the sheet takes over — otherwise it sits open behind it and stays open if
@@ -333,6 +333,7 @@ const InventoryRow = React.memo(function InventoryRow({
 
   return (
     <ReanimatedSwipeable
+      enabled={!picking}
       friction={2}
       leftThreshold={SWIPE_WIDTH * 0.6}
       overshootLeft={false}
@@ -1008,6 +1009,9 @@ export default function InventoryScreen() {
               <Chip
                 label={item.label}
                 selected={selectedCategory === item.id}
+                // A tad smaller than the default chip: this row scrolls
+                // sideways at the top of the list and was taking up a lot of it.
+                className="min-h-[40px] px-3.5 py-1.5"
                 onPress={() => setSelectedCategory(item.id)}
               />
             )}

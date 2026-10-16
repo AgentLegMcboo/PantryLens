@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Alert, FlatList, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RULE_ABOVE } from '../constants/theme';
@@ -16,6 +16,7 @@ import {
   usePantryStore,
 } from '../lib/store';
 import { shelfLabels } from '../lib/shelves';
+import { notificationKeys, useReadNotifications } from '../lib/notifications';
 
 /** How a window of days should read: past, this week, or merely soon. */
 function urgency(days: number) {
@@ -43,6 +44,15 @@ export default function ExpiringSoonScreen() {
   // Damaged or flagged stock: held out of every box until someone clears it.
   // Inventory and Build show a closable banner for this; it always lives here.
   const heldBack = inventory.filter(i => i.count > 0 && !isUsableCondition(i.condition));
+
+  // Seeing this page reads every notification on it, so the bell clears.
+  const markRead = useReadNotifications(s => s.markRead);
+  const loadRead = useReadNotifications(s => s.load);
+  useEffect(() => {
+    if (!settings.pantryId) return;
+    loadRead(settings.pantryId);
+    markRead(notificationKeys(inventory, settings.expirationWarningDays));
+  }, [settings.pantryId, inventory, settings.expirationWarningDays, loadRead, markRead]);
 
   const handleDisposition = (reason: ExitReason) => {
     if (!exitItem) return;

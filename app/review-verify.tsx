@@ -83,7 +83,13 @@ const CATEGORIES = ['grain', 'vegetable', 'protein', 'breakfast', 'snack', 'hygi
 
 export default function ReviewVerifyScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ source?: string }>();
+  const params = useLocalSearchParams<{ source?: string; audit?: string }>();
+  /**
+   * Set when this review is part of a stock check: the confirmed items are
+   * then compared with what the books say for that shelf (audit-review)
+   * instead of being added to inventory.
+   */
+  const auditLocation = params.audit ?? null;
   const {
     currentDraft,
     currentScanPhotos,
@@ -97,6 +103,7 @@ export default function ReviewVerifyScreen() {
     setPendingBarcode,
     currentScan,
     setCurrentScan,
+    setAuditDraft,
   } = usePantryStore();
   const seniorMode = useAccessibilityStore((s) => s.seniorMode);
 
@@ -574,6 +581,24 @@ export default function ReviewVerifyScreen() {
     }
   };
 
+  /** Stock check: hand the confirmed counts to the shelf comparison. */
+  const toShelfCheck = () => {
+    if (!auditLocation) return;
+    setAuditDraft({
+      locationId: auditLocation,
+      photos: currentScanPhotos.length,
+      counted: draftItems.map((row) => ({
+        name: row.name ?? '',
+        category: (row.category as any) ?? null,
+        count: row.count ?? 1,
+        expiration: row.expiration ?? null,
+        // A line the volunteer confirmed is as certain as it gets.
+        confidence: verifiedIds[row.uid] ? 1 : row.confidence,
+      })),
+    });
+    router.replace('/audit-review');
+  };
+
   const handleSaveToInventory = () => {
     if (draftItems.length === 0 || saving) return;
 
@@ -599,12 +624,17 @@ export default function ReviewVerifyScreen() {
         'Tap a glowing box to check it against the photo, or save everything as the scanner read it.',
         [
           { text: 'Keep checking', style: 'cancel' },
-          { text: 'Save anyway', style: 'destructive', onPress: commit },
+          {
+            text: auditLocation ? 'Continue anyway' : 'Save anyway',
+            style: 'destructive',
+            onPress: auditLocation ? toShelfCheck : commit,
+          },
         ],
       );
       return;
     }
-    commit();
+    if (auditLocation) toShelfCheck();
+    else commit();
   };
 
   if (draftItems.length === 0) {
@@ -758,7 +788,7 @@ export default function ReviewVerifyScreen() {
           <Text variant="body" className="font-bold">
             {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
           </Text>
-          {locations.length > 0 && (
+          {locations.length > 0 && !auditLocation && (
             <Tappable
               onPress={() => {
                 cueTap();
@@ -1147,15 +1177,19 @@ export default function ReviewVerifyScreen() {
           </View>
           <View className="flex-[2]">
             <Button
-              label={`Add ${draftItems.length}`}
-              accessibilityLabel={`Add ${draftItems.length} ${draftItems.length === 1 ? 'item' : 'items'} to inventory`}
+              label={auditLocation ? `Check ${draftItems.length}` : `Add ${draftItems.length}`}
+              accessibilityLabel={
+                auditLocation
+                  ? `Check ${draftItems.length} against the shelf`
+                  : `Add ${draftItems.length} ${draftItems.length === 1 ? 'item' : 'items'} to inventory`
+              }
               block
               variant={allVerified ? 'primary' : 'secondary'}
               loading={saving}
               className="px-3"
               icon={
                 <MaterialCommunityIcons
-                  name="tray-arrow-down"
+                  name={auditLocation ? 'clipboard-check-outline' : 'tray-arrow-down'}
                   size={19}
                   color={allVerified ? COLORS.textOnPrimary : COLORS.textPrimary}
                 />

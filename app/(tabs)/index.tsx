@@ -14,6 +14,7 @@ import {
   AnimatedCounter,
   FadeInUp,
   ProgressBar,
+  PRESS_SCALE_ROW,
   Tappable,
 } from "../../components/motion";
 import {
@@ -185,6 +186,7 @@ export default function DashboardScreen() {
 
   return (
     <Screen contentContainerClassName="gap-5">
+
       {/* ZONE 1: Unified Intake & Shelf Tools — everything a volunteer does when food arrives */}
       <FadeInUp index={0}>
         <View className="gap-3">
@@ -315,7 +317,7 @@ export default function DashboardScreen() {
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Count Shelves. Photograph a shelf to reconcile stock."
+              accessibilityLabel="Stock check. Fix a shelf's numbers by photographing it."
               onPress={() => {
                 cueTap();
                 router.push("/shelf-audit");
@@ -342,10 +344,10 @@ export default function DashboardScreen() {
                 />
               </View>
               <Text variant="heading" className="mt-2.5 font-bold">
-                Count Shelf
+                Stock check
               </Text>
               <Text variant="label" tone="soft" className="mt-0.5">
-                Re-count any bin
+                Fix a shelf's numbers
               </Text>
             </Pressable>
           </View>

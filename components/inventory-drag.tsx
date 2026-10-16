@@ -287,14 +287,14 @@ function Tray({
                         : "folder-outline"
                 }
                 size={20}
-                color={on ? COLORS.textOnPrimary : here ? COLORS.textSecondary : COLORS.secondaryDark}
+                color={on ? COLORS.primary : here ? COLORS.textSecondary : COLORS.secondaryDark}
               />
               <View className="flex-1">
                 {p.parent ? (
                   <Text
                     variant="micro"
                     numberOfLines={1}
-                    style={{ color: on ? COLORS.textOnPrimary : COLORS.textSecondary }}
+                    style={{ color: on ? COLORS.primaryDark : COLORS.textSecondary }}
                   >
                     {p.parent}
                   </Text>
@@ -304,7 +304,7 @@ function Tray({
                   numberOfLines={1}
                   className="font-bold"
                   style={{
-                    color: on ? COLORS.textOnPrimary : here ? COLORS.textSecondary : COLORS.textPrimary,
+                    color: on ? COLORS.primaryDark : here ? COLORS.textSecondary : COLORS.textPrimary,
                   }}
                 >
                   {p.name}
@@ -363,9 +363,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "transparent",
   },
+  // The shelf under the finger: the brand's warm tint with an orange edge,
+  // not a solid fill, so it reads as "here" without shouting.
   placeOn: {
-    backgroundColor: COLORS.secondaryDark,
-    borderColor: COLORS.secondaryDark,
+    backgroundColor: "#F6E6DC",
+    borderColor: COLORS.primary,
     transform: [{ scale: 1.04 }],
   },
   // Solid grey, not see-through: the dimmed page shouldn't show through it.

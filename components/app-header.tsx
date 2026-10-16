@@ -12,9 +12,9 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
-import { windowEndISO } from '../lib/expiry';
 import { cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
+import { useUnreadCount } from '../lib/notifications';
 import { offlineQueue } from '../lib/offline-queue';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { PRESS_SCALE_ROW, Tappable } from './motion';
@@ -49,12 +49,12 @@ export function AppHeader({ title }: { title: string }) {
     return offlineQueue.subscribe((count) => setPendingCount(count));
   }, []);
 
-  // Same ISO window the Expiring Soon screen and dashboard use, so the badge
-  // never disagrees with the screen it opens.
-  const warningStr = windowEndISO(settings.expirationWarningDays);
-  const expiringCount = inventory.filter(
-    (i) => i.count > 0 && !!i.expiration && i.expiration <= warningStr,
-  ).length;
+  // Unread notifications: opening the Notifications page marks them read.
+  const unreadCount = useUnreadCount(
+    settings.pantryId,
+    inventory,
+    settings.expirationWarningDays,
+  );
 
   const close = () => {
     setMenuOpen(false);
@@ -171,7 +171,7 @@ export function AppHeader({ title }: { title: string }) {
           <HeaderButton
             icon="bell-outline"
             label="Notifications"
-            badge={expiringCount}
+            badge={unreadCount}
             onPress={() => router.push('/expiring-soon')}
           />
           <HeaderButton
@@ -352,11 +352,16 @@ function CountBadge({ count }: { count: number }) {
   const style = useAnimatedStyle(() => ({ transform: [{ scale: scale.value }] }));
 
   return (
+    // Red, outlined in white, so it reads from across the room: the point is
+    // that nobody has to remember to check the bell.
     <Animated.View
-      style={style}
-      className="absolute -right-1 -top-1 min-w-[20px] items-center justify-center rounded-md bg-warn px-1.5 py-0.5"
+      style={[
+        style,
+        { backgroundColor: COLORS.statusCritical, borderWidth: 2, borderColor: COLORS.cardSurface },
+      ]}
+      className="absolute -right-2 -top-2 min-h-[24px] min-w-[24px] items-center justify-center rounded-full px-1.5"
     >
-      <Text variant="micro" tone="on" className="font-bold">
+      <Text variant="micro" tone="on" className="font-extrabold" style={{ fontSize: 12, lineHeight: 15 }}>
         {count > 99 ? '99+' : count}
       </Text>
     </Animated.View>
