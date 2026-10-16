@@ -6,7 +6,6 @@ import { useAppAppearance, type AppAppearance } from '../lib/appearance';
 import { Tappable } from './motion';
 import { Sheet } from './ui/sheet';
 import { Row } from './ui/row';
-import { GlassBackdrop } from './ui/glass-surface';
 
 export function AppearanceControl() {
   const { mode, setMode } = useAppAppearance();
@@ -17,8 +16,7 @@ export function AppearanceControl() {
     { mode: 'dark', label: 'Dark', icon: 'weather-night', hint: 'Always use the dark palette' },
   ];
   return <>
-    <Tappable accessibilityRole="button" accessibilityLabel={`Appearance: ${mode}. Choose Light, Dark, or Automatic`} onPress={() => setOpen(true)} className="h-12 w-12 items-center justify-center rounded-full bg-transparent">
-      <GlassBackdrop radius={24} material="clear" />
+    <Tappable accessibilityRole="button" accessibilityLabel={`Appearance: ${mode}. Choose Light, Dark, or Automatic`} onPress={() => setOpen(true)} className="h-12 w-12 items-center justify-center rounded-full border border-outline bg-canvas">
       <MaterialCommunityIcons name={choices.find(c => c.mode === mode)!.icon} size={22} color={COLORS.textPrimary} />
     </Tappable>
     <Sheet visible={open} onClose={() => setOpen(false)} title="Appearance">

@@ -274,7 +274,7 @@ export function CameraMock() {
         </View>
       }
       topRight={<Tag icon="camera-outline" label="2 photos" />}
-      bottomLeft={<Tag icon="hand-heart-outline" label="Grocery rescue" />}
+      bottomLeft={<Tag icon="hand-heart-outline" label="Pantry rescue" />}
     />
   );
 }
@@ -324,7 +324,7 @@ export function ScanMock() {
         </Card>
       }
       topRight={<Tag icon="camera-outline" label="1 photo" />}
-      bottomLeft={<Tag icon="hand-heart-outline" label="Grocery rescue" />}
+      bottomLeft={<Tag icon="hand-heart-outline" label="Pantry rescue" />}
     />
   );
 }

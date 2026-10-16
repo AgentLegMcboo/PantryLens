@@ -290,7 +290,7 @@ export function Sheet({
               style={[{ width: '100%', maxWidth: 640, alignSelf: 'center', maxHeight: screenHeight * 0.85, flexShrink: 1, backgroundColor: 'transparent', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }, sheetStyle]}
               className={cn('max-h-[85%] shrink rounded-t-lg', className)}
             >
-              <GlassBackdrop radius={28} material="regular" />
+              <GlassBackdrop radius={28} material="sheet" />
               {/* The grabber. It means what it looks like now. Generously
                   padded, because the thing you grab should be bigger than the
                   thing you see. */}

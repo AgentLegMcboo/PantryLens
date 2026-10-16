@@ -55,7 +55,7 @@ const PHASES = [
     key: "scan",
     Mock: ScanMock,
     lead: "Step 2 · Review your items",
-    title: "Your photos. An item spreadsheet.",
+    title: "Your photos → An item spreadsheet.",
     body: "PantryLens turns your photos into an item spreadsheet automatically. Check the names and quantities—no need to type every item by hand.",
     tint: "#F7EBDF",
   },
@@ -63,7 +63,7 @@ const PHASES = [
     key: "boxes",
     Mock: BoxesMock,
     lead: "Pack with confidence",
-    title: "See what you can pack.",
+    title: "Build balanced boxes.",
     body: "Set limits for food close to expiry. Plan boxes with a balanced mix from your current inventory, and see exactly what’s missing.",
     tint: "#F7E9E4",
   },
@@ -72,8 +72,8 @@ const PHASES = [
 export default function OnboardingScreen() {
   useAppAppearance((state) => state.scheme);
   const { width, height } = useWindowDimensions();
-  const artworkHeight = Math.min(280, height * 0.32);
-  const artworkScale = Math.min(0.62, (width - 56) / 430, artworkHeight / 450);
+  const [viewportHeight, setViewportHeight] = useState(height * 0.7);
+  const [copyHeights, setCopyHeights] = useState<Record<string, number>>({});
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
   const completeOnboarding = usePantryStore(
@@ -144,25 +144,26 @@ export default function OnboardingScreen() {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={onScroll}
+          onLayout={event => setViewportHeight(event.nativeEvent.layout.height)}
           className="flex-1"
         >
           {PHASES.map((phase) => {
             const Mock = phase.Mock;
-            const firstSlide = phase.key === "camera";
-            const imageHeight = firstSlide ? Math.min(260, height * 0.30) : artworkHeight;
-            const imageScale = firstSlide
-              ? Math.min(0.60, (width - 64) / 430, imageHeight / 450)
-              : artworkScale;
+            // Use the space left by the actual text, not a fixed picture size.
+            // On compact screens or with larger text, the page can still scroll.
+            const copyHeight = copyHeights[phase.key] ?? 220;
+            const imageHeight = Math.min(360, Math.max(200, viewportHeight - copyHeight - 64));
+            const imageScale = Math.min(0.8, (width - 56) / 430, imageHeight / 450);
             return (
               <ScrollView
                 key={phase.key}
                 style={{ width }}
                 contentContainerStyle={{
                   flexGrow: 1,
-                  justifyContent: firstSlide ? "center" : undefined,
+                  justifyContent: "center",
                   paddingHorizontal: 24,
-                  paddingTop: firstSlide ? 24 : 16,
-                  paddingBottom: firstSlide ? 24 : 28,
+                  paddingTop: 20,
+                  paddingBottom: 20,
                 }}
                 showsVerticalScrollIndicator={false}
               >
@@ -178,7 +179,7 @@ export default function OnboardingScreen() {
                     flexShrink: 0,
                     alignItems: "center",
                     justifyContent: "center",
-                    marginBottom: firstSlide ? 20 : 28,
+                    marginBottom: 24,
                   }}
                 >
                   <View
@@ -200,7 +201,11 @@ export default function OnboardingScreen() {
                   </View>
                 </View>
 
-                <View style={{ gap: firstSlide ? 10 : 12, paddingBottom: firstSlide ? 0 : 12 }}>
+                <View style={{ gap: 12 }} onLayout={event => {
+                  const measuredHeight = event.nativeEvent.layout.height;
+                  setCopyHeights(previous => Math.abs((previous[phase.key] ?? 0) - measuredHeight) < 1
+                    ? previous : { ...previous, [phase.key]: measuredHeight });
+                }}>
                   <Text
                     variant="label"
                     tone="brand"

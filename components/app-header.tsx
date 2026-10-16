@@ -23,7 +23,6 @@ import { Sheet } from './ui/sheet';
 import { Text } from './ui/text';
 import { AppMap } from './app-map';
 import { AppearanceControl } from './appearance-control';
-import { GlassBackdrop } from './ui/glass-surface';
 import { useAppAppearance } from '../lib/appearance';
 
 /**
@@ -297,9 +296,8 @@ function HeaderButton({
         cueTap();
         onPress();
       }}
-      className="h-12 w-12 items-center justify-center rounded-full bg-transparent"
+      className="h-12 w-12 items-center justify-center rounded-full border border-outline bg-canvas"
     >
-      <GlassBackdrop radius={24} material="clear" />
       <MaterialCommunityIcons
         name={icon}
         size={22}
@@ -385,9 +383,8 @@ export function StackHeader({
             cueTap();
             onBack();
           }}
-      className="h-12 w-12 items-center justify-center rounded-full bg-transparent"
+      className="h-12 w-12 items-center justify-center rounded-full border border-outline bg-canvas"
         >
-          <GlassBackdrop radius={24} material="clear" />
           <MaterialCommunityIcons
             name="chevron-left"
             size={26}

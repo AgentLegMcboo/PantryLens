@@ -222,7 +222,16 @@ export default function BuildBoxesScreen() {
                   />
                 </View>
                 <View className="flex-1">
-                  <Text variant="body" className="font-bold">
+                  <Text
+                    variant="title"
+                    accessibilityRole="header"
+                    style={{
+                      fontSize: 21,
+                      lineHeight: 26,
+                      fontWeight: fw("700"),
+                      letterSpacing: -0.25,
+                    }}
+                  >
                     {box.name}
                   </Text>
                 </View>
@@ -312,7 +321,7 @@ export default function BuildBoxesScreen() {
                     setBreakdownOpen(true);
                   }}
                   accessibilityRole="button"
-                  accessibilityLabel="See per-category breakdown for this box"
+                  accessibilityLabel="View details: food needed and available for these boxes"
                   className="min-h-[48px] flex-row items-center justify-between gap-3"
                 >
                   <Text
@@ -339,7 +348,7 @@ export default function BuildBoxesScreen() {
                   </Text>
                   <View className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-subtle px-3.5 py-2">
                     <Text variant="label" className="font-bold text-ink">
-                      Why
+                      View details
                     </Text>
                     <MaterialCommunityIcons
                       name="chevron-right"
