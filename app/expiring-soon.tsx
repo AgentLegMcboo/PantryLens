@@ -38,6 +38,7 @@ export default function ExpiringSoonScreen() {
     .filter(item => item.count > 0 && !!item.expiration && item.expiration <= warningStr)
     .sort((a, b) => a.expiration!.localeCompare(b.expiration!));
 
+  const unknownDates = inventory.filter(item => item.count > 0 && !item.expiration && item.category !== 'hygiene');
   const pastDateItems = expiring.filter(i => (daysUntil(i.expiration!) ?? 0) < 0);
   const soonItems = expiring.filter(i => (daysUntil(i.expiration!) ?? 0) >= 0);
   const unitsAtRisk = expiring.reduce((sum, item) => sum + item.count, 0);
@@ -177,7 +178,7 @@ export default function ExpiringSoonScreen() {
         contentContainerStyle={{ paddingBottom: 24 + insets.bottom }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          expiring.length > 0 || heldBack.length > 0 ? (
+          expiring.length > 0 || heldBack.length > 0 || unknownDates.length > 0 ? (
             <FadeInUp index={0}>
               {heldBack.length > 0 && (
                 <Card className="mb-5 gap-1 p-4">
@@ -220,6 +221,13 @@ export default function ExpiringSoonScreen() {
                   ))}
                 </Card>
               )}
+                {unknownDates.length > 0 && (
+                  <Card className="mb-2 gap-2">
+                    <Text variant="label" className="font-bold">{unknownDates.length} batches have no recorded date</Text>
+                    <Text variant="micro" tone="soft">Unknown does not mean checked. Read the package and record its date when available.</Text>
+                    <Button label={`Check ${unknownDates[0].name}`} variant="secondary" size="compact" onPress={() => router.push({ pathname: '/item-detail', params: { id: unknownDates[0].id } })} />
+                  </Card>
+                )}
               {expiring.length > 0 && (
               <View className="mb-5 gap-2 px-1">
                 <Text variant="headline">

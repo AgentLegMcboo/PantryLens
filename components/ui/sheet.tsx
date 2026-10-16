@@ -27,6 +27,7 @@ import { cn } from '../../lib/cn';
 import { cueTap } from '../../lib/feedback';
 import { DRAG_SLOP, projectDecay, rubberband, SPRING_SHEET } from '../../lib/motion-physics';
 import { Text } from './text';
+import { GlassBackdrop } from './glass-surface';
 import { Tappable } from '../motion';
 
 /**
@@ -281,9 +282,10 @@ export function Sheet({
                 so its header never gets pushed off the top of the screen. */}
             <Animated.View
               onLayout={e => onSheetLayout(e.nativeEvent.layout.height)}
-              style={sheetStyle}
-              className={cn('max-h-[85%] shrink rounded-t-lg bg-canvas', className)}
+              style={[{ width: '100%', maxWidth: 640, alignSelf: 'center', maxHeight: screenHeight * 0.85, flexShrink: 1, backgroundColor: 'transparent', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }, sheetStyle]}
+              className={cn('max-h-[85%] shrink rounded-t-lg', className)}
             >
+              <GlassBackdrop radius={16} />
               {/* The grabber. It means what it looks like now. Generously
                   padded, because the thing you grab should be bigger than the
                   thing you see. */}
@@ -322,6 +324,7 @@ export function Sheet({
               </View>
 
               <Animated.ScrollView
+                style={{ flexShrink: 1, minHeight: 0 }}
                 ref={scrollRef}
                 onScroll={scrollHandler}
                 scrollEventThrottle={16}
@@ -329,9 +332,7 @@ export function Sheet({
                 keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                 showsVerticalScrollIndicator={false}
                 contentContainerClassName="px-gutter gap-3"
-                // Just clear of the home indicator: a full extra 24px read as dead space
-                // under every sheet's last button.
-                contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 12) + 4 }}
+                contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: Math.max(insets.bottom, 12) + 4 }}
               >
                 {children}
               </Animated.ScrollView>

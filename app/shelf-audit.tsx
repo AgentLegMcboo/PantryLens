@@ -56,41 +56,10 @@ export default function ShelfAuditScreen() {
 
   return (
     <Screen>
-      {/* What this is, in one glance: the problem it solves and the three steps. */}
-      <FadeInUp index={0}>
-        <View className="gap-3 px-1 pt-1">
-          <View>
-            <Text variant="title" className="font-bold">
-              Numbers wrong on a shelf?
-            </Text>
-            <Text variant="label" tone="soft">
-              Photograph it and approve the fixes.
-            </Text>
-          </View>
-          <View className="flex-row flex-wrap items-center gap-x-2 gap-y-1.5">
-            {['Pick a shelf', 'Photograph it', 'Approve changes'].map((step, i) => (
-              <React.Fragment key={step}>
-                {i > 0 && (
-                  <MaterialCommunityIcons name="chevron-right" size={16} color={COLORS.borderStrong} />
-                )}
-                <View className="flex-row items-center gap-1.5">
-                  <View
-                    className="h-5 w-5 items-center justify-center rounded-full"
-                    style={{ backgroundColor: COLORS.primary }}
-                  >
-                    <Text variant="micro" className="font-bold" style={{ color: COLORS.textOnPrimary, fontSize: 11, lineHeight: 14 }}>
-                      {i + 1}
-                    </Text>
-                  </View>
-                  <Text variant="micro" className="font-bold">
-                    {step}
-                  </Text>
-                </View>
-              </React.Fragment>
-            ))}
-          </View>
-        </View>
-      </FadeInUp>
+      <View className="gap-1 px-1 pt-1">
+        <Text variant="title" className="font-bold">Check shelf inventory</Text>
+        <Text variant="label" tone="soft">Correct the count of stock already here. Add new donations through intake.</Text>
+      </View>
 
       <FadeInUp index={1}>
         <Card className="gap-2">
@@ -146,7 +115,7 @@ export default function ShelfAuditScreen() {
             onPress={photograph}
           />
           <Button
-            label="Count by hand"
+            label="Count by hand instead"
             variant="secondary"
             block
             className="rounded-md"
@@ -163,13 +132,14 @@ export default function ShelfAuditScreen() {
           >
             <MaterialCommunityIcons name="help-circle-outline" size={17} color={COLORS.primary} />
             <Text variant="label" tone="brand" className="font-bold">
-              How stock check works
+              How shelf checks work
             </Text>
           </Tappable>
         </View>
       </FadeInUp>
 
-      <Sheet visible={helpOpen} onClose={() => setHelpOpen(false)} title="How stock check works">
+      <Sheet visible={helpOpen} onClose={() => setHelpOpen(false)} title="How shelf checks work">
+        <Text variant="body">If 12 cans are recorded but you count 9, approving the count saves a −3 correction. It does not record food given out.</Text>
         <View>
           <Row
             icon="camera-retake-outline"

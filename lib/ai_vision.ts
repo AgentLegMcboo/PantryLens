@@ -89,7 +89,10 @@ async function readFunctionError(error: any): Promise<string | null> {
   }
 }
 
-export async function processImageScan(images: string[] | string): Promise<ScanResult> {
+export async function processImageScan(
+  images: string[] | string,
+  options: { photoGroups?: number[] } = {},
+): Promise<ScanResult> {
   const imageList = (Array.isArray(images) ? images : [images]).filter(Boolean);
   if (imageList.length === 0) {
     throw new ScanError('No photos to analyse yet — take one first.');
@@ -141,6 +144,7 @@ export async function processImageScan(images: string[] | string): Promise<ScanR
     rawItems
       .map(normaliseItem)
       .filter((i: ScanCandidate | null): i is ScanCandidate => i !== null),
+    options.photoGroups,
   );
   log.debug('scan', `${candidates.length} candidate(s) after normalising and merging`, candidates);
 

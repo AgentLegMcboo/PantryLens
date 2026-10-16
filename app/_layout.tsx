@@ -149,7 +149,7 @@ export default function RootLayout() {
             nothing at all. Anything that pushes onward must stay in the stack. */}
         <Stack.Screen name="log-donation" options={{ title: 'Log Donation', headerShown: false }} />
         <Stack.Screen name="review-verify" options={{ title: 'Review & Verify' }} />
-        <Stack.Screen name="shelf-audit" options={{ title: 'Stock check' }} />
+        <Stack.Screen name="shelf-audit" options={{ title: 'Check shelf inventory' }} />
         <Stack.Screen name="audit-review" options={{ title: 'Check the Count' }} />
         {/* Self-contained — these only ever go back, so a modal is right. */}
         <Stack.Screen name="bulk-intake" options={{ title: 'Bulk Donation', presentation: 'modal' }} />

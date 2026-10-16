@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 import { cn } from '../lib/cn';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTabOverlayInset } from '../lib/tab-overlay';
 
 /**
  * `Screen`, for pages that contain a text field.
@@ -51,6 +52,7 @@ export function KeyboardScreen({
   const navigation = useContext(NavigationContext);
   const inTab = navigation?.getState?.()?.type === 'tab';
   const insets = useSafeAreaInsets();
+  const tabOverlayInset = useTabOverlayInset();
   useEffect(() => {
     if (!navigation || navigation.getState?.()?.type !== 'tab') return;
     return navigation.addListener('blur', () => {
@@ -75,8 +77,7 @@ export function KeyboardScreen({
         keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
         showsVerticalScrollIndicator={false}
         {...rest}
-        // A short tail; a pushed form also clears the home indicator.
-        contentContainerStyle={[{ paddingBottom: 24 + (inTab ? 0 : insets.bottom) }, rest.contentContainerStyle]}
+        contentContainerStyle={[{ paddingBottom: 24 + (inTab ? tabOverlayInset : insets.bottom) }, rest.contentContainerStyle]}
       >
         {children}
       </ScrollView>

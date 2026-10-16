@@ -247,7 +247,7 @@ export default function DashboardScreen() {
 
           <Tappable
             accessibilityRole="button"
-            accessibilityLabel="Quick add common pantry staples without typing"
+            accessibilityLabel="Quick Add any item or choose a common item"
             onPress={() => {
               cueTap();
               setStaplesModalVisible(true);
@@ -264,10 +264,10 @@ export default function DashboardScreen() {
             </View>
             <View className="flex-1">
               <Text variant="heading" className="font-bold" numberOfLines={1}>
-                Quick add staples
+                Quick Add
               </Text>
               <Text variant="label" tone="soft" numberOfLines={1}>
-                Beans, rice, pasta, soup
+                Type any item or choose a common item
               </Text>
             </View>
             <MaterialCommunityIcons
@@ -317,7 +317,7 @@ export default function DashboardScreen() {
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Stock check. Fix a shelf's numbers by photographing it."
+              accessibilityLabel="Check shelf inventory. Compare physical counts with the app."
               onPress={() => {
                 cueTap();
                 router.push("/shelf-audit");
@@ -344,10 +344,10 @@ export default function DashboardScreen() {
                 />
               </View>
               <Text variant="heading" className="mt-2.5 font-bold">
-                Stock check
+                Check a shelf
               </Text>
               <Text variant="label" tone="soft" className="mt-0.5">
-                Fix a shelf's numbers
+                Correct existing stock
               </Text>
             </Pressable>
           </View>

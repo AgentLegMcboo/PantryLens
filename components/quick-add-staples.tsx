@@ -1,12 +1,13 @@
-import React, { useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, TextInput, View } from "react-native";
+import React, { useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, TextInput, View } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { COLORS, RULE_ABOVE_FAINT } from "../constants/theme";
 import { useAccessibilityStore } from "../lib/accessibility";
 import { cueSuccess, cueTap, cueWarn } from "../lib/feedback";
-import { Category, InventoryItem, usePantryStore } from "../lib/store";
-import { Card, CategoryIcon, Segmented, Sheet, Text } from "./ui";
-import { shelfLabels } from "../lib/shelves";
+import { Category, Condition, CONDITION_LABELS, InventoryItem, usePantryStore } from "../lib/store";
+import { Button, Card, CategoryIcon, Chip, Input, Segmented, Sheet, Text } from "./ui";
+import { INTAKE_CATEGORIES, parsePrintedDate, parseQuickAdd } from '../lib/intake';
+import { shelfLabels } from '../lib/shelves';
 
 export interface StapleItem {
   id: string;
@@ -103,31 +104,12 @@ export const TOP_STAPLES: StapleItem[] = [
   },
 ];
 
-const WORD_NUMS: Record<string, number> = {
-  a: 1,
-  an: 1,
-  one: 1,
-  two: 2,
-  three: 3,
-  four: 4,
-  five: 5,
-  six: 6,
-  seven: 7,
-  eight: 8,
-  nine: 9,
-  ten: 10,
-  twelve: 12,
-  dozen: 12,
-  twenty: 20,
-  "twenty-four": 24,
-};
-
 function inferCategory(name: string, inventory: InventoryItem[]): Category {
   const lower = name.toLowerCase();
   const match = inventory.find((i) => i.name.toLowerCase().includes(lower) || lower.includes(i.name.toLowerCase()));
   if (match && match.category !== "unknown") return match.category;
 
-  if (/(bean|tuna|salmon|chicken|beef|pork|spam|peanut|lentil|chili|protein|meat|jerky)/.test(lower)) {
+  if (/(bean|chickpea|garbanzo|tuna|salmon|chicken|beef|pork|spam|peanut|lentil|chili|protein|meat|jerky)/.test(lower)) {
     return "protein";
   }
   if (/(corn|tomato|pea|carrot|spinach|green bean|soup|broth|veg|potato|yam)/.test(lower)) {
@@ -145,56 +127,7 @@ function inferCategory(name: string, inventory: InventoryItem[]): Category {
   if (/(cracker|chip|cookie|fruit cup|applesauce|bar|snack|pretzel|raisin)/.test(lower)) {
     return "snack";
   }
-  return "grain";
-}
-
-/**
- * Parses a natural spoken or typed phrase like "24 cans of black beans" or
- * "2 cases sweet corn" into a structured item, quantity, and category.
- */
-function parseQuickPhrase(raw: string, inventory: InventoryItem[]): {
-  count: number;
-  name: string;
-  category: Category;
-} | null {
-  const cleaned = raw.trim().replace(/\s+/g, " ");
-  if (!cleaned) return null;
-
-  let rest = cleaned;
-  let count = 1;
-
-  // Match e.g. "2 cases of ...", "a flat of ...", "12 cans of ..."
-  const packMatch = rest.match(
-    /^(\d+|a|an|one|two|three|four|five|six|ten|twelve|dozen)\s*(cases?|flats?|packs?|boxes|cans?|jars?|bags?|tins?|units?)?(?:\s+of)?\s+(.+)$/i,
-  );
-
-  if (packMatch) {
-    const rawNum = packMatch[1].toLowerCase();
-    const base = /^\d+$/.test(rawNum) ? parseInt(rawNum, 10) : (WORD_NUMS[rawNum] ?? 1);
-    const unitWord = (packMatch[2] ?? "").toLowerCase();
-    const mult = unitWord.startsWith("case") || unitWord.startsWith("flat")
-      ? 12
-      : unitWord.startsWith("pack")
-        ? 6
-        : 1;
-    count = Math.max(1, base * mult);
-    rest = packMatch[3].trim();
-  }
-
-  if (!rest) return null;
-
-  // Check if it matches an existing inventory item or staple name closely
-  const lowerRest = rest.toLowerCase();
-  const existingMatch =
-    inventory.find((i) => i.name.toLowerCase() === lowerRest) ??
-    TOP_STAPLES.find((s) => s.name.toLowerCase().includes(lowerRest));
-
-  const titleCased = existingMatch
-    ? existingMatch.name
-    : rest.replace(/\b\w/g, (c) => c.toUpperCase());
-
-  const category = existingMatch ? existingMatch.category : inferCategory(titleCased, inventory);
-  return { count, name: titleCased, category };
+  return "unknown";
 }
 
 interface QuickAddStaplesModalProps {
@@ -210,14 +143,20 @@ export function QuickAddStaplesModal({
   const locations = usePantryStore((state) => state.locations);
   const defaultLocationFor = usePantryStore((state) => state.defaultLocationFor);
   const addItems = usePantryStore((state) => state.addItems);
-  const updateItem = usePantryStore((state) => state.updateItem);
-  const addActivity = usePantryStore((state) => state.addActivity);
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
 
   const [tab, setTab] = useState<"staples" | "shelves">("staples");
   const [phrase, setPhrase] = useState("");
+  const [packSize, setPackSize] = useState('');
+  const [expiration, setExpiration] = useState('');
+  const [condition, setCondition] = useState<Condition>('ok');
+  const [categoryOverride, setCategoryOverride] = useState<Category | null>(null);
+  const dateInvalid = !!expiration.trim() && !parsePrintedDate(expiration);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const busyRef = useRef(false);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [toastError, setToastError] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
 
   const placeNames = useMemo(
     () => shelfLabels(locations),
@@ -250,23 +189,30 @@ export function QuickAddStaplesModal({
       list.push({
         id: `shelf-${item.id}`,
         name: item.name,
-        category: item.category === "unknown" ? "grain" : item.category,
+        category: item.category,
         unitDesc: item.location_id && placeNames[item.location_id]
           ? placeNames[item.location_id]
           : item.category,
         presetPacks: [1, 6, 12, 24],
       });
-      if (list.length >= 15) break;
+
     }
     return list;
   }, [inventory, placeNames]);
 
   const parsedPhrase = useMemo(
-    () => parseQuickPhrase(phrase, inventory),
-    [phrase, inventory],
+    () => {
+      const parsed = parseQuickAdd(phrase, Number(packSize));
+      if (!parsed) return null;
+      const exact = inventory.find(i => i.name.toLowerCase() === parsed.name.toLowerCase());
+      return { ...parsed, name: exact?.name ?? parsed.name, category: categoryOverride ?? exact?.category ?? inferCategory(parsed.name, inventory) };
+    },
+    [phrase, inventory, packSize, categoryOverride],
   );
 
   const handleQuickAdd = async (staple: StapleItem, amount: number) => {
+    if (busyRef.current || dateInvalid) return false;
+    busyRef.current = true;
     cueTap();
     setBusyId(`${staple.id}-${amount}`);
     try {
@@ -276,51 +222,33 @@ export function QuickAddStaplesModal({
       const targetLocId = existing?.location_id ?? resolveShelfId(staple.name, staple.category);
       const shelfLabel = targetLocId && placeNames[targetLocId] ? ` (${placeNames[targetLocId]})` : "";
 
-      if (existing) {
-        const nextCount = existing.count + amount;
-        await updateItem(existing.id, {
-          count: nextCount,
-          ...(targetLocId && !existing.location_id ? { location_id: targetLocId } : {}),
-        });
-        addActivity(
-          `Added ${amount} units of ${staple.name} (now ${nextCount})`,
-          "plus-box-outline",
-        );
-        setToastMessage(
-          `✓ Added ${amount} of ${staple.name}${shelfLabel}. Shelf now has ${nextCount}.`,
-        );
-      } else {
-        await addItems([
-          {
-            name: staple.name,
-            category: staple.category,
-            count: amount,
-            source: "donation",
-            expiration: null,
-            location_id: targetLocId,
-          },
-        ]);
-        addActivity(
-          `Added ${amount} units of ${staple.name}`,
-          "plus-box-outline",
-        );
-        setToastMessage(`✓ Added ${amount} of ${staple.name} to shelf${shelfLabel}.`);
-      }
+      // A delivery is its own date/condition batch, never a blind update of old stock.
+      await addItems([{
+        name: staple.name, category: staple.category, count: amount,
+        source: "donation", expiration: parsePrintedDate(expiration), condition,
+        location_id: targetLocId,
+      }]);
+      setToastMessage(`Added ${amount} × ${staple.name}${shelfLabel}${condition !== 'ok' ? ' · held for inspection' : ''}. Add another item below.`);
+      setToastError(false);
 
       cueSuccess();
       setTimeout(() => {
         setToastMessage((cur) => (cur?.includes(staple.name) ? null : cur));
       }, 3500);
+      return true;
     } catch {
       cueWarn();
-      setToastMessage(`⚠️ Could not add ${staple.name}. Please try again.`);
+      setToastMessage(`Could not add ${staple.name}. Please try again.`);
+      setToastError(true);
+      return false;
     } finally {
+      busyRef.current = false;
       setBusyId(null);
     }
   };
 
   const handlePhraseSubmit = async () => {
-    if (!parsedPhrase || busyId) return;
+    if (!parsedPhrase || busyId || parsedPhrase.needsPackSize || dateInvalid) return;
     const synthetic: StapleItem = {
       id: "phrase",
       name: parsedPhrase.name,
@@ -328,8 +256,8 @@ export function QuickAddStaplesModal({
       unitDesc: parsedPhrase.category,
       presetPacks: [parsedPhrase.count],
     };
-    await handleQuickAdd(synthetic, parsedPhrase.count);
-    setPhrase("");
+    const saved = await handleQuickAdd(synthetic, parsedPhrase.count);
+    if (saved) { setPhrase(""); setPackSize(""); setExpiration(""); setCondition('ok'); setCategoryOverride(null); }
   };
 
   const activeList = tab === "shelves" ? shelfItems : TOP_STAPLES;
@@ -338,8 +266,8 @@ export function QuickAddStaplesModal({
     <Sheet
       visible={visible}
       onClose={onClose}
-      title="Quick Add & Restock"
-      subtitle="Tap a case button, or use your keyboard microphone to say what came in."
+      title="Quick Add"
+      subtitle="Type any item, or tap a common item below."
     >
       {/* Voice / Natural Phrase Quick-Intake Bar */}
       <View className="gap-2 rounded-xl border border-hairline bg-subtle p-3">
@@ -349,20 +277,21 @@ export function QuickAddStaplesModal({
             className="min-h-[48px] flex-1 flex-row items-center gap-2 rounded-lg border border-outline bg-card px-3"
           >
             <MaterialCommunityIcons
-              name="microphone-outline"
+              name="pencil-outline"
               size={20}
               color={COLORS.primary}
             />
             <TextInput
               value={phrase}
-              onChangeText={setPhrase}
+              editable={!busyId}
+              onChangeText={(value) => { setPhrase(value); setCategoryOverride(null); }}
               onSubmitEditing={handlePhraseSubmit}
               returnKeyType="done"
               maxFontSizeMultiplier={2.2}
               style={seniorMode ? { fontSize: 18 } : undefined}
-              placeholder='Say or type e.g. "12 cans black beans"'
+              placeholder="e.g. 12 cans of black beans"
               placeholderTextColor={COLORS.textSecondary}
-              accessibilityLabel="Say or type quantity and item name to add"
+              accessibilityLabel="Item name and quantity"
               className="flex-1 text-body text-ink"
             />
             {phrase.length > 0 && (
@@ -381,24 +310,7 @@ export function QuickAddStaplesModal({
               </Pressable>
             )}
           </View>
-          {parsedPhrase && (
-            <Pressable
-              onPress={handlePhraseSubmit}
-              disabled={!!busyId}
-              accessibilityRole="button"
-              accessibilityLabel={`Add ${parsedPhrase.count} ${parsedPhrase.name}`}
-              style={({ pressed }) => ({
-                borderBottomWidth: pressed ? 1 : 3,
-                borderBottomColor: COLORS.primaryDeep,
-                transform: [{ translateY: pressed ? 2 : 0 }],
-              })}
-              className="min-h-[48px] items-center justify-center rounded-lg bg-brand px-4"
-            >
-              <Text variant="label" tone="on" className="font-bold">
-                Add +{parsedPhrase.count}
-              </Text>
-            </Pressable>
-          )}
+
         </View>
 
         {parsedPhrase ? (
@@ -409,7 +321,7 @@ export function QuickAddStaplesModal({
               color={COLORS.secondaryDark}
             />
             <Text variant="micro" className="font-semibold" style={{ color: COLORS.secondaryDark }}>
-              Ready: {parsedPhrase.count} × {parsedPhrase.name} ({parsedPhrase.category})
+              {parsedPhrase.needsPackSize ? `Enter units per pack for ${parsedPhrase.name}` : `Ready: ${parsedPhrase.count} × ${parsedPhrase.name} (${parsedPhrase.category})`}
               {(() => {
                 const locId = resolveShelfId(parsedPhrase.name, parsedPhrase.category);
                 return locId && placeNames[locId] ? ` → ${placeNames[locId]}` : "";
@@ -418,27 +330,64 @@ export function QuickAddStaplesModal({
           </View>
         ) : (
           <Text variant="micro" tone="soft" className="px-1">
-            Tip: Tap the mic on your keyboard and say &ldquo;2 cases sweet corn&rdquo; or &ldquo;24 tuna&rdquo;.
+            Type any product, such as “24 cans of tuna”. For cases, we will ask how many units are inside.
           </Text>
         )}
       </View>
 
+      {parsedPhrase?.needsPackSize || /\b(cases?|flats?|packs?)\b/i.test(phrase) ? (
+        <Input label="Units in each case or pack" value={packSize} onChangeText={setPackSize} keyboardType="number-pad" placeholder="Read the pack, e.g. 12" hint="Case sizes vary. We never assume a size." />
+      ) : null}
+      {parsedPhrase && (
+        <View className="gap-2">
+          <Text variant="label" className="font-bold">Category for this item</Text>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerClassName="gap-2">{INTAKE_CATEGORIES.map(category => <Chip key={category} label={category === 'unknown' ? 'Not sure' : category} selected={parsedPhrase.category === category} onPress={() => setCategoryOverride(category)} />)}</ScrollView>
+        </View>
+      )}
+      <Pressable
+        onPress={() => setDetailsOpen(value => !value)}
+        accessibilityRole="button" accessibilityState={{ expanded: detailsOpen }}
+        accessibilityLabel={`Date and condition: ${expiration || 'Date unknown'}, ${CONDITION_LABELS[condition]}`}
+        className="min-h-[56px] flex-row items-center gap-3 rounded-lg bg-subtle px-3 py-2"
+      >
+        <MaterialCommunityIcons name="calendar-check-outline" size={20} color={COLORS.primary} />
+        <View className="flex-1 gap-1">
+          <Text variant="label" className="font-bold">Date &amp; condition</Text>
+          <Text variant="micro" tone={dateInvalid || condition !== 'ok' ? 'critical' : 'soft'}>{dateInvalid ? 'Check the date' : expiration || 'Date unknown'} · {CONDITION_LABELS[condition]}</Text>
+        </View>
+        <MaterialCommunityIcons name={detailsOpen ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
+      </Pressable>
+      {detailsOpen && <View className="gap-3">
+      <Input label="Printed date for this delivery (optional)" value={expiration} onChangeText={setExpiration} placeholder="YYYY-MM-DD or MM/YYYY" error={dateInvalid ? 'Enter a real printed date, or leave it blank if unknown.' : null} hint="Unknown dates stay unknown. Month-only labels use the first of the month for review." />
+      <View className="gap-2">
+        <Text variant="label" className="font-bold">Condition for the units you add</Text>
+        <View className="flex-row flex-wrap gap-2">{(Object.keys(CONDITION_LABELS) as Condition[]).map(value => <Chip key={value} label={CONDITION_LABELS[value]} selected={condition === value} onPress={() => setCondition(value)} />)}</View>
+        {condition !== 'ok' && <Text variant="micro" tone="critical">These units will be held out of boxes for inspection.</Text>}
+      </View>
+      </View>}
+      {parsedPhrase && <Button
+        label={parsedPhrase.needsPackSize ? 'Enter units per case above' : `Add ${parsedPhrase.count} ${parsedPhrase.count === 1 ? 'unit' : 'units'}`}
+        accessibilityLabel={`Add ${parsedPhrase.count} ${parsedPhrase.name}`}
+        block loading={busyId === 'phrase-' + parsedPhrase.count}
+        disabled={!!busyId || dateInvalid || parsedPhrase.needsPackSize}
+        onPress={handlePhraseSubmit}
+      />}
       {/* Toast Banner */}
       {toastMessage && (
         <View
           accessibilityLiveRegion="polite"
-          style={{ backgroundColor: "#EEF4E9", borderColor: COLORS.statusGood }}
+          style={{ backgroundColor: toastError ? COLORS.surfaceContainer : COLORS.secondaryTint, borderColor: toastError ? COLORS.statusCritical : COLORS.secondaryDark }}
           className="flex-row items-center gap-2 rounded-lg border p-3"
         >
           <MaterialCommunityIcons
-            name="check-circle"
+            name={toastError ? "alert-circle-outline" : "check-circle"}
             size={20}
-            color={COLORS.statusGood}
+            color={toastError ? COLORS.statusCritical : COLORS.secondaryDark}
           />
           <Text
             variant="label"
             className="flex-1 font-semibold"
-            style={{ color: "#2B5A24" }}
+            style={{ color: toastError ? COLORS.statusCritical : COLORS.secondaryDark }}
           >
             {toastMessage}
           </Text>
@@ -449,8 +398,8 @@ export function QuickAddStaplesModal({
         <Segmented
           value={tab}
           options={[
-            { value: "staples", label: "Common Staples" },
-            { value: "shelves", label: `On Your Shelves (${shelfItems.length})` },
+            { value: "staples", label: "Common items" },
+            { value: "shelves", label: `On your shelves (${shelfItems.length})` },
           ]}
           onChange={setTab}
         />
@@ -464,7 +413,7 @@ export function QuickAddStaplesModal({
               i.name.toLowerCase().trim() ===
               staple.name.toLowerCase().trim(),
           );
-          const currentStock = existing?.count ?? 0;
+          const currentStock = inventory.filter(i => i.name.toLowerCase().trim() === staple.name.toLowerCase().trim()).reduce((sum, item) => sum + item.count, 0);
           const targetLocId = existing?.location_id ?? resolveShelfId(staple.name, staple.category);
           const shelfName = targetLocId ? placeNames[targetLocId] : undefined;
 
@@ -512,45 +461,16 @@ export function QuickAddStaplesModal({
               >
                 {staple.presetPacks.map((pack) => {
                   const isBusy = busyId === `${staple.id}-${pack}`;
-                  const label =
-                    pack === 1
-                      ? "+1"
-                      : pack >= 24
-                        ? `+${pack} Flat`
-                        : pack >= 12
-                          ? `+${pack} Case`
-                          : `+${pack}`;
+                  const label = `+${pack}`;
 
                   return (
-                    <Pressable
-                      key={pack}
-                      disabled={!!busyId}
-                      accessibilityRole="button"
-                      accessibilityLabel={`Add ${pack} units of ${staple.name}`}
-                      onPress={() => handleQuickAdd(staple, pack)}
-                      style={({ pressed }) => ({
-                        borderBottomWidth: pressed ? 1 : 3,
-                        borderBottomColor: COLORS.borderStrong,
-                        transform: [{ translateY: pressed ? 2 : 0 }],
-                        minHeight: 48,
-                      })}
-                      className="flex-1 items-center justify-center rounded-lg border border-hairline bg-card px-1.5 py-2.5"
-                    >
-                      {isBusy ? (
-                        <ActivityIndicator
-                          size="small"
-                          color={COLORS.primary}
-                        />
-                      ) : (
-                        <Text
-                          variant="label"
-                          tone="brand"
-                          className="text-center font-bold"
-                        >
-                          {label}
-                        </Text>
-                      )}
-                    </Pressable>
+                    <View key={pack} className="flex-1">
+                      <Button label={label} variant="secondary" size="compact" block
+                        className="px-1" loading={isBusy}
+                        disabled={!!busyId || dateInvalid}
+                        accessibilityLabel={`Add ${pack} units of ${staple.name}`}
+                        onPress={() => handleQuickAdd(staple, pack)} />
+                    </View>
                   );
                 })}
               </View>

@@ -11,12 +11,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, fw } from '../constants/theme';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { cueTap } from '../lib/feedback';
+import { GlassSurface } from './ui/glass-surface';
 
 type TabBarProps = Parameters<NonNullable<React.ComponentProps<typeof Tabs>['tabBar']>>[0];
 
 /** Bar height before the home-indicator inset is added. */
-export const TAB_BAR_BODY = 64;
-export const TAB_BAR_BODY_SENIOR = 74;
+export const TAB_BAR_BODY = 78;
+export const TAB_BAR_BODY_SENIOR = 88;
 /** How far the pill sits inside each item, so it reads as a pill, not a cell. */
 const PILL_INSET = 8;
 
@@ -63,16 +64,23 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
   return (
     <View
       style={{
+        position: 'absolute',
+        bottom: 0,
+        left: 0,
+        right: 0,
         height: barBodyHeight + insets.bottom,
-        paddingBottom: Math.max(insets.bottom, 8),
+        paddingBottom: insets.bottom + 8,
         paddingTop: 6,
-        backgroundColor: COLORS.background,
-        borderTopWidth: 1,
-        borderTopColor: COLORS.borderSoft,
+        paddingHorizontal: 12,
+        backgroundColor: 'transparent',
+        alignItems: 'stretch',
       }}
     >
+      <GlassSurface style={{ flex: 1, width: '100%', alignSelf: 'stretch' }}>
       <View
-        className="flex-1 flex-row"
+        role="tablist"
+        accessibilityLabel="Main navigation"
+        style={{ flex: 1, width: '100%', flexDirection: 'row', alignItems: 'stretch' }}
         onLayout={(e) => setRowWidth(e.nativeEvent.layout.width)}
       >
         {itemWidth > 0 && (
@@ -81,12 +89,14 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
             style={[
               {
                 position: 'absolute',
-                top: 0,
-                bottom: 0,
+                top: 4,
+                bottom: 4,
                 left: PILL_INSET,
                 width: itemWidth - PILL_INSET * 2,
-                borderRadius: 999,
+                borderRadius: 16,
                 backgroundColor: COLORS.surfaceContainer,
+                borderWidth: 1,
+                borderColor: 'rgba(156,66,38,0.16)',
               },
               pill,
             ]}
@@ -125,9 +135,12 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
               onLongPress={() => navigation.emit({ type: 'tabLongPress', target: route.key })}
               accessibilityRole="tab"
               accessibilityState={{ selected: focused }}
+              aria-selected={focused}
               accessibilityLabel={options.tabBarAccessibilityLabel ?? label}
-              className="flex-1 items-center justify-center gap-0.5"
+              // Static dimensions keep all four tabs evenly distributed.
+              style={{ width: `${100 / visible.length}%`, flexGrow: 0, flexShrink: 0, minWidth: 0 }}
             >
+              <View style={{ flex: 1, width: '100%', alignItems: 'center', justifyContent: 'center', gap: 3 }}>
               {options.tabBarIcon?.({ focused, color, size: seniorMode ? 28 : 24 })}
               <Animated.Text
                 style={{
@@ -139,10 +152,12 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
               >
                 {label}
               </Animated.Text>
+              </View>
             </Pressable>
           );
         })}
       </View>
+      </GlassSurface>
     </View>
   );
 }
