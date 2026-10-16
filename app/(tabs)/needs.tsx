@@ -313,7 +313,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                           className="self-start rounded-sm px-1.5 py-0.5"
                           style={{ backgroundColor: COLORS.primaryLight }}
                         >
-                          <Text variant="micro" className="font-bold" style={{ color: COLORS.primaryDark }}>
+                          <Text variant="micro" className="font-bold" style={{ color: COLORS.textOnAccent }}>
                             Runs out first
                           </Text>
                         </View>

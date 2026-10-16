@@ -38,6 +38,30 @@ test('orange primary buttons keep readable dark text in both appearances', () =>
   }
 });
 
+test('the Needs limiting-category badge remains readable in light and dark mode', () => {
+  const filename = path.join(__dirname, '../app/(tabs)/needs.tsx');
+  const source = ts.createSourceFile(filename, fs.readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+  let label;
+  function visit(node) {
+    if (ts.isJsxElement(node) && node.children.some(child => ts.isJsxText(child) && child.text.trim() === 'Runs out first')) label = node;
+    ts.forEachChild(node, visit);
+  }
+  visit(source);
+  assert.ok(label, 'limiting-category label must be present');
+  const colorToken = (element, property) => {
+    const style = element.openingElement.attributes.properties.find(attribute => attribute.name?.getText(source) === 'style');
+    const value = style.initializer.expression.properties.find(entry => entry.name.getText(source) === property).initializer;
+    assert.equal(value.expression.getText(source), 'COLORS');
+    return value.name.text;
+  };
+  const foreground = colorToken(label, 'color');
+  const background = colorToken(label.parent, 'backgroundColor');
+  for (const [appearance, colors] of [['light', LIGHT_COLORS], ['dark', DARK_COLORS]]) {
+    assert.ok(contrast(colors[foreground], colors[background]) >= 4.5,
+      `${appearance} badge text ${colors[foreground]} must contrast with ${colors[background]}`);
+  }
+});
+
 test('body, secondary and action text retain contrast on the page and cards', () => {
   for (const colors of [LIGHT_COLORS, DARK_COLORS]) {
     for (const background of [colors.background, colors.cardSurface]) {
