@@ -4,6 +4,7 @@ import { NavigationContext } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { cn } from '../../lib/cn';
 import { Text } from './text';
+import { useTabOverlayInset } from '../../lib/tab-overlay';
 
 /**
  * The standard page body: one gutter, one rhythm between blocks.
@@ -24,6 +25,7 @@ export function Screen({ className, contentContainerClassName, ...props }: Scrol
   const navigation = React.useContext(NavigationContext);
   const inTab = navigation?.getState?.()?.type === 'tab';
   const insets = useSafeAreaInsets();
+  const tabOverlayInset = useTabOverlayInset();
   React.useEffect(() => {
     if (!navigation || navigation.getState?.()?.type !== 'tab') return;
     return navigation.addListener('blur', () => {
@@ -36,11 +38,10 @@ export function Screen({ className, contentContainerClassName, ...props }: Scrol
       ref={scroll}
       className={cn('flex-1 bg-canvas', className)}
       contentContainerClassName={cn('px-gutter pt-gutter gap-gap', contentContainerClassName)}
-      // A short tail, not a screen's worth of empty cream. A tab already ends
-      // above the tab bar; a pushed screen also clears the home indicator.
+      // Content scrolls under the floating glass; the last control clears it.
       showsVerticalScrollIndicator={false}
       {...props}
-      contentContainerStyle={[{ paddingBottom: 24 + (inTab ? 0 : insets.bottom) }, props.contentContainerStyle]}
+      contentContainerStyle={[{ paddingBottom: 24 + (inTab ? tabOverlayInset : insets.bottom) }, props.contentContainerStyle]}
     />
   );
 }

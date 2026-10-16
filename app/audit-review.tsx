@@ -120,7 +120,7 @@ export default function AuditReviewScreen() {
           icon="clipboard-search-outline"
           title="No count in progress"
           body="Start from Audit a shelf, take your photos, and the count lands here."
-          actionLabel="Count a shelf"
+          actionLabel="Check shelf inventory"
           actionVariant="primary"
           onAction={() => router.replace('/shelf-audit')}
         />
@@ -422,6 +422,9 @@ export default function AuditReviewScreen() {
 
                     {/* The safety question. Two explicit answers and no default
                         that deletes anything — a tap is required to remove. */}
+                    {status !== 'missing' && <Text variant="label" tone="brand" className="font-bold">
+                      Recorded {line.expected} → Counted {line.counted} → Change {line.counted - line.expected > 0 ? '+' : ''}{line.counted - line.expected}
+                    </Text>}
                     {status === 'missing' && (
                       <View className="gap-2 rounded-md bg-subtle p-3">
                         <Text variant="micro" tone="soft">

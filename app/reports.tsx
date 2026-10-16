@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
-import { Alert, Pressable, View } from "react-native";
+import { Pressable, View } from "react-native";
 import { COLORS, RULE_ABOVE, RULE_BELOW } from "../constants/theme";
 import {
   ExitChart,
@@ -9,7 +9,9 @@ import {
 } from "../components/exit-chart";
 import { AnimatedCounter, FadeInUp } from "../components/motion";
 import { categoryIcon } from "../components/ui/category-icon";
-import { Card, Screen, Segmented, Text } from "../components/ui";
+import { Button, Card, Input, Screen, Segmented, Text } from "../components/ui";
+import { partnerReportCsv, reportingMonth } from '../lib/partner-report';
+import { todayISO } from '../lib/expiry';
 import { cueTap } from "../lib/feedback";
 import {
   bulkLotsCsv,
@@ -73,6 +75,9 @@ export default function ReportsScreen() {
   const [slow, setSlow] = useState<SlowMover[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
+  const [reportMonth, setReportMonth] = useState(todayISO().slice(0, 7));
+  const [reportError, setReportError] = useState<string | null>(null);
+  const [exportError, setExportError] = useState<string | null>(null);
   const [showAllCategories, setShowAllCategories] = useState(false);
 
   useEffect(() => {
@@ -80,9 +85,10 @@ export default function ReportsScreen() {
     if (!settings.pantryId) return;
 
     setLoading(true);
+    setReportError(null);
     fetchExits(settings.pantryId, sinceFor(days))
       .then((rows) => !cancelled && setExits(rows))
-      .catch(() => !cancelled && setExits([]))
+      .catch(() => { if (!cancelled) { setExits([]); setReportError('Could not load the exit log. Totals are unavailable; please reopen Reports to retry.'); } })
       .finally(() => !cancelled && setLoading(false));
 
     // Not windowed by `days`: "this has been sitting for four months" is a fact
@@ -144,12 +150,13 @@ export default function ReportsScreen() {
     .replace(/[^a-z0-9]+/g, "-");
 
   const exportCsv = async (name: string, csv: string) => {
+    setExportError(null);
     setBusy(true);
     try {
       cueTap();
       await shareCsv(name, csv);
     } catch (err: any) {
-      Alert.alert("Could not export", err?.message ?? "Please try again.");
+      setExportError(err?.message ?? "Could not export. Please try again.");
     } finally {
       setBusy(false);
     }
@@ -208,6 +215,7 @@ export default function ReportsScreen() {
 
   return (
     <Screen>
+      {reportError && <Text variant="body" tone="critical">{reportError}</Text>}
       <FadeInUp index={0}>
         <Segmented
           value={days}
@@ -305,15 +313,16 @@ export default function ReportsScreen() {
             icon="tray-arrow-down"
             value={receivedUnits}
             unit="units"
-            label="Taken in"
+            label="Recent stock left"
           />
           <Stat
             icon="scale"
             value={Math.round(receivedLbs)}
             unit="lb"
-            label="Weighed in bulk"
+            label="Bulk weight logged"
           />
         </View>
+        <Text variant="micro" tone="soft" className="mt-2">Recent stock counts only units still on the shelf from this period. It is not a complete intake total; logged bulk weight does not measure distributed pounds.</Text>
       </FadeInUp>
 
       {exits.length > 0 && (
@@ -437,6 +446,26 @@ export default function ReportsScreen() {
           </Card>
         </FadeInUp>
       )}
+
+      <Card className="gap-3">
+        <Text variant="heading" className="font-bold">Food bank reporting</Text>
+        <Text variant="body" tone="soft">Review a monthly summary, then share the CSV with your food bank.</Text>
+        <Input label="Reporting month" value={reportMonth} onChangeText={setReportMonth} placeholder="YYYY-MM" error={reportingMonth(reportMonth) ? null : 'Use YYYY-MM, for example 2026-10.'} />
+        <Text variant="label" tone="soft">Includes recorded distribution, waste and corrections. Missing weight and household data stay blank. Nothing is sent automatically.</Text>
+        <Button label="Download monthly report" block loading={busy} disabled={!reportingMonth(reportMonth) || !settings.pantryId} onPress={async () => {
+          const window = reportingMonth(reportMonth);
+          if (!window || !settings.pantryId || busy) return;
+          setBusy(true);
+          setExportError(null);
+          try {
+            const rows = await fetchExits(settings.pantryId, window.start, window.end);
+            await shareCsv(`${slug}-partner-report-${reportMonth}.csv`, partnerReportCsv(settings.pantryName || 'Pantry', reportMonth, rows, inventory, new Date().toISOString()));
+          } catch (error: any) { setExportError(error?.message || 'Could not prepare the report. Check your connection and try again.'); }
+          finally { setBusy(false); }
+        }} />
+      </Card>
+
+      {exportError && <Text variant="label" tone="critical" accessibilityRole="alert">{exportError}</Text>}
 
       {/* The spreadsheet bridge: whoever the pantry reports to still wants a
           sheet. Four small tiles, not four full-width buttons. */}

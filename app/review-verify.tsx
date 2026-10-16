@@ -1,13 +1,15 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as ImagePicker from 'expo-image-picker';
 import React, { useEffect, useRef, useState } from 'react';
-import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS, RULE_ABOVE } from '../constants/theme';
 import { DetectionOverlay, type OverlayItem } from '../components/detection-overlay';
 import { Badge, Button, Card, Chip, Input, ItemThumb, Sheet, Stepper, Text } from '../components/ui';
 import * as Crypto from 'expo-crypto';
-import { identifyRegion, ScanError } from '../lib/ai_vision';
+import { identifyRegion, processImageScan, ScanError } from '../lib/ai_vision';
+import { preparePhoto } from '../lib/photo';
 import { recordConfirmations, type ConfirmationEntry } from '../lib/catalogue';
 import { nextRowToCheck } from '../lib/review-order';
 import { attachItemPhotos, type PhotoJob } from '../lib/item-photos';
@@ -25,7 +27,7 @@ import {
 } from '../lib/store';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { useAccessibilityStore } from '../lib/accessibility';
-import { windowEndISO } from '../lib/expiry';
+import { canCombineIntake, parsePrintedDate, splitInspection } from '../lib/intake';
 import { log } from '../lib/log';
 
 /**
@@ -48,7 +50,7 @@ import { log } from '../lib/log';
  * to catch, so it must not be the one it makes.
  */
 type DraftRow = Partial<InventoryItem> &
-  Partial<Pick<ScanCandidate, 'imageIndex' | 'box' | 'barcode' | 'resolvedBy'>> & {
+  Partial<Pick<ScanCandidate, 'imageIndex' | 'box' | 'barcode' | 'resolvedBy' | 'sourceDetections' | 'captureGroup'>> & {
     uid: string;
     /**
      * Exactly what the scanner said, frozen before anyone edited it.
@@ -58,6 +60,7 @@ type DraftRow = Partial<InventoryItem> &
      * the row at save time would only ever record the corrected name twice.
      */
     rawName: string;
+    combinedRows?: DraftRow[];
     /** A box a volunteer drew over something the scan missed. */
     drawnByHand?: boolean;
     /**
@@ -85,6 +88,7 @@ export default function ReviewVerifyScreen() {
   const params = useLocalSearchParams<{ source?: string }>();
   const {
     currentDraft,
+    setDraft,
     currentScanPhotos,
     inventory,
     addItems,
@@ -97,6 +101,7 @@ export default function ReviewVerifyScreen() {
     currentScan,
     setCurrentScan,
   } = usePantryStore();
+  const { height: windowHeight } = useWindowDimensions();
   const seniorMode = useAccessibilityStore((s) => s.seniorMode);
 
   /**
@@ -150,12 +155,12 @@ export default function ReviewVerifyScreen() {
   const [draftItems, setDraftItems] = useState<DraftRow[]>(() =>
     currentDraft.map((item, index) => ({
       ...item,
-      uid: nextUid(),
-      rawName: item.name ?? '',
+      uid: (item as DraftRow).uid ?? nextUid(),
+      rawName: (item as DraftRow).rawName ?? item.name ?? '',
       // start_scan returns the candidate ids in the order they were sent, and
       // currentDraft is those same candidates in that same order.
-      scanItemId: currentScan?.itemIds[index],
-      detected: {
+      scanItemId: (item as DraftRow).uid ? (item as DraftRow).scanItemId : currentScan?.itemIds[index],
+      detected: (item as DraftRow).detected ?? {
         name: item.name ?? '',
         category: (item.category ?? 'unknown') as string,
         count: item.count ?? 0,
@@ -163,10 +168,15 @@ export default function ReviewVerifyScreen() {
       },
       // normaliseItem hands this over as imageUrl; the row stores it the way the
       // database does.
-      image_url: (item as any).imageUrl ?? null,
+      image_url: (item as any).imageUrl ?? item.image_url ?? null,
     })),
   );
+  useEffect(() => {
+    setDraft(draftItems as InventoryItem[], currentScanPhotos);
+  }, [draftItems, setDraft]);
   const [saving, setSaving] = useState(false);
+  const [savedSummary, setSavedSummary] = useState<{ units: number; held: number; unknownDates: number } | null>(null);
+  const savingRef = useRef(false);
   // Which photo is on screen, when the scan covered more than one.
   const [photoIndex, setPhotoIndex] = useState(0);
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -175,6 +185,15 @@ export default function ReviewVerifyScreen() {
   // Draw mode swaps tapping-to-select for dragging-out a new box.
   const [drawMode, setDrawMode] = useState(false);
   // Details and batch-filing open as sheets over the review.
+  const [listOpen, setListOpen] = useState(false);
+  const [heldQuantity, setHeldQuantity] = useState(1);
+  const [readingDate, setReadingDate] = useState(false);
+  const [dateReadError, setDateReadError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [decision, setDecision] = useState<{ title: string; message: string; actions: { text: string; style?: string; onPress?: () => void }[] } | null>(null);
+  const ask = (title: string, message: string, actions: { text: string; style?: string; onPress?: () => void }[]) => {
+    setMoreOpen(false); setListOpen(false); setDecision({ title, message, actions });
+  };
   const [moreOpen, setMoreOpen] = useState(false);
   const [filingOpen, setFilingOpen] = useState(false);
   // Space left for the photo, so it can be sized to fit without scrolling.
@@ -217,7 +236,15 @@ export default function ReviewVerifyScreen() {
   const verifiedCount = draftItems.filter((i) => verifiedIds[i.uid]).length;
   const allVerified = draftItems.length > 0 && verifiedCount === draftItems.length;
 
+  useEffect(() => {
+    const row = draftItems.find(item => item.uid === selectedId);
+    setHeldQuantity(row?.count ?? 1);
+  }, [selectedId]);
+
   const updateItemAtIndex = (index: number, updates: Partial<InventoryItem>) => {
+    setNotice(null);
+    const uid = draftItems[index]?.uid;
+    if (uid) setVerifiedIds(prev => { const next = { ...prev }; delete next[uid]; verifiedRef.current = next; return next; });
     setDraftItems((prev) => {
       const next = [...prev];
       next[index] = { ...next[index], ...updates };
@@ -317,7 +344,15 @@ export default function ReviewVerifyScreen() {
   const confirmAndAdvance = (uid: string) => {
     const row = draftItems.find((r) => r.uid === uid);
     if (!row || !row.name?.trim()) return;
+    if (row.expiration?.trim() && !parsePrintedDate(row.expiration)) {
+      Alert.alert('Check the printed date', 'Enter a real date in YYYY-MM-DD or MM/YYYY, or leave it unknown.');
+      setMoreOpen(true); return;
+    }
+    if (!Number.isSafeInteger(row.count) || (row.count ?? 0) < 1) {
+      setNotice('Enter a whole-number quantity greater than zero.'); return;
+    }
 
+    setNotice(null);
     let map = verifiedRef.current;
     if (!map[uid]) {
       map = { ...map, [uid]: true };
@@ -466,6 +501,8 @@ export default function ReviewVerifyScreen() {
   }, [pendingBarcode]);
 
   const commit = async () => {
+    if (savingRef.current || savedSummary) return;
+    savingRef.current = true;
     setSaving(true);
     try {
       /**
@@ -481,6 +518,7 @@ export default function ReviewVerifyScreen() {
         // whichever shelf holds that product or category.
         location_id: resolveLocationForRow(row),
         source_org: draftSource,
+        expiration: row.expiration ? parsePrintedDate(row.expiration) : null,
       }));
       await addItems(rows, source, currentScan?.scanId ?? null);
 
@@ -495,24 +533,25 @@ export default function ReviewVerifyScreen() {
        * Best-effort, and after the save: losing the bookkeeping is a wrong
        * measurement, losing the donation would be a wrong app.
        */
-      void finishScan(
-        currentScan?.scanId ?? null,
-        rows.flatMap((row) =>
-          row.scanItemId && row.detected
-            ? [
-                {
-                  id: row.scanItemId,
-                  verdict: verdictFor(row.detected, row),
-                  item_id: row.id ?? null,
-                  name: row.name ?? '',
-                  category: (row.category ?? 'unknown') as string,
-                  count: row.count ?? 0,
-                  expiration: row.expiration ?? null,
-                },
-              ]
-            : [],
-        ),
-      );
+      // A source may split into usable/held rows, or several sources may combine.
+      // Keep every source connected to its outcome rather than marking a merged source rejected.
+      const originsOf = (row: DraftRow): DraftRow[] => row.combinedRows ? row.combinedRows.flatMap(originsOf) : [row];
+      const outcomes = new Map<string, { id: string; verdict: ReturnType<typeof verdictFor>; item_id: string | null; name: string; category: string; count: number; expiration: string | null }>();
+      for (const row of rows) {
+        const seen = new Set<string>();
+        for (const origin of originsOf(row)) {
+          if (!origin.scanItemId || !origin.detected || seen.has(origin.scanItemId)) continue;
+          seen.add(origin.scanItemId);
+          const previous = outcomes.get(origin.scanItemId);
+          const count = (previous?.count ?? 0) + (row.count ?? 0);
+          outcomes.set(origin.scanItemId, {
+            id: origin.scanItemId, verdict: verdictFor(origin.detected, { ...row, count }),
+            item_id: previous?.item_id ?? row.id ?? null, name: row.name ?? '',
+            category: row.category ?? 'unknown', count, expiration: row.expiration ?? null,
+          });
+        }
+      }
+      void finishScan(currentScan?.scanId ?? null, [...outcomes.values()]);
       setCurrentScan(null);
 
       /**
@@ -566,17 +605,19 @@ export default function ReviewVerifyScreen() {
         attachItemPhotos(jobs).catch((err) => log.error('store', 'the photo attach threw', err));
       }
 
+      usePantryStore.getState().setDraft([], []);
       cueSuccess();
-      Alert.alert(
-        'Saved to inventory',
-        `${draftItems.length} item${draftItems.length === 1 ? '' : 's'} added.`,
-        [{ text: 'View Inventory', onPress: () => router.replace('/(tabs)/inventory') }],
-      );
+      setSavedSummary({
+        units: rows.reduce((sum, row) => sum + (row.count ?? 0), 0),
+        held: rows.filter(row => !isUsableCondition(row.condition)).reduce((sum, row) => sum + (row.count ?? 0), 0),
+        unknownDates: rows.filter(row => !row.expiration).length,
+      });
     } catch (err: any) {
       log.error('store', 'save from review failed', err);
       cueWarn();
-      Alert.alert('Could not save', err?.message ?? 'Please try again.');
+      setNotice(err?.message ?? 'Could not save. Please try again.');
     } finally {
+      savingRef.current = false;
       setSaving(false);
     }
   };
@@ -592,27 +633,29 @@ export default function ReviewVerifyScreen() {
       cueWarn();
       setPhotoIndex(draftItems[namelessIndex].imageIndex ?? 0);
       setSelectedId(draftItems[namelessIndex].uid);
-      Alert.alert('One item still needs a name', 'Name the box you drew, then save.');
+      setNotice('Name this item before saving.');
       return;
     }
 
-    // Unconfirmed rows are a warning, not a wall. A volunteer who has looked at
-    // the photo and is happy should not have to tap nineteen boxes to prove it.
+    const invalid = draftItems.find(row => (row.expiration?.trim() && !parsePrintedDate(row.expiration)) || !Number.isSafeInteger(row.count) || (row.count ?? 0) < 1);
+    if (invalid) { focusRow(invalid); setMoreOpen(true); Alert.alert('Check the date and quantity', 'Use a real printed date or Unknown, and a positive whole-number quantity.'); return; }
     const unverified = draftItems.length - verifiedCount;
     if (unverified > 0) {
-      cueWarn();
-      Alert.alert(
-        `${unverified} item${unverified === 1 ? '' : 's'} not confirmed`,
-        'Tap a glowing box to check it against the photo, or save everything as the scanner read it.',
-        [
-          { text: 'Keep checking', style: 'cancel' },
-          { text: 'Save anyway', style: 'destructive', onPress: commit },
-        ],
-      );
+      const next = draftItems.find(row => !verifiedIds[row.uid]);
+      if (next) focusRow(next);
+      Alert.alert('Finish checking the items', `${unverified} items still need confirmation. Check the count, printed date and condition before saving.`);
       return;
     }
     commit();
   };
+
+  if (savedSummary) return (
+    <View className="flex-1 justify-center gap-5 bg-canvas px-gutter">
+      <Text variant="headline">Donation added</Text>
+      <Text variant="body">{savedSummary.units} units recorded · {savedSummary.held} held for inspection · {savedSummary.unknownDates} batches with unknown dates.</Text>
+      <Button label="View inventory" block onPress={() => router.replace('/(tabs)/inventory')} />
+    </View>
+  );
 
   if (draftItems.length === 0) {
     return (
@@ -745,9 +788,11 @@ export default function ReviewVerifyScreen() {
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       className="flex-1 bg-canvas"
     >
+      <ScrollView style={{ flex: 1 }} contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
       {/* Progress, and where the batch is going. One slim row instead of a
           title block, a paragraph and a progress card. */}
       <View className="gap-2 px-gutter pb-2 pt-2">
+        <Button label={`View all ${draftItems.length} items`} variant="secondary" size="compact" onPress={() => setListOpen(true)} />
         <View className="flex-row items-center justify-between gap-3">
           <Text variant="body" className="font-bold">
             {allVerified ? 'Everything checked' : `${verifiedCount} of ${draftItems.length} confirmed`}
@@ -760,15 +805,15 @@ export default function ReviewVerifyScreen() {
               }}
               accessibilityRole="button"
               accessibilityLabel="Choose where this batch is filed"
-              className="flex-row items-center gap-1.5 rounded-full border border-hairline bg-card px-3 py-1.5"
+              className="flex-row items-center gap-1.5 min-h-[48px] rounded-lg border border-hairline bg-card px-3 py-2"
             >
               <MaterialCommunityIcons name="map-marker-outline" size={15} color={COLORS.textSecondary} />
               <Text variant="micro" className="font-semibold" numberOfLines={1}>
                 {batchLocation
                   ? locations.find((l) => l.id === batchLocation)?.name ?? 'Filed'
                   : autoFiles
-                    ? 'Auto-filed'
-                    : 'Unfiled'}
+                    ? 'Suggested shelf'
+                    : 'Choose shelf'}
               </Text>
               <MaterialCommunityIcons name="chevron-down" size={15} color={COLORS.textSecondary} />
             </Pressable>
@@ -784,7 +829,8 @@ export default function ReviewVerifyScreen() {
 
       {/* The photo, with this item's box selected on it. */}
       <View
-        className="flex-1 items-center justify-center px-gutter"
+        className="items-center justify-center px-gutter"
+        style={{ height: photo ? Math.min(260, Math.max(140, windowHeight * 0.25)) : 60 }}
         onLayout={(e) => setPhotoArea({ w: e.nativeEvent.layout.width - 40, h: e.nativeEvent.layout.height })}
       >
         {photo && photoWidth > 0 ? (
@@ -919,7 +965,7 @@ export default function ReviewVerifyScreen() {
           needed for the common case is here; the rest is behind "More". */}
       <View
         className="gap-3 bg-card px-gutter pt-3"
-        style={[RULE_ABOVE, { paddingBottom: insets.bottom + 12 }]}
+        style={[RULE_ABOVE, { paddingBottom: 12 }]}
       >
         {selectedItem ? (
           <>
@@ -967,14 +1013,11 @@ export default function ReviewVerifyScreen() {
                   <Pressable
                     onPress={() => {
                       cueTap();
-                      const i = CATEGORIES.indexOf(selectedItem.category as string);
-                      updateItemAtIndex(selectedIndex, {
-                        category: CATEGORIES[(i + 1) % CATEGORIES.length] as any,
-                      });
+                      setMoreOpen(true);
                     }}
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={`Category ${selectedItem.category}. Tap to change.`}
+                    accessibilityLabel={`Category ${selectedItem.category}. Open item details to change.`}
                     className="flex-row items-center gap-1 rounded-md bg-subtle px-2 py-1"
                   >
                     <Text variant="label" className="font-bold capitalize">
@@ -1022,59 +1065,14 @@ export default function ReviewVerifyScreen() {
               </View>
             </View>
 
-            {/* How many, 1-tap case multipliers, plus the way into everything else, and paging. */}
-            <View className="flex-row items-center gap-2">
-              <Stepper
-                value={selectedItem.count ?? 1}
-                min={1}
-                onChange={(count) => updateItemAtIndex(selectedIndex, { count })}
-              />
-              {[6, 12, 24].map((pack) => (
-                <Pressable
-                  key={pack}
-                  onPress={() => {
-                    cueTap();
-                    updateItemAtIndex(selectedIndex, {
-                      count: (selectedItem.count ?? 1) + pack,
-                    });
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Add ${pack} more units`}
-                  className="h-12 items-center justify-center rounded-md border border-hairline bg-subtle px-2.5"
-                >
-                  <Text variant="micro" tone="brand" className="font-bold">
-                    +{pack}
-                  </Text>
-                </Pressable>
-              ))}
-              <Pressable
-                onPress={() => {
-                  cueTap();
-                  setMoreOpen(true);
-                }}
-                accessibilityRole="button"
-                accessibilityLabel="More item details"
-                className="h-12 flex-1 flex-row items-center justify-center gap-1 rounded-md bg-subtle px-2"
-              >
-                <MaterialCommunityIcons name="tune-variant" size={18} color={COLORS.textPrimary} />
-                <Text variant="micro" className="font-bold" numberOfLines={1}>
-                  More
-                </Text>
-              </Pressable>
-              <PhotoArrow
-                icon="chevron-left"
-                dark
-                label="Previous item"
-                disabled={currentIndex <= 0}
-                onPress={() => focusRow(draftItems[currentIndex - 1])}
-              />
-              <PhotoArrow
-                icon="chevron-right"
-                dark
-                label="Next item"
-                disabled={currentIndex >= draftItems.length - 1}
-                onPress={() => focusRow(draftItems[currentIndex + 1])}
-              />
+            <Button label={`${selectedItem.expiration ? `Date: ${selectedItem.expiration}` : 'Date unknown'} · ${damaged ? 'Inspect damage' : 'Check condition'}`} variant="secondary" size="compact" onPress={() => setMoreOpen(true)} />
+            <View className="flex-row items-center justify-between gap-3">
+              <Text variant="label" tone="soft" className="font-semibold">Quantity</Text>
+              <Stepper value={selectedItem.count ?? 1} min={1} onChange={(count) => updateItemAtIndex(selectedIndex, { count })} />
+            </View>
+            <View className="flex-row gap-2">
+              <View className="flex-1"><Button label="Previous item" size="compact" variant="ghost" disabled={currentIndex <= 0} onPress={() => focusRow(draftItems[currentIndex - 1])} /></View>
+              <View className="flex-1"><Button label="Next item" size="compact" variant="ghost" disabled={currentIndex >= draftItems.length - 1} onPress={() => focusRow(draftItems[currentIndex + 1])} /></View>
             </View>
           </>
         ) : (
@@ -1085,10 +1083,14 @@ export default function ReviewVerifyScreen() {
           </Text>
         )}
 
+      </View>
+      </ScrollView>
+      <View className="gap-3 bg-card px-gutter pt-3" style={[RULE_ABOVE, { paddingBottom: insets.bottom + 12 }]}>
+        {notice && <Text variant="label" tone="critical" accessibilityRole="alert">{notice}</Text>}
         {/* Confirm and Add, side by side, in fixed positions. Confirm is the wide
             one on the left, where rapid taps land, and it ends as a
             non-tappable "All confirmed", so a burst of confirms can never spill
-            into saving. Adding with items unconfirmed asks first. */}
+            into saving. Saving stays unavailable until every item is confirmed. */}
         <View className="flex-row gap-2">
           <View className="flex-[3]">
             {bar.action ? (
@@ -1122,7 +1124,8 @@ export default function ReviewVerifyScreen() {
           </View>
           <View className="flex-[2]">
             <Button
-              label={`Add ${draftItems.length}`}
+              label="Save items"
+              disabled={!allVerified}
               accessibilityLabel={`Add ${draftItems.length} ${draftItems.length === 1 ? 'item' : 'items'} to inventory`}
               block
               variant={allVerified ? 'primary' : 'secondary'}
@@ -1146,8 +1149,55 @@ export default function ReviewVerifyScreen() {
         visible={moreOpen && !!selectedItem}
         onClose={() => setMoreOpen(false)}
         title={selectedItem?.name?.trim() || 'This item'}
-        subtitle="Details"
+        subtitle="Check the date and packaging."
       >
+        {selectedItem && (
+          <View className="mb-3 gap-2">
+            <Button label="Read date from a label photo" variant="secondary" size="compact" loading={readingDate} onPress={async () => {
+              if (readingDate) return;
+              setDateReadError(null);
+              const uid = selectedItem.uid;
+              setReadingDate(true);
+              try {
+                const permission = Platform.OS === 'web' ? null : await ImagePicker.requestCameraPermissionsAsync();
+                if (permission && !permission.granted) throw new Error('Allow camera access, or enter the printed date manually.');
+                const result = Platform.OS === 'web'
+                  ? await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], base64: true, quality: 0.8 })
+                  : await ImagePicker.launchCameraAsync({ mediaTypes: ['images'], base64: true, quality: 0.8 });
+                if (result.canceled) return;
+                const prepared = await preparePhoto(result.assets[0]);
+                if (!prepared) throw new Error('Could not read that photo. Try again or type the date.');
+                const { candidates } = await processImageScan(prepared.base64);
+                const dates = [...new Set(candidates.map(item => item.expiration).filter((date): date is string => !!date))];
+                if (dates.length !== 1) throw new Error(dates.length ? 'Several dates were visible. Type the date for this item to avoid assigning the wrong one.' : 'No printed date was readable. Take a closer photo including the product label, or enter it manually.');
+                ask('Confirm the printed date', `The photo suggests ${dates[0]}. Does that match this package?`, [
+                  { text: 'Keep current date', style: 'cancel' },
+                  { text: 'Use this date', onPress: () => {
+                    setDraftItems(prev => prev.map(row => row.uid === uid ? { ...row, expiration: dates[0] } : row));
+                    setVerifiedIds(prev => { const next = { ...prev }; delete next[uid]; verifiedRef.current = next; return next; });
+                  } },
+                ]);
+              } catch (error: any) { setDateReadError(error?.message || 'Enter the date printed on the package.'); }
+              finally { setReadingDate(false); }
+            }} />
+            {dateReadError && <Text variant="label" tone="critical" accessibilityRole="alert">{dateReadError}</Text>}
+            <Text variant="micro" tone="soft">Photograph this product and its printed date together. A reading always needs your confirmation.</Text>
+          </View>
+        )}
+        {selectedItem && damaged && selectedItem.condition !== 'expired' && (
+          <Card className="mb-3 gap-3">
+            <Text variant="label" className="font-bold">How many units need inspection?</Text>
+            <Text variant="micro" tone="soft">Keep usable units available. Hold only the affected units out of boxes.</Text>
+            <Stepper value={Math.min(heldQuantity, selectedItem.count ?? 1)} min={1} max={selectedItem.count ?? 1} onChange={setHeldQuantity} />
+            <Text variant="micro" tone="soft">{(selectedItem.count ?? 1) - Math.min(heldQuantity, selectedItem.count ?? 1)} units stay available after you check their condition and date.</Text>
+            <Button label={`Separate ${Math.min(heldQuantity, selectedItem.count ?? 1)} for inspection`} size="compact" onPress={() => {
+              const parts = splitInspection(selectedItem, Math.min(heldQuantity, selectedItem.count ?? 1));
+              const rows = parts.map((row, index) => ({ ...row, uid: nextUid(), id: undefined, scanItemId: row.scanItemId, sourceDetections: undefined, combinedRows: undefined }));
+              setDraftItems(prev => prev.flatMap(row => row.uid === selectedItem.uid ? rows : [row]));
+              setSelectedId(rows[rows.length - 1].uid); setMoreOpen(false); cueTap();
+            }} />
+          </Card>
+        )}
         {selectedItem ? (
           <ItemEditor
             compact
@@ -1168,6 +1218,37 @@ export default function ReviewVerifyScreen() {
             onClose={() => setMoreOpen(false)}
           />
         ) : null}
+      </Sheet>
+
+
+      <Sheet visible={listOpen} onClose={() => setListOpen(false)} title="Every item in this scan" subtitle="Review every item here. Open a combined item to check whether the photos show the same stock.">
+        {draftItems.map(row => (
+          <Card key={row.uid} className="gap-2">
+            <Text variant="body" className="font-bold">{row.count} × {row.name || 'Unnamed item'}</Text>
+            <Text variant="micro" tone="soft">{row.expiration || 'Date unknown'} · {CONDITION_LABELS[row.condition || 'ok']} · {verifiedIds[row.uid] ? 'Confirmed' : 'Needs review'}</Text>
+            <Text variant="micro" tone="brand">{row.sourceDetections && row.sourceDetections.length > 1 ? `Combined from ${new Set(row.sourceDetections.map(d => d.imageIndex)).size} photo(s), ${row.sourceDetections.length} readings` : row.combinedRows ? 'Combined by you' : 'Separate item'}</Text>
+            <Button label="Review this item" variant="secondary" size="compact" onPress={() => { focusRow(row); setListOpen(false); }} />
+            {(row.combinedRows || (row.sourceDetections?.length ?? 0) > 1) && <Button label="Separate these items" variant="ghost" size="compact" onPress={() => {
+              const readings: DraftRow[] = row.combinedRows ?? row.sourceDetections!.map((reading, index) => ({ ...reading, image_url: reading.imageUrl ?? row.image_url, rawName: reading.name, uid: nextUid(), scanItemId: row.scanItemId, detected: row.detected }));
+              ask('Are these different physical items?', `Separating restores ${readings.reduce((sum, r) => sum + (r.count ?? 0), 0)} units across ${readings.length} rows. Do this only if the photos show different stock, then check every count.`, [
+                { text: 'Keep combined', style: 'cancel' },
+                { text: 'Separate items', onPress: () => { setDraftItems(prev => prev.flatMap(r => r.uid === row.uid ? readings.map(r => ({ ...r, uid: nextUid(), sourceDetections: undefined, combinedRows: undefined })) : [r])); cueTap(); } },
+              ]);
+            }} />}
+            {selectedItem && selectedItem.uid !== row.uid && canCombineIntake(selectedItem, row) && <Button label={`Combine with ${selectedItem.name}`} variant="ghost" size="compact" onPress={() => {
+              const current = selectedItem;
+              const combine = (sameUnits: boolean) => {
+                const combined: DraftRow = { ...current, uid: nextUid(), count: sameUnits ? Math.max(current.count ?? 1, row.count ?? 1) : (current.count ?? 1) + (row.count ?? 1), combinedRows: [current, row], sourceDetections: undefined };
+                setDraftItems(prev => prev.flatMap(r => r.uid === current.uid ? [combined] : r.uid === row.uid ? [] : [r])); setSelectedId(combined.uid); cueTap();
+              };
+              ask('How should these counts combine?', 'Combine only matching products and pack sizes. Another angle uses the larger count; different stock adds the counts.', [{ text: 'Cancel', style: 'cancel' }, { text: 'Same physical units', onPress: () => combine(true) }, { text: 'Different units', onPress: () => combine(false) }]);
+            }} />}
+          </Card>
+        ))}
+      </Sheet>
+
+      <Sheet visible={!!decision} onClose={() => setDecision(null)} title={decision?.title || 'Check this change'} subtitle={decision?.message}>
+        <View className="gap-3">{decision?.actions.map(action => <Button key={action.text} label={action.text} block variant={action.style === 'cancel' ? 'secondary' : 'primary'} onPress={() => { setDecision(null); action.onPress?.(); }} />)}</View>
       </Sheet>
 
       {/* Where this whole batch is going — decided once, by the person carrying it. */}
@@ -1394,8 +1475,9 @@ function ItemEditor({
           <View className="flex-row items-end gap-3">
             <View className="flex-1">
               <Input
-                label="Expires"
-                placeholder="YYYY-MM-DD"
+                label="Printed date"
+                placeholder="YYYY-MM-DD or MM/YYYY"
+                error={item.expiration?.trim() && !parsePrintedDate(item.expiration) ? "Check this printed date, or choose Unknown." : null}
                 value={item.expiration || ''}
                 onChangeText={(txt) => onChange({ expiration: txt })}
               />
@@ -1411,24 +1493,8 @@ function ItemEditor({
               />
             )}
           </View>
-          <View className="flex-row flex-wrap gap-2">
-            {[
-              { label: '+3 mos', days: 90 },
-              { label: '+6 mos', days: 180 },
-              { label: '+1 yr', days: 365 },
-              { label: '+2 yrs', days: 730 },
-            ].map((preset) => {
-              const iso = windowEndISO(preset.days);
-              return (
-                <Chip
-                  key={preset.label}
-                  label={preset.label}
-                  selected={item.expiration === iso}
-                  onPress={() => onChange({ expiration: iso })}
-                />
-              );
-            })}
-          </View>
+          <Button label="Date unknown / not printed" variant="ghost" size="compact" onPress={() => onChange({ expiration: null })} />
+          <Text variant="micro" tone="soft">Read the package. Never guess a date from shelf life. Month-only dates use the first day of that month for review.</Text>
         </View>
       </View>
     );
@@ -1578,8 +1644,9 @@ function ItemEditor({
         </View>
         <View className="flex-1">
           <Input
-            label="Expires"
-            placeholder="YYYY-MM-DD"
+            label="Printed date"
+            placeholder="YYYY-MM-DD or MM/YYYY"
+                error={item.expiration?.trim() && !parsePrintedDate(item.expiration) ? "Check this printed date, or choose Unknown." : null}
             value={item.expiration || ''}
             onChangeText={(txt) => onChange({ expiration: txt })}
           />

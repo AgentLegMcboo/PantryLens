@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
 import React, { useRef, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, View } from 'react-native';
-import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming } from 'react-native-reanimated';
+import Animated, { useAnimatedStyle, useSharedValue, withSequence, withTiming, useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Text } from '../components/ui';
 import { COLORS } from '../constants/theme';
@@ -50,7 +50,9 @@ export default function LogDonationScreen() {
   const camera = useRef<CameraView>(null);
   const [torch, setTorch] = useState(false);
   const [capturing, setCapturing] = useState(false);
-  const [shots, setShots] = useState<PreparedPhoto[]>([]);
+  const [shots, setShots] = useState<(PreparedPhoto & { group: number })[]>([]);
+  const [captureMode, setCaptureMode] = useState<'angle' | 'new'>('angle');
+  const reducedMotion = useReducedMotion();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   /**
    * Who it came from. Grocery rescue and a school food drive are different
@@ -75,14 +77,20 @@ export default function LogDonationScreen() {
       log.warn('scan', 'no usable photos came back');
       return;
     }
-    setShots((prev) => [...prev, ...prepared].slice(0, MAX_PHOTOS));
+    setShots((prev) => {
+      const lastGroup = prev[prev.length - 1]?.group ?? -1;
+      const firstGroup = prev.length === 0 ? 0 : captureMode === 'new' ? lastGroup + 1 : lastGroup;
+      // Library selection follows the chosen intent; new-group mode treats each selected picture as separate stock.
+      return [...prev, ...prepared.map((photo, index) => ({ ...photo, group: firstGroup + (captureMode === 'new' ? index : 0) }))].slice(0, MAX_PHOTOS);
+    });
+    setCaptureMode('angle');
   };
 
   const handleShutter = async () => {
     if (atLimit || busy || !camera.current) return;
     cuePress();
     setCapturing(true);
-    flash.value = withSequence(withTiming(0.85, { duration: 60 }), withTiming(0, { duration: 220 }));
+    if (!reducedMotion) flash.value = withSequence(withTiming(0.35, { duration: 60 }), withTiming(0, { duration: 150 }));
     try {
       const photo = await camera.current.takePictureAsync({ quality: QUALITY, base64: true, exif: false });
       if (photo) {
@@ -114,8 +122,8 @@ export default function LogDonationScreen() {
       quality: QUALITY,
       base64: true,
       exif: false,
-      allowsMultipleSelection: true,
-      selectionLimit: MAX_PHOTOS - shots.length,
+      // One at a time so each picture has an explicit angle/group intent.
+      allowsMultipleSelection: false,
     });
     if (result.canceled) return;
     await addPrepared(result.assets);
@@ -133,7 +141,7 @@ export default function LogDonationScreen() {
 
     try {
       const startedAt = Date.now();
-      const { candidates, photosRead, photosSent } = await processImageScan(shots.map((s) => s.base64));
+      const { candidates, photosRead, photosSent } = await processImageScan(shots.map((s) => s.base64), { photoGroups: shots.map((s) => s.group) });
 
       // Opened BEFORE the review, so a scan the volunteer walks away from is
       // still recorded. Best-effort: a null record changes nothing that follows.
@@ -185,7 +193,7 @@ export default function LogDonationScreen() {
   // Still finding out whether we may use the camera.
   if (!permission) return <View className="flex-1 bg-black" />;
 
-  if (!permission.granted) {
+  if (!permission.granted && shots.length === 0) {
     return (
       <View className="flex-1 items-center justify-center gap-4 bg-black px-8">
         <MaterialCommunityIcons name="camera-off-outline" size={44} color="#FFFFFF" />
@@ -212,11 +220,11 @@ export default function LogDonationScreen() {
       ? `${MAX_PHOTOS} photos — that's the most for one scan`
       : shots.length === 0
         ? 'Lay items out so the labels face the camera'
-        : `${shots.length} of ${MAX_PHOTOS} · a big pile reads better in sections`;
+        : `${shots.length} of ${MAX_PHOTOS} · review counts before saving`;
 
   return (
     <View className="flex-1 bg-black">
-      <CameraView ref={camera} style={{ flex: 1 }} facing="back" enableTorch={torch} />
+      {permission.granted ? <CameraView ref={camera} style={{ flex: 1 }} facing="back" enableTorch={torch} /> : <View className="flex-1 bg-black" />}
 
       {/* Capture flash */}
       <Animated.View pointerEvents="none" className="absolute inset-0 bg-white" style={flashStyle} />
@@ -249,6 +257,18 @@ export default function LogDonationScreen() {
           </View>
         </View>
 
+        <View className="px-gutter pb-2">
+          {shots.length > 0 && (
+            <View className="mt-2 gap-2 rounded-lg bg-card p-3">
+              <Text variant="label" className="font-bold">What will the next photo show?</Text>
+              <View className="flex-row gap-2">
+                <Button className="flex-1 self-stretch" label="Another angle" size="compact" variant={captureMode === 'angle' ? 'primary' : 'secondary'} onPress={() => setCaptureMode('angle')} />
+                <Button className="flex-1 self-stretch" label="New group" size="compact" variant={captureMode === 'new' ? 'primary' : 'secondary'} onPress={() => setCaptureMode('new')} />
+              </View>
+              <Text variant="micro" tone="soft">{captureMode === 'angle' ? 'Same physical items: overlapping counts will not be added twice.' : 'Different physical items: counts stay separate from earlier groups.'}</Text>
+            </View>
+          )}
+        </View>
         {/* Hint */}
         <View className="items-center pb-3" pointerEvents="none">
           <View className="flex-row items-center gap-2 rounded-full px-4 py-2" style={{ backgroundColor: GLASS }}>
@@ -269,8 +289,10 @@ export default function LogDonationScreen() {
           >
             {shots.map((shot, i) => (
               <View key={`${shot.uri}-${i}`}>
+                <Text variant="micro" className="font-bold text-white">Group {shot.group + 1}</Text>
                 <Image source={{ uri: shot.uri }} className="h-16 w-16 rounded-lg border-2 border-white" />
                 <Pressable
+                  disabled={busy}
                   onPress={() => removeShot(i)}
                   hitSlop={10}
                   accessibilityRole="button"
@@ -331,7 +353,7 @@ export default function LogDonationScreen() {
               disabled={atLimit || busy}
               accessibilityRole="button"
               accessibilityLabel="Take photo"
-              style={({ pressed }) => ({ transform: [{ scale: pressed ? 0.93 : 1 }] })}
+              style={({ pressed }) => ({ transform: [{ scale: pressed && !busy && !atLimit && !reducedMotion ? 0.96 : 1 }] })}
               className="h-[74px] w-[74px] items-center justify-center rounded-full border-4 border-white"
             >
               <View
@@ -348,7 +370,7 @@ export default function LogDonationScreen() {
 
             <Pressable
               onPress={handleDetectItems}
-              disabled={shots.length === 0 || isAnalyzing}
+              disabled={shots.length === 0 || busy}
               accessibilityRole="button"
               accessibilityLabel={`Detect items in ${shots.length} photos`}
               className="h-12 min-w-[48px] flex-row items-center justify-center gap-1.5 rounded-xl px-3.5"

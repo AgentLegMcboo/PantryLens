@@ -185,11 +185,17 @@ export default function ShelfAuditScreen() {
 
   return (
     <Screen>
+      <Card className="gap-3">
+        <Text variant="headline">Check shelf inventory</Text>
+        <Text variant="body" tone="soft">Compare what is physically on one shelf with what the app has recorded. Use this to correct stock already here.</Text>
+        <Text variant="label" className="font-bold">1. Choose a shelf   2. Count   3. Review changes</Text>
+        <Text variant="micro" tone="soft">Example: the app says 12 cans, but you count 9. After you approve, the shelf changes to 9 (−3 correction). A new donation should be added through donation intake instead.</Text>
+      </Card>
       <FadeInUp index={0}>
         <Card>
           <CardHeader
             title="Which shelf are you counting?"
-            subtitle="The count replaces what this shelf says. Everywhere else is left alone."
+            subtitle="Only this shelf is checked. You review every proposed change before saving."
           />
 
           {locations.map((place, i) => {
@@ -322,7 +328,7 @@ export default function ShelfAuditScreen() {
           can take stock away, so it says what it can and cannot see. */}
       <FadeInUp index={3}>
         <Card className="gap-4">
-          <CardHeader title="How to count a shelf" />
+          <CardHeader title="How to check shelf inventory" />
 
           <Row
             icon="camera-retake-outline"

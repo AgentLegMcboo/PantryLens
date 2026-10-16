@@ -1,3 +1,4 @@
+import { parsePrintedDate } from '../lib/intake';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -97,6 +98,9 @@ export default function ItemDetailScreen() {
   };
 
   const handleSave = () => {
+    if (expiration.trim() && !parsePrintedDate(expiration)) {
+      Alert.alert('Check the printed date', 'Enter YYYY-MM-DD or MM/YYYY, or leave it blank if unknown.'); return;
+    }
     // The stepper goes to zero and the hint says so, so zero has to actually
     // mean gone — the same thing it means on the shelf list. Saving a 0-count
     // item would otherwise leave a row nothing can ever be packed from.
@@ -111,7 +115,7 @@ export default function ItemDetailScreen() {
       name: name.trim(),
       category,
       count,
-      expiration: expiration.trim() || null,
+      expiration: parsePrintedDate(expiration),
       condition,
       location_id: locationId,
       diet_tags: dietTags,
@@ -299,7 +303,8 @@ export default function ItemDetailScreen() {
             label="Date printed on it"
             value={expiration}
             onChangeText={setExpiration}
-            placeholder="YYYY-MM-DD"
+            placeholder="YYYY-MM-DD or MM/YYYY"
+            error={expiration.trim() && !parsePrintedDate(expiration) ? "Enter a real printed date, or leave blank." : null}
             hint="Leave it blank if there is no date to read."
           />
 

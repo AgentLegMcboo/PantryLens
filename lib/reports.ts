@@ -1,5 +1,6 @@
 import { Directory, File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
+import { Platform } from 'react-native';
 import { DIET_TAG_LABELS, isAllergenTag, type DietTag } from './diet';
 import { log } from './log';
 import { supabase } from './supabase';
@@ -28,21 +29,27 @@ export interface StockExit {
 export async function fetchExits(
   pantryId: string,
   sinceISO: string | null,
+  untilISO?: string,
 ): Promise<StockExit[]> {
-  let query = supabase
-    .from('stock_exits')
-    .select('id, item_name, category, count, reason, occurred_at')
-    .eq('pantry_id', pantryId)
-    .order('occurred_at', { ascending: false });
-
-  if (sinceISO) query = query.gte('occurred_at', sinceISO);
-
-  const { data, error } = await query;
-  if (error) {
-    log.error('store', 'could not read the exit log', error);
-    throw error;
+  const rows: StockExit[] = [];
+  // Supabase pages results: reporting must not quietly stop at the first page.
+  for (let offset = 0; ; offset += 1000) {
+    let query = supabase.from('stock_exits')
+      .select('id, item_name, category, count, reason, occurred_at')
+      .eq('pantry_id', pantryId)
+      .order('occurred_at', { ascending: false }).order('id', { ascending: false })
+      .range(offset, offset + 999);
+    if (sinceISO) query = query.gte('occurred_at', sinceISO);
+    if (untilISO) query = query.lt('occurred_at', untilISO);
+    const { data, error } = await query;
+    if (error) {
+      log.error('store', 'could not read the exit log', error);
+      throw error;
+    }
+    rows.push(...(data ?? []) as StockExit[]);
+    if ((data?.length ?? 0) < 1000) break;
   }
-  return (data ?? []) as StockExit[];
+  return rows;
 }
 
 /**
@@ -105,7 +112,8 @@ export async function fetchSlowMovers(
  * reported to somebody.
  */
 function cell(value: unknown): string {
-  const s = value === null || value === undefined ? '' : String(value);
+  const raw = value === null || value === undefined ? '' : String(value);
+  const s = /^[=+@\-\t\r]/.test(raw) ? `'${raw}` : raw;
   return `"${s.replace(/"/g, '""')}"`;
 }
 
@@ -202,6 +210,14 @@ export function bulkLotsCsv(lots: BulkLot[]): string {
  * which needs an attachment.
  */
 export async function shareCsv(filename: string, csv: string): Promise<void> {
+  if (Platform.OS === 'web') {
+    const url = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+    const link = document.createElement('a');
+    link.href = url; link.download = filename;
+    document.body.appendChild(link); link.click(); link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    return;
+  }
   if (!(await Sharing.isAvailableAsync())) {
     throw new Error('Sharing is not available on this device.');
   }

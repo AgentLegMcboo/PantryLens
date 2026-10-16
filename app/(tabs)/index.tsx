@@ -168,7 +168,7 @@ export default function DashboardScreen() {
           {/* Secondary 1-Tap Accelerator: Quick Add Staples */}
           <Pressable
             accessibilityRole="button"
-            accessibilityLabel="One-tap quick add common pantry staples without typing"
+            accessibilityLabel="Quick Add any item or choose a common item"
             onPress={() => {
               cueTap();
               setStaplesModalVisible(true);
@@ -186,16 +186,16 @@ export default function DashboardScreen() {
               </View>
               <View className="flex-1">
                 <Text variant="heading" className="font-bold">
-                  One-Tap Quick Add Staples
+                  Quick Add
                 </Text>
                 <Text variant="label" tone="soft">
-                  Add beans, rice, pasta &amp; soup cases without typing
+                  Type any item or choose a common item
                 </Text>
               </View>
             </View>
             <View className="rounded-md border border-hairline bg-subtle px-3 py-2">
               <Text variant="label" tone="brand" className="font-bold">
-                Quick Add →
+                Open →
               </Text>
             </View>
           </Pressable>
@@ -232,7 +232,7 @@ export default function DashboardScreen() {
 
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Count Shelves. Photograph a shelf to reconcile stock."
+              accessibilityLabel="Check shelf inventory. Compare physical counts with the app."
               onPress={() => {
                 cueTap();
                 router.push('/shelf-audit');
@@ -255,10 +255,10 @@ export default function DashboardScreen() {
                 <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
               </View>
               <Text variant="heading" className="mt-2.5 font-bold">
-                Count Shelf
+                Check a shelf
               </Text>
               <Text variant="label" tone="soft" className="mt-0.5">
-                Re-count any bin
+                Correct existing stock
               </Text>
             </Pressable>
           </View>

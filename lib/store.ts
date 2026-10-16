@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { parsePrintedDate } from './intake';
 import { create } from 'zustand';
 import type { AuditWrite, CountedRow } from './audit';
 import { normaliseDietTags, type DietTag } from './diet';
@@ -1349,6 +1350,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
   },
 
   addItems: async (items: Partial<InventoryItem>[], source = 'donation', scanId = null) => {
+    // Enforce the same rules for camera review, Quick Add and manual intake.
+    for (const item of items) {
+      if (item.expiration?.trim() && !parsePrintedDate(item.expiration)) throw new Error('Enter a real printed date or leave it unknown.');
+      const count = item.count ?? 1;
+      if (!Number.isSafeInteger(count) || count < 1 || count > 1000000) throw new Error('Quantity must be a whole number between 1 and 1,000,000.');
+    }
     const { settings } = get();
     if (!settings.pantryId) {
       // Silently dropping the write here is how a volunteer ends up believing
@@ -1367,8 +1374,8 @@ export const usePantryStore = create<AppState>((set, get) => ({
       pantry_id: settings.pantryId,
       name: item.name?.trim() || 'Unlabeled Item',
       category: item.category || 'unknown',
-      count: parseInt(String(item.count), 10) || 1,
-      expiration: item.expiration || null,
+      count: item.count ?? 1,
+      expiration: item.expiration ? parsePrintedDate(item.expiration) : null,
       date_added: new Date().toISOString().split('T')[0],
       source: source,
       confidence: item.confidence || 1.0,
@@ -1432,6 +1439,10 @@ export const usePantryStore = create<AppState>((set, get) => ({
    * store re-reads the truth and the caller is told.
    */
   updateItem: async (id: string, updates: Partial<InventoryItem>) => {
+    if ('expiration' in updates) {
+      if (updates.expiration?.trim() && !parsePrintedDate(updates.expiration)) throw new Error('Enter a real printed date or leave it unknown.');
+      updates = { ...updates, expiration: updates.expiration ? parsePrintedDate(updates.expiration) : null };
+    }
     const previous = get().inventory;
     set({ inventory: previous.map(i => (i.id === id ? { ...i, ...updates } : i)) });
 

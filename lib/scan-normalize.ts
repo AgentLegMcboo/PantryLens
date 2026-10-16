@@ -2,6 +2,7 @@
 // anywhere — including a plain node process.
 import { normaliseDietTags, type DietTag } from './diet';
 import type { Category, Condition, InventoryItem } from './store';
+import { todayISO } from './expiry';
 
 /**
  * Pure normalisation of whatever the vision model returns.
@@ -143,6 +144,9 @@ export type ScanCandidate = Partial<InventoryItem> & {
   diet_tags?: DietTag[];
   /** Null when the model gave no usable box — the item is still verifiable. */
   box: DetectionBox | null;
+  /** Original readings, retained so a volunteer can undo a combination. */
+  sourceDetections?: ScanCandidate[];
+  captureGroup?: number;
 };
 
 /** Converts the model's [ymin, xmin, ymax, xmax] 0-1000 box into fractions. */
@@ -175,7 +179,7 @@ export function normaliseItem(raw: any): ScanCandidate | null {
 
   // An item already past its date is inspection-failed on arrival, whatever the
   // model thought of the tin itself.
-  const today = new Date().toISOString().split('T')[0];
+  const today = todayISO();
   const isExpired = !!expiration && expiration < today;
 
   const imageIndex = Math.floor(Number(raw?.image_index));
@@ -200,7 +204,9 @@ export function normaliseItem(raw: any): ScanCandidate | null {
 
 /** The identity of a product: same name, same category, ignoring punctuation. */
 function productKey(item: ScanCandidate): string {
-  return `${item.category}|${item.name.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
+  const identity = item.barcode?.replace(/^0+/, '') || item.name.toLowerCase().replace(/[^a-z0-9.]+/g, ' ').trim();
+  // Different dates and inspection results describe different physical batches.
+  return `${item.category}|${identity}|${item.expiration ?? ''}|${item.condition}`;
 }
 
 /**
@@ -217,7 +223,7 @@ function combine(existing: ScanCandidate, item: ScanCandidate, count: number): S
 
   return {
     ...existing,
-    count: normaliseCount(count),
+    count: Math.max(1, Math.min(1000000, Math.floor(count))),
     confidence: Math.max(existing.confidence, item.confidence),
     expiration: existing.expiration ?? item.expiration,
     // A damage flag on either reading is worth keeping: it only ever holds stock
@@ -229,6 +235,10 @@ function combine(existing: ScanCandidate, item: ScanCandidate, count: number): S
     barcode: existing.barcode ?? item.barcode,
     resolvedBy: existing.resolvedBy ?? item.resolvedBy,
     imageUrl: existing.imageUrl ?? item.imageUrl,
+    sourceDetections: [
+      ...(existing.sourceDetections ?? [existing]),
+      ...(item.sourceDetections ?? [item]),
+    ],
   };
 }
 
@@ -252,19 +262,20 @@ function combine(existing: ScanCandidate, item: ScanCandidate, count: number): S
  * being asked to de-duplicate everything itself; now that each photo is analysed
  * on its own it is the difference between correct stock and quietly wrong stock.
  */
-export function mergeDuplicates(items: ScanCandidate[]): ScanCandidate[] {
+export function mergeDuplicates(items: ScanCandidate[], photoGroups?: number[]): ScanCandidate[] {
   // Pass one: within a photo, counts add.
   const perPhoto = new Map<string, ScanCandidate>();
   for (const item of items) {
     const key = `${item.imageIndex}|${productKey(item)}`;
     const existing = perPhoto.get(key);
-    perPhoto.set(key, existing ? combine(existing, item, existing.count + item.count) : item);
+    const reading = { ...item, captureGroup: photoGroups?.[item.imageIndex] ?? 0 };
+    perPhoto.set(key, existing ? combine(existing, reading, existing.count + item.count) : reading);
   }
 
   // Pass two: across photos, the same cans seen twice — take the better reading.
   const merged = new Map<string, ScanCandidate>();
   for (const item of perPhoto.values()) {
-    const key = productKey(item);
+    const key = `${item.captureGroup ?? 0}|${productKey(item)}`;
     const existing = merged.get(key);
     merged.set(
       key,

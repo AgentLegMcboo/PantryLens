@@ -87,12 +87,17 @@ function Tab<T extends string | number>({
       className="min-h-[48px] flex-1"
     >
       <Animated.View
-        style={press.style}
+        style={[{
+          minHeight: 48, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+          gap: 6, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8,
+          backgroundColor: active ? COLORS.primary : 'transparent',
+          borderBottomWidth: active ? 3 : 0, borderBottomColor: COLORS.primaryDeep,
+        }, press.style]}
         className={cn(
           'min-h-[48px] flex-1 flex-row items-center justify-center gap-1.5 rounded-md px-3',
           // The lip again, so the selected tab reads as raised out of the
           // trough rather than merely tinted.
-          active && 'border-b-[3px] border-brand-deep bg-brand',
+          active && 'bg-brand',
         )}
       >
         {option.icon ? (
@@ -102,7 +107,7 @@ function Tab<T extends string | number>({
             color={active ? COLORS.textOnPrimary : COLORS.textSecondary}
           />
         ) : null}
-        <Text variant="label" tone={active ? 'on' : 'soft'} numberOfLines={1} className="font-bold">
+        <Text variant="label" tone={active ? 'on' : 'soft'} className="shrink text-center font-bold">
           {option.label}
         </Text>
       </Animated.View>

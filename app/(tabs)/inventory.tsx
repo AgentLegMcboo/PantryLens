@@ -42,6 +42,7 @@ import {
   usePantryStore,
 } from "../../lib/store";
 import { QuickAddStaplesModal } from "../../components/quick-add-staples";
+import { useTabOverlayInset } from "../../lib/tab-overlay";
 
 /**
  * The shelf, as a list.
@@ -252,6 +253,9 @@ const InventoryRow = React.memo(function InventoryRow({
             })()}
           </View>
 
+        </View>
+        <View className="mt-3 flex-row items-center justify-between gap-3">
+          <Text variant="label" tone="soft">Quantity</Text>
           {/* The stepper is meaningless while picking — the row is a checkbox
               then, and a control that also changes stock would fight the tap. */}
           {picking ? (
@@ -324,6 +328,7 @@ const InventoryRow = React.memo(function InventoryRow({
 });
 
 export default function InventoryScreen() {
+  const tabOverlayInset = useTabOverlayInset();
   const router = useRouter();
   // Only what this screen uses, compared shallowly, so unrelated store changes
   // (members loading, photos attaching, scan state) don't re-render it.
@@ -668,7 +673,7 @@ export default function InventoryScreen() {
             <View className="flex-1">
               <Text variant="headline">Your shelves</Text>
               <Text variant="label" tone="soft">
-                {inventory.length} products ·{" "}
+                {inventory.length} {inventory.length === 1 ? 'product' : 'products'} ·{" "}
                 {inventory.reduce((sum, item) => sum + item.count, 0)} units
               </Text>
             </View>
@@ -922,6 +927,7 @@ export default function InventoryScreen() {
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
         contentContainerClassName="px-gutter pt-4 pb-6"
+        contentContainerStyle={{ paddingBottom: tabOverlayInset + 24 }}
         renderSectionHeader={({ section }) => {
           if (dGroup === "none" || picking) return null;
           const isCollapsed = !!collapsed[section.id];
@@ -966,7 +972,7 @@ export default function InventoryScreen() {
               {/* Group and sort open a clear picker sheet so the chevron-down
                   icon behaves as a true dropdown rather than forcing volunteers
                   to cycle through options in a loop. */}
-              <View className="flex-row items-center gap-2">
+              <View className="gap-2">
                 <ListControl
                   icon="view-agenda-outline"
                   caption="Group"
@@ -996,13 +1002,14 @@ export default function InventoryScreen() {
                     hitSlop={6}
                     accessibilityRole="button"
                     accessibilityLabel="Manage places"
-                    className="h-[52px] w-[52px] items-center justify-center rounded-lg border border-hairline bg-card"
+                    className="min-h-[48px] self-start flex-row items-center justify-center gap-2 rounded-lg border border-hairline bg-card px-3 py-2"
                   >
                     <MaterialCommunityIcons
                       name="map-marker-outline"
                       size={22}
                       color={COLORS.secondaryDark}
                     />
+                    <Text variant="label" className="font-semibold">Manage shelves</Text>
                   </Pressable>
                 )}
               </View>
@@ -1351,7 +1358,7 @@ function ListControl({
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
-      className="min-h-[52px] flex-1 flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3 py-2"
+      className="min-h-[52px] w-full flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3 py-2"
     >
       <View className="h-8 w-8 items-center justify-center rounded-md bg-secondary-tint">
         <MaterialCommunityIcons
@@ -1364,7 +1371,7 @@ function ListControl({
         <Text variant="micro" tone="soft">
           {caption}
         </Text>
-        <Text variant="label" numberOfLines={1} className="font-bold">
+        <Text variant="label" className="font-bold">
           {value}
         </Text>
       </View>

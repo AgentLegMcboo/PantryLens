@@ -25,7 +25,7 @@ const LIP = 2;
 const LIP_COMPACT = 1;
 const LIP_PRESSED = 1;
 
-const buttonVariants = cva('flex-row items-center justify-center gap-2 rounded-lg self-start', {
+const buttonVariants = cva('min-w-0 max-w-full flex-row items-center justify-center gap-2 rounded-lg self-start', {
   variants: {
     variant: {
       primary: 'bg-brand',
