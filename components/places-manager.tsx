@@ -7,7 +7,8 @@ import { BoxRules, usePantryStore } from '../lib/store';
 import { Tappable } from './motion';
 
 /**
- * Adding, naming and stocking the places in a pantry.
+ * Adding, naming and stocking the shelves in a pantry, and the sub-shelves
+ * inside them (one level: "Back room › Top shelf").
  *
  * Lived in Settings, which was the wrong room: shelves and bins are not a
  * preference you set once and forget, they are the thing you rearrange while
@@ -21,25 +22,34 @@ export function PlacesManager() {
   const { locations, addLocation, renameLocation, setLocationCategories, deleteLocation, boxRules } =
     usePantryStore();
 
-  const [newLocation, setNewLocation] = useState('');
-  /** Which place is open in the editor, if any. */
+  const [newShelf, setNewShelf] = useState('');
+  const [newSub, setNewSub] = useState('');
+  /** Which shelf is open in the editor, if any. */
   const [editing, setEditing] = useState<{ id: string; name: string } | null>(null);
 
   const editingLocation = locations.find(l => l.id === editing?.id);
   const categories = Object.keys(boxRules) as (keyof BoxRules)[];
+  const topLevel = locations.filter(l => !l.parent_id);
+  const subsOf = (id: string) => locations.filter(l => l.parent_id === id);
 
-  const handleAdd = async () => {
-    const name = newLocation.trim();
+  /** Names are unique among siblings: two shelves can each have a "Top shelf". */
+  const taken = (name: string, parentId: string | null) =>
+    locations.some(
+      l => (l.parent_id ?? null) === parentId && l.name.toLowerCase() === name.toLowerCase(),
+    );
+
+  const add = async (raw: string, parentId: string | null, clear: () => void) => {
+    const name = raw.trim();
     if (!name) return;
-    if (locations.some(l => l.name.toLowerCase() === name.toLowerCase())) {
-      Alert.alert('Already there', `You already have a place called "${name}".`);
+    if (taken(name, parentId)) {
+      Alert.alert('Already there', `There's already a shelf called "${name}" here.`);
       return;
     }
     try {
-      await addLocation(name);
-      setNewLocation('');
+      await addLocation(name, parentId);
+      clear();
     } catch (err: any) {
-      Alert.alert('Could not add that place', err?.message ?? 'Please try again.');
+      Alert.alert('Could not add that shelf', err?.message ?? 'Please try again.');
     }
   };
 
@@ -56,9 +66,12 @@ export function PlacesManager() {
   const handleRemove = () => {
     if (!editing) return;
     const { id, name } = editing;
+    const subs = subsOf(id).length;
     Alert.alert(
       `Remove "${name}"?`,
-      'The food stays on the shelf list — it just stops being assigned anywhere.',
+      subs
+        ? `Its ${subs} sub-shelf${subs === 1 ? '' : 's'} go too. The food stays on the list, just unfiled.`
+        : 'The food stays on the list — it just stops being filed anywhere.',
       [
         { text: 'Keep it', style: 'cancel' },
         {
@@ -75,26 +88,42 @@ export function PlacesManager() {
     );
   };
 
+  const hint = (categoriesHere?: string[]) =>
+    categoriesHere?.length ? categoriesHere.join(', ') : 'Takes anything';
+
   return (
     <>
-      {locations.map((loc, i) => (
-        <Row
-          key={loc.id}
-          icon="map-marker-outline"
-          label={loc.name}
-          hint={
-            loc.categories?.length
-              ? loc.categories.join(', ')
-              : 'Takes anything — nothing files itself here'
-          }
-          divider={i < locations.length - 1}
-          onPress={() => setEditing({ id: loc.id, name: loc.name })}
-        />
+      {topLevel.map((loc, i) => (
+        <View key={loc.id}>
+          <Row
+            icon="bookshelf"
+            label={loc.name}
+            hint={
+              subsOf(loc.id).length
+                ? `${subsOf(loc.id).length} sub-shelf${subsOf(loc.id).length === 1 ? '' : 's'} · ${hint(loc.categories)}`
+                : hint(loc.categories)
+            }
+            divider={false}
+            onPress={() => setEditing({ id: loc.id, name: loc.name })}
+          />
+          {subsOf(loc.id).map(sub => (
+            <View key={sub.id} className="ml-[52px]">
+              <Row
+                icon="subdirectory-arrow-right"
+                label={sub.name}
+                hint={hint(sub.categories)}
+                divider={false}
+                onPress={() => setEditing({ id: sub.id, name: sub.name })}
+              />
+            </View>
+          ))}
+          {i < topLevel.length - 1 && <View className="h-px bg-hairline" />}
+        </View>
       ))}
 
       {locations.length === 0 && (
         <Text variant="label" tone="soft" className="pb-2">
-          None yet. Add the shelves and bins you already use — "Shelf A",
+          None yet. Add the shelves and bins you already use — "Canned wall",
           "Freezer", "Back room".
         </Text>
       )}
@@ -102,20 +131,20 @@ export function PlacesManager() {
       <View className="mt-4 flex-row items-end gap-3">
         <View className="flex-1">
           <Input
-            label="Add a place"
-            value={newLocation}
-            onChangeText={setNewLocation}
-            placeholder="Shelf A"
+            label="New shelf"
+            value={newShelf}
+            onChangeText={setNewShelf}
+            placeholder="Back room"
             returnKeyType="done"
-            onSubmitEditing={handleAdd}
+            onSubmitEditing={() => add(newShelf, null, () => setNewShelf(''))}
           />
         </View>
         <Tappable
-          onPress={handleAdd}
-          accessibilityLabel="Add this place"
-          disabled={!newLocation.trim()}
+          onPress={() => add(newShelf, null, () => setNewShelf(''))}
+          accessibilityLabel="Add this shelf"
+          disabled={!newShelf.trim()}
           className={`h-12 w-12 items-center justify-center rounded-md bg-brand ${
-            newLocation.trim() ? '' : 'opacity-40'
+            newShelf.trim() ? '' : 'opacity-40'
           }`}
         >
           <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
@@ -124,18 +153,56 @@ export function PlacesManager() {
 
       <Sheet
         visible={!!editing}
-        onClose={() => setEditing(null)}
-        title="Rename this place"
+        onClose={() => {
+          setEditing(null);
+          setNewSub('');
+        }}
+        title={editingLocation?.parent_id ? 'Edit sub-shelf' : 'Edit shelf'}
         subtitle="Everything filed here follows the new name."
       >
         <Input
           label="Name"
           value={editing?.name ?? ''}
           onChangeText={name => setEditing(prev => (prev ? { ...prev, name } : prev))}
-          placeholder="Shelf A"
+          placeholder="Canned wall"
           returnKeyType="done"
           onSubmitEditing={handleRename}
         />
+
+        {/* Sub-shelves: only on a top-level shelf, one level deep. */}
+        {editingLocation && !editingLocation.parent_id && (
+          <View className="gap-2">
+            <Text variant="label" tone="soft" className="font-semibold">
+              Sub-shelves
+            </Text>
+            {subsOf(editingLocation.id).length > 0 && (
+              <Text variant="label">
+                {subsOf(editingLocation.id).map(sub => sub.name).join(' · ')}
+              </Text>
+            )}
+            <View className="flex-row items-end gap-3">
+              <View className="flex-1">
+                <Input
+                  value={newSub}
+                  onChangeText={setNewSub}
+                  placeholder="Top shelf"
+                  returnKeyType="done"
+                  onSubmitEditing={() => add(newSub, editingLocation.id, () => setNewSub(''))}
+                />
+              </View>
+              <Tappable
+                onPress={() => add(newSub, editingLocation.id, () => setNewSub(''))}
+                accessibilityLabel="Add this sub-shelf"
+                disabled={!newSub.trim()}
+                className={`h-12 w-12 items-center justify-center rounded-md bg-brand ${
+                  newSub.trim() ? '' : 'opacity-40'
+                }`}
+              >
+                <MaterialCommunityIcons name="plus" size={22} color={COLORS.textOnPrimary} />
+              </Tappable>
+            </View>
+          </View>
+        )}
 
         {/* What this bin is FOR. Their tables and bins are already labelled this
             way — "canned vegetables", "pasta" — so telling the app the same thing
@@ -175,7 +242,7 @@ export function PlacesManager() {
 
         <Button label="Save" block onPress={handleRename} />
         <Button
-          label="Remove this place"
+          label={editingLocation?.parent_id ? 'Remove this sub-shelf' : 'Remove this shelf'}
           variant="criticalGhost"
           className="self-center"
           onPress={handleRemove}

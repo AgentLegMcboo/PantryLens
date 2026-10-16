@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import React from "react";
 import { Image, StyleSheet, View } from "react-native";
-import { COLORS } from "../constants/theme";
+import { COLORS, fw } from "../constants/theme";
 import { GoogleLogo } from "./google-logo";
 import { KeyboardScreen } from "./keyboard-screen";
 import { Button, Card, cardRing, Text } from "./ui";
@@ -56,7 +56,7 @@ export function AuthBrand({
         style={{
           fontSize: 32,
           lineHeight: 40,
-          fontWeight: "800",
+          fontWeight: fw('800'),
           letterSpacing: -0.6,
           color: COLORS.textPrimary,
         }}

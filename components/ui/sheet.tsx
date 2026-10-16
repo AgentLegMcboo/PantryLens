@@ -329,7 +329,9 @@ export function Sheet({
                 keyboardDismissMode={Platform.OS === 'ios' ? 'interactive' : 'on-drag'}
                 showsVerticalScrollIndicator={false}
                 contentContainerClassName="px-gutter gap-3"
-                contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+                // Just clear of the home indicator: a full extra 24px read as dead space
+                // under every sheet's last button.
+                contentContainerStyle={{ paddingBottom: Math.max(insets.bottom, 12) + 4 }}
               >
                 {children}
               </Animated.ScrollView>

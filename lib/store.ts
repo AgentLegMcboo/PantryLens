@@ -123,6 +123,8 @@ export interface PantryLocation {
   pantry_id: string;
   name: string;
   sort_order: number;
+  /** The shelf this sub-shelf sits in; null for a top-level shelf. One level deep. */
+  parent_id: string | null;
   /**
    * What belongs here. A pantry's bins are labelled by what goes in them, so
    * this is a rule rather than a note: a scan uses it to file itself. Empty
@@ -547,7 +549,7 @@ interface AppState {
   deleteBulkLot: (id: string) => Promise<void>;
   updateLbsPerUnit: (updates: Partial<LbsPerUnit>) => Promise<void>;
 
-  addLocation: (name: string) => Promise<void>;
+  addLocation: (name: string, parentId?: string | null) => Promise<void>;
   renameLocation: (id: string, name: string) => Promise<void>;
   setLocationCategories: (id: string, categories: Category[]) => Promise<void>;
   /** Where a freshly scanned item of this category should be filed. */
@@ -1108,7 +1110,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     await get().fetchMembers();
   },
 
-  addLocation: async (name: string) => {
+  addLocation: async (name: string, parentId: string | null = null) => {
     const { settings, locations } = get();
     const trimmed = name.trim();
     if (!settings.pantryId || !trimmed) return;
@@ -1121,6 +1123,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
         // New places go at the end of the walk, not the front of it.
         sort_order: locations.length,
         categories: [],
+        parent_id: parentId,
       })
       .select()
       .single();
@@ -1333,10 +1336,13 @@ export const usePantryStore = create<AppState>((set, get) => ({
   deleteLocation: async (id: string) => {
     const previous = get().locations;
     const previousInventory = get().inventory;
+    // The database removes its sub-shelves with it (ON DELETE CASCADE), and
+    // food on any of them becomes unfiled, never deleted.
+    const gone = new Set([id, ...previous.filter(l => l.parent_id === id).map(l => l.id)]);
     set({
-      locations: previous.filter(l => l.id !== id),
+      locations: previous.filter(l => !gone.has(l.id)),
       inventory: previousInventory.map(i =>
-        i.location_id === id ? { ...i, location_id: null } : i,
+        i.location_id && gone.has(i.location_id) ? { ...i, location_id: null } : i,
       ),
     });
 

@@ -34,6 +34,7 @@ import {
   isUsableCondition,
   usePantryStore,
 } from '../lib/store';
+import { orderShelves } from '../lib/shelves';
 
 const CATEGORIES: Category[] = [
   'grain',
@@ -309,10 +310,10 @@ export default function ItemDetailScreen() {
                 Where does it live?
               </Text>
               <View className="flex-row flex-wrap gap-2">
-                {locations.map(loc => (
+                {orderShelves(locations).map(({ loc, label }) => (
                   <Chip
                     key={loc.id}
-                    label={loc.name}
+                    label={label}
                     selected={locationId === loc.id}
                     onPress={() => setLocationId(locationId === loc.id ? null : loc.id)}
                   />

@@ -6,6 +6,7 @@ import { useAccessibilityStore } from "../lib/accessibility";
 import { cueSuccess, cueTap, cueWarn } from "../lib/feedback";
 import { Category, InventoryItem, usePantryStore } from "../lib/store";
 import { Card, CategoryIcon, Segmented, Sheet, Text } from "./ui";
+import { shelfLabels } from "../lib/shelves";
 
 export interface StapleItem {
   id: string;
@@ -219,7 +220,7 @@ export function QuickAddStaplesModal({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
 
   const placeNames = useMemo(
-    () => Object.fromEntries(locations.map((l) => [l.id, l.name])) as Record<string, string>,
+    () => shelfLabels(locations),
     [locations],
   );
 

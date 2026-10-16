@@ -9,7 +9,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import Svg, { Line, Rect, Text as SvgText } from 'react-native-svg';
-import { COLORS } from '../constants/theme';
+import { COLORS, fw } from '../constants/theme';
 import type { StockExit } from '../lib/reports';
 import { Text } from './ui';
 
@@ -85,6 +85,8 @@ function niceCeil(n: number) {
 const HEIGHT = 200;
 const AXIS_W = 28;
 const LABEL_H = 18;
+/** Room above the top gridline so its axis label isn't clipped. */
+const TOP_PAD = 10;
 
 export function ExitChart({ exits, days }: { exits: StockExit[]; days: number }) {
   const [width, setWidth] = React.useState(0);
@@ -96,7 +98,7 @@ export function ExitChart({ exits, days }: { exits: StockExit[]; days: number })
   const plotH = HEIGHT - LABEL_H;
   const slot = buckets.length ? plotW / buckets.length : 0;
   const barW = Math.max(3, Math.min(22, slot * 0.62));
-  const y = (v: number) => plotH - (v / top) * plotH;
+  const y = (v: number) => plotH - (v / top) * (plotH - TOP_PAD);
 
   const reduceMotion = useReducedMotion();
   const progress = useSharedValue(0);
@@ -139,7 +141,7 @@ export function ExitChart({ exits, days }: { exits: StockExit[]; days: number })
                   x={AXIS_W - 6}
                   y={y(top * f) + 4}
                   fontSize={11}
-                  fontWeight="600"
+                  fontWeight={fw('600')}
                   fill={COLORS.textSecondary}
                   textAnchor="end"
                 >
@@ -156,7 +158,7 @@ export function ExitChart({ exits, days }: { exits: StockExit[]; days: number })
                   x={n === 0 ? cx - barW / 2 : n === 2 ? cx + barW / 2 : cx}
                   y={HEIGHT - 3}
                   fontSize={11}
-                  fontWeight="600"
+                  fontWeight={fw('600')}
                   fill={COLORS.textSecondary}
                   textAnchor={n === 0 ? 'start' : n === 2 ? 'end' : 'middle'}
                 >

@@ -3,8 +3,9 @@ import { useRouter } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { Pressable, StyleSheet, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { COLORS } from "../../constants/theme";
+import { COLORS, fw } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
+import { useDismissible } from "../../lib/dismissals";
 import {
   DIET_TAG_LABELS,
   EXCLUSION_CAVEAT,
@@ -140,6 +141,12 @@ export default function BuildBoxesScreen() {
       requires: box.requires,
     },
   );
+  // Closable; it returns when the held-back stock changes. The same items are
+  // on the Notifications page (the bell).
+  const [heldBackVisible, dismissHeldBack] = useDismissible(
+    `build-held-back.${settings.pantryId ?? "none"}`,
+    `${plan.excluded.pastDate.units}-${plan.excluded.flagged.units}`,
+  );
 
   const categories = Object.keys(box.rules) as (keyof BoxRules)[];
   const isShort = plan.achievableBoxes < requestedBoxes;
@@ -193,7 +200,7 @@ export default function BuildBoxesScreen() {
                   value={plan.achievableBoxes}
                   style={{
                     fontSize: 60,
-                    fontWeight: "800",
+                    fontWeight: fw('800'),
                     color: COLORS.textOnPrimary,
                     letterSpacing: -2,
                   }}
@@ -324,7 +331,8 @@ export default function BuildBoxesScreen() {
         )}
 
         {(plan.excluded.pastDate.units > 0 ||
-          plan.excluded.flagged.units > 0) && (
+          plan.excluded.flagged.units > 0) &&
+          heldBackVisible && (
           <FadeInUp index={1}>
             <Panel className="flex-row gap-3">
               <MaterialCommunityIcons
@@ -355,18 +363,28 @@ export default function BuildBoxesScreen() {
                     : "are"}{" "}
                   on the shelf but left out of this plan.
                 </Text>
-                {plan.excluded.pastDate.units > 0 && (
-                  <Tappable
-                    onPress={() => router.push("/expiring-soon")}
-                    accessibilityRole="button"
-                    className="min-h-[44px] justify-center self-start py-1"
-                  >
-                    <Text variant="label" tone="brand" className="font-bold">
-                      Check what is out of date →
-                    </Text>
-                  </Tappable>
-                )}
+                <Tappable
+                  onPress={() => router.push("/expiring-soon")}
+                  accessibilityRole="button"
+                  className="min-h-[44px] justify-center self-start py-1"
+                >
+                  <Text variant="label" tone="brand" className="font-bold">
+                    See them in Notifications →
+                  </Text>
+                </Tappable>
               </View>
+              <Tappable
+                onPress={() => {
+                  cueTap();
+                  dismissHeldBack();
+                }}
+                hitSlop={12}
+                accessibilityRole="button"
+                accessibilityLabel="Dismiss. It stays on the Notifications page."
+                className="-mr-1 -mt-1 h-8 w-8 items-center justify-center"
+              >
+                <MaterialCommunityIcons name="close" size={18} color={COLORS.textSecondary} />
+              </Tappable>
             </Panel>
           </FadeInUp>
         )}

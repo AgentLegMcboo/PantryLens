@@ -9,7 +9,7 @@ import Animated, {
 import { useRouter } from "expo-router";
 import React, { useMemo, useState } from "react";
 import { Image, Pressable, StyleSheet, View } from "react-native";
-import { COLORS, RULE_ABOVE_FAINT } from "../../constants/theme";
+import { COLORS, RULE_ABOVE_FAINT, fw } from "../../constants/theme";
 import {
   AnimatedCounter,
   FadeInUp,
@@ -391,7 +391,7 @@ export default function DashboardScreen() {
                   style={{
                     fontSize: 34,
                     lineHeight: 40,
-                    fontWeight: "800",
+                    fontWeight: fw('800'),
                     color: COLORS.textPrimary,
                   }}
                 />
@@ -486,7 +486,7 @@ export default function DashboardScreen() {
                   style={{
                     fontSize: 34,
                     lineHeight: 40,
-                    fontWeight: "800",
+                    fontWeight: fw('800'),
                     color: COLORS.textPrimary,
                   }}
                 />

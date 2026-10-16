@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import React, { useEffect, useState } from "react";
 import { Alert, View } from "react-native";
-import { COLORS, RULE_ABOVE, RULE_BELOW } from "../constants/theme";
+import { COLORS, RULE_ABOVE, RULE_BELOW, fw } from "../constants/theme";
 import {
   ExitChart,
   GIVEN_COLOUR,
@@ -231,7 +231,7 @@ export default function ReportsScreen() {
                   style={{
                     fontSize: 40,
                     lineHeight: 46,
-                    fontWeight: "800",
+                    fontWeight: fw('800'),
                     color: COLORS.textPrimary,
                     letterSpacing: -1,
                   }}

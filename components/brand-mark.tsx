@@ -1,7 +1,7 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as React from 'react';
 import { View } from 'react-native';
-import { COLORS } from '../constants/theme';
+import { COLORS, fw } from '../constants/theme';
 import { Text } from './ui';
 
 /**
@@ -22,7 +22,7 @@ export function BrandMark() {
         style={{
           fontSize: 19,
           lineHeight: 24,
-          fontWeight: '800',
+          fontWeight: fw('800'),
           letterSpacing: -0.4,
           color: COLORS.textPrimary,
         }}

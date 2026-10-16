@@ -24,7 +24,7 @@ import { AuthBackdrop } from '../components/auth-layout';
 import { BrandMark } from '../components/brand-mark';
 import { BoxesMock, CameraMock, ScanMock } from '../components/onboarding-mocks';
 import { Button, Text } from '../components/ui';
-import { COLORS } from '../constants/theme';
+import { COLORS, fw } from '../constants/theme';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { cueSuccess, cueTap } from '../lib/feedback';
 import { usePantryStore } from '../lib/store';
@@ -155,7 +155,7 @@ export default function OnboardingScreen() {
                     style={{
                       fontSize: seniorMode ? 33 : 30,
                       lineHeight: seniorMode ? 40 : 37,
-                      fontWeight: '700',
+                      fontWeight: fw('700'),
                       letterSpacing: -0.5,
                       color: COLORS.textPrimary,
                     }}
@@ -165,7 +165,7 @@ export default function OnboardingScreen() {
                       style={{
                         fontSize: seniorMode ? 33 : 30,
                         lineHeight: seniorMode ? 40 : 37,
-                        fontWeight: '700',
+                        fontWeight: fw('700'),
                         color: COLORS.primaryLight,
                       }}
                     >

@@ -3,7 +3,7 @@ import * as Clipboard from "expo-clipboard";
 import { useRouter } from "expo-router";
 import React, { useState } from "react";
 import { Alert, Share, View } from "react-native";
-import { COLORS } from "../../constants/theme";
+import { COLORS, fw } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
 import { AnimatedCounter, FadeInUp, ProgressBar, Tappable } from "../../components/motion";
 import {
@@ -230,7 +230,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                         </Text>
                         <AnimatedCounter
                           value={item.deficit}
-                          style={{ fontSize: 22, lineHeight: 28, fontWeight: "700", color: accent }}
+                          style={{ fontSize: 22, lineHeight: 28, fontWeight: fw('700'), color: accent }}
                         />
                       </View>
                       <Text variant="micro" tone="soft">

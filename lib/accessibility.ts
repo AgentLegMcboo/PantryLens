@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fw } from '../constants/theme';
 import { create } from 'zustand';
 
 const SENIOR_MODE_KEY = 'pantrylens.senior_mode.v1';
@@ -96,7 +97,7 @@ export function getSeniorTextStyle(variant?: string | null, tone?: string | null
   };
 
   if (fontWeight) {
-    style.fontWeight = fontWeight;
+    style.fontWeight = fw(fontWeight);
   }
 
   // High contrast for senior eyes: soft grey becomes crisp charcoal. Default

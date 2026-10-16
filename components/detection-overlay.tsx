@@ -12,7 +12,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { COLORS, RADII } from '../constants/theme';
+import { COLORS, RADII, fw } from '../constants/theme';
 import { useAccessibilityStore } from '../lib/accessibility';
 import {
   isTooSmall,
@@ -507,8 +507,8 @@ const styles = StyleSheet.create({
     paddingVertical: 2.5,
     borderRadius: RADII.sm,
   },
-  tagText: { fontSize: 12, fontWeight: '700', color: COLORS.textOnPrimary },
-  tagTick: { fontSize: 11, fontWeight: '900', color: COLORS.textOnPrimary },
+  tagText: { fontSize: 12, fontWeight: fw('700'), color: COLORS.textOnPrimary },
+  tagTick: { fontSize: 11, fontWeight: fw('900'), color: COLORS.textOnPrimary },
 
   handleHit: {
     position: 'absolute',

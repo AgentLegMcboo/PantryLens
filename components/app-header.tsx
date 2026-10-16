@@ -170,7 +170,7 @@ export function AppHeader({ title }: { title: string }) {
 
           <HeaderButton
             icon="bell-outline"
-            label="Expiring soon"
+            label="Notifications"
             badge={expiringCount}
             onPress={() => router.push('/expiring-soon')}
           />

@@ -2,7 +2,7 @@ import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { Tabs } from 'expo-router';
 import { LinearGradient } from 'expo-linear-gradient';
 import { View } from 'react-native';
-import { COLORS } from '../../constants/theme';
+import { COLORS, fw } from '../../constants/theme';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccessibilityStore } from '../../lib/accessibility';
 import { AppHeader } from '../../components/app-header';
@@ -45,7 +45,7 @@ export default function TabLayout() {
           },
           tabBarLabelStyle: {
             fontSize: seniorMode ? 15 : 12,
-            fontWeight: seniorMode ? '700' : '600',
+            fontWeight: fw(seniorMode ? '700' : '600'),
             marginTop: 2,
           },
           tabBarIconStyle: { marginTop: 0 },

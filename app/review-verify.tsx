@@ -22,6 +22,7 @@ import {
   isUsableCondition,
   usePantryStore,
 } from '../lib/store';
+import { orderShelves, shelfLabels } from '../lib/shelves';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { windowEndISO } from '../lib/expiry';
@@ -770,7 +771,7 @@ export default function ReviewVerifyScreen() {
               <MaterialCommunityIcons name="map-marker-outline" size={15} color={COLORS.textSecondary} />
               <Text variant="micro" className="font-semibold" numberOfLines={1}>
                 {batchLocation
-                  ? locations.find((l) => l.id === batchLocation)?.name ?? 'Filed'
+                  ? shelfLabels(locations)[batchLocation] ?? 'Filed'
                   : autoFiles
                     ? 'Auto-filed'
                     : 'Unfiled'}
@@ -1012,7 +1013,7 @@ export default function ReviewVerifyScreen() {
                   </Text>
                   {(() => {
                     const locId = resolveLocationForRow(selectedItem);
-                    const locName = locId ? locations.find((l) => l.id === locId)?.name : null;
+                    const locName = locId ? shelfLabels(locations)[locId] : null;
                     if (!locName) return null;
                     return (
                       <>
@@ -1201,10 +1202,10 @@ export default function ReviewVerifyScreen() {
         title={autoFiles ? 'Send the whole batch to one place?' : 'Where is this going?'}
       >
         <View className="flex-row flex-wrap gap-2">
-          {locations.map((loc) => (
+          {orderShelves(locations).map(({ loc, label }) => (
             <Chip
               key={loc.id}
-              label={loc.name}
+              label={label}
               selected={batchLocation === loc.id}
               onPress={() => setBatchLocation(batchLocation === loc.id ? null : loc.id)}
             />

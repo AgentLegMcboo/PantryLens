@@ -15,7 +15,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from "react-native-reanimated";
-import { COLORS, FONTS } from "../constants/theme";
+import { COLORS, FONTS, fw } from "../constants/theme";
 import { cueTap } from "../lib/feedback";
 
 const { width: W, height: H } = Dimensions.get("window");
@@ -356,14 +356,14 @@ const styles = StyleSheet.create({
   word: {
     marginTop: 22,
     fontSize: 30,
-    fontWeight: "800",
+    fontWeight: fw('800'),
     letterSpacing: -0.6,
     color: COLORS.textOnPrimary,
   },
   tag: {
     marginTop: 6,
     fontSize: 13,
-    fontWeight: "600",
+    fontWeight: fw('600'),
     letterSpacing: 0.3,
     color: COLORS.background,
   },
@@ -384,7 +384,7 @@ const styles = StyleSheet.create({
   },
   debugText: {
     fontSize: 12,
-    fontWeight: "800",
+    fontWeight: fw('800'),
     letterSpacing: 1.4,
     color: COLORS.background,
     opacity: 0.9,

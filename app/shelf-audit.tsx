@@ -13,6 +13,7 @@ import { cueTap, cueWarn } from '../lib/feedback';
 import { log } from '../lib/log';
 import { preparePhoto, type PreparedPhoto } from '../lib/photo';
 import { usePantryStore } from '../lib/store';
+import { orderShelves } from '../lib/shelves';
 
 const MAX_SHOTS = 6;
 
@@ -192,7 +193,7 @@ export default function ShelfAuditScreen() {
             subtitle="The count replaces what this shelf says. Everywhere else is left alone."
           />
 
-          {locations.map((place, i) => {
+          {orderShelves(locations).map(({ loc: place, label }, i) => {
             const active = place.id === locationId;
             const items = inventory.filter(x => x.location_id === place.id);
             const units = items.reduce((sum, x) => sum + x.count, 0);
@@ -220,7 +221,7 @@ export default function ShelfAuditScreen() {
                     tone={active ? 'default' : 'soft'}
                     className={active ? 'font-semibold' : undefined}
                   >
-                    {place.name}
+                    {label}
                   </Text>
                   {/* What the books claim, so the scope is a number before a
                       single photo is taken. */}

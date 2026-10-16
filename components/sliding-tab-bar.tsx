@@ -8,7 +8,7 @@ import Animated, {
   withSpring,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { COLORS } from '../constants/theme';
+import { COLORS, fw } from '../constants/theme';
 import { useAccessibilityStore } from '../lib/accessibility';
 import { cueTap } from '../lib/feedback';
 
@@ -132,7 +132,7 @@ export function SlidingTabBar({ state, descriptors, navigation }: TabBarProps) {
               <Animated.Text
                 style={{
                   fontSize: seniorMode ? 15 : 12,
-                  fontWeight: focused || seniorMode ? '700' : '600',
+                  fontWeight: fw(focused || seniorMode ? '700' : '600'),
                   color,
                 }}
                 numberOfLines={1}
