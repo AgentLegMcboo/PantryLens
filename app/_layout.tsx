@@ -18,6 +18,7 @@ import { loadFeedbackPrefs } from '../lib/feedback';
 import { GrainOverlay } from '../components/motion';
 import { Asset } from 'expo-asset';
 import { BrandSplash } from '../components/brand-splash';
+import { TeamAlertPopup } from '../components/team-alert-popup';
 import { StackHeader } from '../components/app-header';
 import { StatusBar, View } from 'react-native';
 
@@ -185,6 +186,7 @@ export default function RootLayout() {
       <SpotlightHost />
       {/* Sits above every screen. Non-interactive, so it never eats a tap. */}
       <GrainOverlay opacity={0.12} />
+      <TeamAlertPopup enabled={splashDone && isLoaded && !!session && !!pantryId} />
       {!splashDone && <BrandSplash hold={!ready} onDone={() => setSplashDone(true)} />}
     </SafeAreaProvider>
     </ThemeProvider>

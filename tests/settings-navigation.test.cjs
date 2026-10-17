@@ -7,7 +7,7 @@ const ts = require('typescript');
 
 // Execute the real components with deterministic native animation callbacks.
 // Layout changes and UIKit dismissal are separate events, just as on a phone.
-function mount(file, exportName, initialProps = {}, platform = 'ios') {
+function mount(file, exportName, initialProps = {}, platform = 'ios', options = {}) {
   const slots = [], animations = [], pushes = [];
   let cursor = 0, dirty = false, effects = [], props = initialProps, tree;
   const changed = (a, b) => !a || !b || a.length !== b.length || a.some((value, i) => !Object.is(value, b[i]));
@@ -47,6 +47,7 @@ function mount(file, exportName, initialProps = {}, platform = 'ios') {
     session: { user: { id: 'user', email: 'member@example.test' } }, inventory: [], pantries: [],
     signOut: async () => {}, switchPantry() {}, setAddingPantry() {},
   };
+  const teamAlerts = { alerts: [{ id: 'alert', message: 'We need grains and protein', created_at: '2026-10-17T12:00:00Z', created_by: 'someone-else' }], load() {} };
   const animate = (to, config, callback) => { animations.push({ to, config, callback }); return to; };
   const router = { push: route => pushes.push(route) };
   const compiled = ts.transpileModule(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), {
@@ -66,21 +67,24 @@ function mount(file, exportName, initialProps = {}, platform = 'ios') {
       if (name === 'react-native-reanimated') return {
         __esModule: true, default: { View: 'Animated.View', ScrollView: 'Animated.ScrollView' },
         useSharedValue: value => React.useRef({ value }).current,
-        useReducedMotion: () => false, useAnimatedStyle: fn => fn(), useAnimatedScrollHandler: fn => fn,
+        useReducedMotion: () => options.reduceMotion ?? false, useAnimatedStyle: fn => fn(), useAnimatedScrollHandler: fn => fn,
         withSpring: animate, withTiming: animate, withSequence: value => value, runOnJS: fn => fn,
-        interpolate: () => 1, ReduceMotion: { Never: 'never' }, Easing: {},
+        interpolate: () => 1, ReduceMotion: { Never: 'never' }, Easing: { out: fn => fn, cubic: x => x },
       };
       if (name === 'react-native-gesture-handler') return { Gesture: { Pan: () => gesture }, GestureDetector: 'GestureDetector', GestureHandlerRootView: 'GestureHandlerRootView' };
-      if (name === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 0, bottom: 24 }) };
-      if (name === 'expo-router') return { useRouter: () => router };
+      if (name === 'react-native-safe-area-context') return { useSafeAreaInsets: () => ({ top: 47, bottom: 24 }) };
+      if (name === 'expo-router') return { useRouter: () => router, useSegments: () => ['(tabs)', 'index'], useFocusEffect: effect => React.useEffect(effect, []) };
+      if (name === '@react-native-async-storage/async-storage') return { __esModule: true, default: { getItem: async () => '[]', setItem: async () => {} } };
       if (name.includes('constants/theme')) return { COLORS: {} };
       if (name.endsWith('/appearance')) return { useAppAppearance: selector => selector(state) };
       if (name.endsWith('/accessibility')) return { useAccessibilityStore: selector => selector(state) };
-      if (name.endsWith('/store')) return { usePantryStore: () => state };
+      if (name.endsWith('/store')) return { usePantryStore: selector => selector ? selector(state) : state };
+      if (name.endsWith('/team-alerts')) return { useTeamAlerts: selector => selector(teamAlerts) };
+      if (name.endsWith('/time')) return { timeAgo: () => '2 minutes ago' };
       if (name.endsWith('/notifications')) return { useUnreadCount: () => 0 };
       if (name.endsWith('/offline-queue')) return { offlineQueue: { subscribe: () => () => {} } };
       if (name.endsWith('/feedback')) return { cueTap() {} };
-      if (name.endsWith('/motion-physics')) return { SPRING_SHEET: {}, DRAG_SLOP: 10, projectDecay: () => 0, rubberband: x => x };
+      if (name.endsWith('/motion-physics')) return { SPRING_SHEET: {}, SPRING_NOTIFICATION: { dampingRatio: 1, duration: 300 }, DRAG_SLOP: 10, projectDecay: () => 0, rubberband: x => x };
       if (name.endsWith('/cn')) return { cn: (...args) => args.filter(Boolean).join(' ') };
       if (name.endsWith('/spotlight')) return { useSpotlightTarget: () => () => {} };
       return new Proxy({}, { get: (_target, key) => key === '__esModule' ? true : String(key) });
@@ -213,4 +217,89 @@ test('profile navigation cannot open a second sheet until the menu dismisses', (
   assert.equal(h.pushes.length, 1);
   assert.equal(h.pushes[0].pathname, '/(tabs)/settings');
   assert.equal(h.pushes[0].params.section, 'profile');
+});
+
+test('team alerts use a top bubble instead of a blocking bottom sheet', async () => {
+  const h = mount('components/team-alert-popup.tsx', 'TeamAlertPopup');
+  await new Promise(resolve => setImmediate(resolve));
+  h.render();
+  assert.equal(h.find('Sheet'), null);
+  const bubble = h.find('TopNotificationBubble');
+  assert.ok(bubble);
+  assert.equal(bubble.props.visible, true);
+});
+
+function mountBubble(props = {}, options = {}) {
+  assert.ok(fs.existsSync(path.join(__dirname, '../components/top-notification-bubble.tsx')), 'Top notification bubble is not implemented');
+  return mount('components/top-notification-bubble.tsx', 'TopNotificationBubble', {
+    visible: true, message: 'We need grains and protein', detail: '2 minutes ago', onClose() {}, onPress() {}, ...props,
+  }, 'ios', options);
+}
+
+test('notification bubbles sit below the top safe area without a modal or backdrop', () => {
+  const h = mountBubble();
+  const host = h.find('View', props => props.testID === 'top-notification-host');
+  assert.ok(host);
+  assert.equal(host.props.style.top, 55);
+  assert.equal(host.props.pointerEvents, 'box-none');
+  assert.equal(h.find('Modal'), null);
+  assert.ok(h.find('Animated.View', props => !!props.onLayout).props.style[1].transform[0].translateY < 0,
+    'the entrance starts above the top edge');
+  h.layout(140);
+  assert.equal(h.animations.at(-1).to, 1);
+  assert.equal(h.animations.at(-1).config.duration, 300);
+});
+
+test('notification bubble keeps its content during exit and calls onDismiss once', () => {
+  let dismissed = 0;
+  const h = mountBubble({ onDismiss: () => dismissed++ });
+  h.layout(140);
+  h.render({ visible: false, message: '' });
+  assert.ok(h.find('Text', props => props.children === 'We need grains and protein'));
+  assert.equal(h.animations.at(-1).to, 0);
+  assert.equal(h.animations.at(-1).config.duration, 150);
+  assert.equal(h.find('Animated.View', props => !!props.onLayout).props.pointerEvents, 'none');
+  assert.equal(dismissed, 0);
+  h.animations.at(-1).callback(true);
+  h.render();
+  assert.equal(h.find('View', props => props.testID === 'top-notification-host'), null);
+  assert.equal(dismissed, 1);
+  h.render({ onDismiss: () => dismissed++ });
+  assert.equal(dismissed, 1);
+});
+
+test('Reduce Motion makes notification bubbles fade without translating', () => {
+  const h = mountBubble({}, { reduceMotion: true });
+  h.layout(140);
+  h.render();
+  const card = h.find('Animated.View', props => !!props.onLayout);
+  assert.equal(card.props.style[1].transform.length, 0);
+  assert.equal(h.animations.at(-1).config.duration, 200);
+});
+
+test('See needs marks the alert seen and navigates once after the bubble leaves', async () => {
+  const h = mount('components/team-alert-popup.tsx', 'TeamAlertPopup');
+  await new Promise(resolve => setImmediate(resolve));
+  h.render();
+  h.find('TopNotificationBubble').props.onPress();
+  h.render();
+  const bubble = h.find('TopNotificationBubble');
+  assert.equal(bubble.props.visible, false);
+  assert.equal(h.pushes.length, 0);
+  bubble.props.onDismiss();
+  bubble.props.onDismiss();
+  assert.equal(h.pushes.length, 1);
+  assert.equal(h.pushes[0], '/(tabs)/needs');
+});
+
+test('a new alert can interrupt the bubble exit without being unmounted', () => {
+  const h = mountBubble();
+  h.layout(140);
+  h.render({ visible: false });
+  const closing = h.animations.at(-1).callback;
+  h.render({ visible: true, message: 'Another team alert' });
+  closing(true);
+  h.render();
+  assert.ok(h.find('View', props => props.testID === 'top-notification-host'));
+  assert.ok(h.find('Text', props => props.children === 'Another team alert'));
 });

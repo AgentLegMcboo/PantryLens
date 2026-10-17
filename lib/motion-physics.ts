@@ -27,6 +27,9 @@
  */
 export const SPRING_SETTLE = { dampingRatio: 1, duration: 350 } as const;
 
+/** A brief arrival for a notification that moves into view on its own. */
+export const SPRING_NOTIFICATION = { ...SPRING_SETTLE, duration: 300 } as const;
+
 /**
  * For a sheet or drawer, which the user drags and releases.
  *

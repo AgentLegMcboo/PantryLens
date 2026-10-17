@@ -12,7 +12,6 @@ import { InventoryItem, usePantryStore } from "../../lib/store";
 import { cuePress, cueTap } from "../../lib/feedback";
 import { QuickAddStaplesModal } from "../../components/quick-add-staples";
 import { ShelfCheckSheet } from "../../components/shelf-check";
-import { TeamAlertPopup } from "../../components/team-alert-popup";
 import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
 
 const HOME_TOUR: TourStep[] = [
@@ -292,7 +291,6 @@ export default function DashboardScreen() {
 
 
       <SpotlightTour tourKey="home" steps={HOME_TOUR} />
-      <TeamAlertPopup />
       <ShelfCheckSheet
         visible={shelfCheckOpen}
         onClose={() => setShelfCheckOpen(false)}
