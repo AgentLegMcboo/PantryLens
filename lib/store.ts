@@ -4,7 +4,7 @@ import { create } from 'zustand';
 import type { AuditWrite, CountedRow } from './audit';
 import { normaliseDietTags, type DietTag } from './diet';
 import { SCAN_PHOTO_BUCKET, type StartedScan } from './scan-history';
-import { itemsPerBox, normaliseRules } from './box-presets';
+import { itemsPerBox, normaliseItems, normaliseRules, type BoxItemRule } from './box-presets';
 import { log } from './log';
 import { ADMIN_ONLY_MESSAGE, asRole, canEditPantry, type PantryRole } from './permissions';
 import { supabase } from './supabase';
@@ -229,6 +229,8 @@ export interface BoxTemplate {
   pantry_id: string;
   name: string;
   rules: BoxRules;
+  /** Particular products, on top of the category amounts. */
+  items: BoxItemRule[];
   /** Amounts are for a family of 4 and scale with household size. Off for per-person kits. */
   scales_with_family: boolean;
   /** Nothing known to carry these goes in. "Wheat-free box". */
@@ -595,6 +597,7 @@ interface AppState {
     id?: string;
     name: string;
     rules: BoxRules;
+    items?: BoxItemRule[];
     scalesWithFamily: boolean;
     folderId?: string | null;
     /** Nothing known to carry these goes in. */
@@ -842,7 +845,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
             .order('name', { ascending: true }),
           supabase
             .from('box_templates')
-            .select('id, pantry_id, name, rules, scales_with_family, is_default, folder_id, excludes_tags, requires_tags')
+            .select('id, pantry_id, name, rules, items, scales_with_family, is_default, folder_id, excludes_tags, requires_tags')
             .eq('pantry_id', pantryId)
             .order('is_default', { ascending: false })
             .order('name', { ascending: true }),
@@ -869,6 +872,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
         const boxTemplates = ((tplData as any[]) || []).map(t => ({
           ...t,
           rules: normaliseRules(t.rules),
+          items: normaliseItems(t.items),
           excludes_tags: normaliseDietTags(t.excludes_tags),
           requires_tags: normaliseDietTags(t.requires_tags),
         })) as BoxTemplate[];
@@ -1797,14 +1801,15 @@ export const usePantryStore = create<AppState>((set, get) => ({
    * next refresh. Templates have member policies, and every write here checks
    * its error.
    */
-  saveBoxTemplate: async ({ id, name, rules, scalesWithFamily, folderId, excludesTags, requiresTags }) => {
+  saveBoxTemplate: async ({ id, name, rules, items, scalesWithFamily, folderId, excludesTags, requiresTags }) => {
     const { settings, boxTemplates } = get();
     if (!settings.pantryId) throw new Error('No pantry is loaded yet. Reopen the app and try again.');
 
     const trimmed = name.trim();
     if (!trimmed) throw new Error('Give the box a name.');
     const clean = normaliseRules(rules);
-    if (itemsPerBox(clean) === 0) throw new Error('A box needs at least one item in it.');
+    const cleanItems = normaliseItems(items ?? []);
+    if (itemsPerBox(clean) === 0 && cleanItems.length === 0) throw new Error('A box needs at least one item in it.');
 
     const excludes = normaliseDietTags(excludesTags);
     const requires = normaliseDietTags(requiresTags);
@@ -1819,12 +1824,13 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const fields = {
       name: trimmed,
       rules: clean,
+      items: cleanItems,
       scales_with_family: scalesWithFamily,
       folder_id: folderId ?? null,
       excludes_tags: excludes,
       requires_tags: requires,
     };
-    const columns = 'id, pantry_id, name, rules, scales_with_family, is_default, folder_id, excludes_tags, requires_tags';
+    const columns = 'id, pantry_id, name, rules, items, scales_with_family, is_default, folder_id, excludes_tags, requires_tags';
 
     let result;
     if (id) {
@@ -1853,6 +1859,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
     const saved = {
       ...(result.data as any),
       rules: normaliseRules((result.data as any).rules),
+      items: normaliseItems((result.data as any).items),
       excludes_tags: normaliseDietTags((result.data as any).excludes_tags),
       requires_tags: normaliseDietTags((result.data as any).requires_tags),
     } as BoxTemplate;

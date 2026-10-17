@@ -19,6 +19,8 @@ import {
 } from '../lib/store';
 import { shelfLabels } from '../lib/shelves';
 import { notificationKeys, useReadNotifications } from '../lib/notifications';
+import { useTeamAlerts } from '../lib/team-alerts';
+import { timeAgo } from '../lib/time';
 
 /** How a window of days should read: past, this week, or merely soon. */
 function urgency(days: number) {
@@ -37,26 +39,52 @@ export default function ExpiringSoonScreen() {
 
   const warningStr = windowEndISO(settings.expirationWarningDays);
 
+  const cleared = useReadNotifications(s => s.cleared);
+  const clearAll = useReadNotifications(s => s.clear);
+  const keyFor = (item: InventoryItem) =>
+    `${item.id}:${(daysUntil(item.expiration!) ?? 0) < 0 ? 'past' : 'soon'}`;
   const expiring = inventory
     .filter(item => item.count > 0 && !!item.expiration && item.expiration <= warningStr)
+    .filter(item => !cleared.has(keyFor(item)))
     .sort((a, b) => a.expiration!.localeCompare(b.expiration!));
 
-  const unknownDates = inventory.filter(item => item.count > 0 && !item.expiration && item.category !== 'hygiene');
+  const allUndated = inventory.filter(item => item.count > 0 && !item.expiration && item.category !== 'hygiene');
+  const unknownDates = cleared.has(`undated:${allUndated.length}`) ? [] : allUndated;
   const pastDateItems = expiring.filter(i => (daysUntil(i.expiration!) ?? 0) < 0);
   const soonItems = expiring.filter(i => (daysUntil(i.expiration!) ?? 0) >= 0);
   const unitsAtRisk = expiring.reduce((sum, item) => sum + item.count, 0);
   // Damaged or flagged stock: held out of every box until someone clears it.
   // Inventory and Build show a closable banner for this; it always lives here.
-  const heldBack = inventory.filter(i => i.count > 0 && !isUsableCondition(i.condition));
+  const heldBack = inventory.filter(
+    i => i.count > 0 && !isUsableCondition(i.condition) && !cleared.has(`${i.id}:damaged`),
+  );
 
   // Seeing this page reads every notification on it, so the bell clears.
   const markRead = useReadNotifications(s => s.markRead);
+  const allTeamAlerts = useTeamAlerts(s => s.alerts);
+  const teamAlerts = allTeamAlerts.filter(a => !cleared.has(`alert:${a.id}`));
+  const onClearAll = () => {
+    cueTap();
+    Alert.alert('Clear all notifications?', 'They stay cleared on this phone. Anything new still shows up.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Clear all',
+        style: 'destructive',
+        onPress: () =>
+          clearAll([
+            ...cleared,
+            ...notificationKeys(inventory, settings.expirationWarningDays, allTeamAlerts.map(a => a.id)),
+            `undated:${allUndated.length}`,
+          ]),
+      },
+    ]);
+  };
   const loadRead = useReadNotifications(s => s.load);
   useEffect(() => {
     if (!settings.pantryId) return;
     loadRead(settings.pantryId);
-    markRead(notificationKeys(inventory, settings.expirationWarningDays));
-  }, [settings.pantryId, inventory, settings.expirationWarningDays, loadRead, markRead]);
+    markRead(notificationKeys(inventory, settings.expirationWarningDays, teamAlerts.map(a => a.id)));
+  }, [settings.pantryId, inventory, settings.expirationWarningDays, loadRead, markRead, teamAlerts]);
 
   const handleDisposition = (reason: ExitReason) => {
     if (!exitItem) return;
@@ -181,8 +209,41 @@ export default function ExpiringSoonScreen() {
         contentContainerStyle={{ paddingBottom: 24 + insets.bottom }}
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
-          expiring.length > 0 || heldBack.length > 0 || unknownDates.length > 0 ? (
+          expiring.length > 0 || heldBack.length > 0 || unknownDates.length > 0 || teamAlerts.length > 0 ? (
             <FadeInUp index={0}>
+              <View className="mb-3 flex-row justify-end">
+                <Pressable
+                  onPress={onClearAll}
+                  accessibilityRole="button"
+                  hitSlop={8}
+                  className="min-h-[40px] flex-row items-center gap-1.5 rounded-md border border-hairline px-3"
+                >
+                  <MaterialCommunityIcons name="notification-clear-all" size={17} color={COLORS.textSecondary} />
+                  <Text variant="label" className="font-semibold">
+                    Clear all
+                  </Text>
+                </Pressable>
+              </View>
+              {teamAlerts.length > 0 && (
+                <Card className="mb-5 gap-1 p-4">
+                  <View className="mb-1 flex-row items-center gap-2">
+                    <MaterialCommunityIcons name="bullhorn-outline" size={20} color={COLORS.primaryDark} />
+                    <Text variant="heading" className="flex-1 font-bold">
+                      From your team
+                    </Text>
+                  </View>
+                  {teamAlerts.map((a, i) => (
+                    <View key={a.id} className="gap-0.5 py-2.5" style={i > 0 ? RULE_ABOVE : undefined}>
+                      <Text variant="body" className="font-semibold">
+                        {a.message}
+                      </Text>
+                      <Text variant="micro" tone="soft">
+                        {timeAgo(a.created_at)}
+                      </Text>
+                    </View>
+                  ))}
+                </Card>
+              )}
               {heldBack.length > 0 && (
                 <Card className="mb-5 gap-1 p-4">
                   <View className="mb-1 flex-row items-center gap-2">

@@ -10,6 +10,7 @@ import {
   MAX_PER_CATEGORY,
   normaliseRules,
   uniqueBoxName,
+  type BoxItemRule,
   type BoxPreset,
 } from '../lib/box-presets';
 import {
@@ -24,6 +25,7 @@ import { type BoxRules, type BoxTemplate, usePantryStore } from '../lib/store';
 import { FolderChips, FolderManager } from './box-folders';
 import { Button, categoryIcon, Chip, Input, Row, Sheet, Stepper, Text, Toggle } from './ui';
 import { Tappable } from './motion';
+import { BoxItemsEditor } from './box-items-editor';
 
 /** What Build is packing: a saved template, or a preset used as-is. */
 export type BoxSelection = { kind: 'template'; id: string } | { kind: 'preset'; key: string };
@@ -33,6 +35,7 @@ interface Draft {
   id?: string;
   name: string;
   rules: BoxRules;
+  items: BoxItemRule[];
   scalesWithFamily: boolean;
   folderId: string | null;
   excludesTags: DietTag[];
@@ -97,6 +100,7 @@ export function BoxPicker({
       id: template.id,
       name: template.name,
       rules: template.rules,
+      items: template.items ?? [],
       scalesWithFamily: template.scales_with_family,
       folderId: template.folder_id ?? null,
       excludesTags: template.excludes_tags ?? [],
@@ -111,6 +115,7 @@ export function BoxPicker({
         ? {
             name: uniqueBoxName(preset.name, takenNames()),
             rules: { ...preset.rules },
+            items: [],
             scalesWithFamily: preset.scalesWithFamily,
             folderId: null,
             excludesTags: preset.excludesTags ?? [],
@@ -119,6 +124,7 @@ export function BoxPicker({
         : {
             name: '',
             rules: normaliseRules({}),
+            items: [],
             scalesWithFamily: true,
             folderId: null,
             excludesTags: [],
@@ -183,7 +189,7 @@ export function BoxPicker({
   if (draft) {
     const saved = draft.id ? boxTemplates.find(t => t.id === draft.id) : undefined;
     const isDefault = !!saved?.is_default;
-    const total = itemsPerBox(draft.rules);
+    const total = itemsPerBox(draft.rules) + draft.items.reduce((sum, i) => sum + i.count, 0);
 
     return (
       <Sheet
@@ -213,12 +219,18 @@ export function BoxPicker({
               }
             />
           ))}
-          <Text variant="micro" tone={total === 0 ? 'critical' : 'soft'} className="px-1">
-            {total === 0
-              ? 'Add at least one item.'
-              : `${total} ${total === 1 ? 'item' : 'items'} in each box${draft.scalesWithFamily ? ' (for a family of 4)' : ''}.`}
-          </Text>
         </View>
+
+        <BoxItemsEditor
+          items={draft.items}
+          onChange={items => setDraft(prev => (prev ? { ...prev, items } : prev))}
+        />
+
+        <Text variant="micro" tone={total === 0 ? 'critical' : 'soft'} className="px-1">
+          {total === 0
+            ? 'Add at least one item.'
+            : `${total} ${total === 1 ? 'item' : 'items'} in each box${draft.scalesWithFamily ? ' (for a family of 4)' : ''}.`}
+        </Text>
 
         <Input
           label="Name"
@@ -414,7 +426,7 @@ export function BoxPicker({
         // The contents stay on the row whatever folder it's in.
         hint={`${template.is_default ? 'Default · ' : ''}${
           template.scales_with_family ? '' : 'Fixed · '
-        }${describeRules(template.rules)}`}
+        }${describeRules(template.rules, template.items)}`}
         divider={!isLast}
         onPress={() => pick({ kind: 'template', id: template.id })}
         right={

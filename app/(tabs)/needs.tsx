@@ -10,6 +10,7 @@ import { FadeInUp, ProgressBar, Tappable } from "../../components/motion";
 import { Button, Card, CategoryIcon, Panel, Screen, Sheet, Text } from "../../components/ui";
 import { cueSuccess, cueTap } from "../../lib/feedback";
 import { usePantryStore } from "../../lib/store";
+import { useTeamAlerts } from "../../lib/team-alerts";
 import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
 
 const NEEDS_TOUR: TourStep[] = [
@@ -160,6 +161,36 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
       "Copied",
       "Paste it into an email, a post, or a printed flyer.",
     );
+  };
+
+  // An in-app notification to everyone in this pantry, on their bell.
+  const sendAlert = useTeamAlerts((st) => st.send);
+  const [alerting, setAlerting] = useState(false);
+  const [alerted, setAlerted] = useState(false);
+  const alertMessage = `We need ${deficits
+    .map((d) => `${(categoryLabels[d.category] ?? d.category).toLowerCase()} (${d.deficit})`)
+    .join(", ")}. Watch for these in donations.`;
+  const handleAlertTeam = () => {
+    cueTap();
+    Alert.alert("Alert your team?", `Everyone in ${settings.pantryName || "this pantry"} sees this on their bell:\n\n"${alertMessage}"`, [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Send",
+        onPress: async () => {
+          setAlerting(true);
+          try {
+            await sendAlert(alertMessage);
+            cueSuccess();
+            setAlerted(true);
+            setTimeout(() => setAlerted(false), 3000);
+          } catch (err: any) {
+            Alert.alert("Couldn't send that", err?.message ?? "Please try again.");
+          } finally {
+            setAlerting(false);
+          }
+        },
+      },
+    ]);
   };
 
   const handleShare = async () => {
@@ -409,13 +440,34 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
             />
           }
         />
-        <Button
-          label={copied ? "Copied" : "Copy text"}
-          variant="secondary"
-          block
-          className="mt-1"
-          onPress={handleCopy}
-        />
+        <View className="mt-1 flex-row gap-2">
+          <View className="flex-1">
+            <Button
+              label={copied ? "Copied" : "Copy text"}
+              variant="secondary"
+              block
+              className="rounded-md"
+              onPress={handleCopy}
+            />
+          </View>
+          <View className="flex-1">
+            <Button
+              label={alerted ? "Sent" : "Alert team"}
+              variant="secondary"
+              block
+              className="rounded-md"
+              loading={alerting}
+              icon={
+                <MaterialCommunityIcons
+                  name={alerted ? "check" : "bell-ring-outline"}
+                  size={17}
+                  color={COLORS.textPrimary}
+                />
+              }
+              onPress={handleAlertTeam}
+            />
+          </View>
+        </View>
       </Sheet>
     </>
   );

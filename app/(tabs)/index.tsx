@@ -12,6 +12,7 @@ import { InventoryItem, usePantryStore } from "../../lib/store";
 import { cuePress, cueTap } from "../../lib/feedback";
 import { QuickAddStaplesModal } from "../../components/quick-add-staples";
 import { ShelfCheckSheet } from "../../components/shelf-check";
+import { TeamAlertPopup } from "../../components/team-alert-popup";
 import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
 
 const HOME_TOUR: TourStep[] = [
@@ -291,6 +292,7 @@ export default function DashboardScreen() {
 
 
       <SpotlightTour tourKey="home" steps={HOME_TOUR} />
+      <TeamAlertPopup />
       <ShelfCheckSheet
         visible={shelfCheckOpen}
         onClose={() => setShelfCheckOpen(false)}
@@ -315,16 +317,16 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   scanTitle: {
-    fontSize: 21,
-    lineHeight: 26,
+    fontSize: 28,
+    lineHeight: 33,
     fontWeight: "700",
     letterSpacing: -0.25,
   },
   scanSubtitle: {
     marginTop: 2,
-    fontSize: 18,
-    lineHeight: 24,
-    fontWeight: fw("700"),
+    fontSize: 20,
+    lineHeight: 26,
+    fontWeight: fw("500"),
     // Lifts the line off the light end of the gradient.
     textShadowColor: "rgba(80, 40, 10, 0.25)",
     textShadowRadius: 2,

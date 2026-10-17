@@ -106,6 +106,11 @@ export interface AllocationPlan {
     /** Held back by THIS box's dietary constraints, not by anything wrong with it. */
     dietary: ExcludedStock;
   };
+  /**
+   * Set when a specific item, not a category, is what runs out first: the
+   * item's name and how many more of it the requested boxes need.
+   */
+  limitingItem: { name: string; short: number } | null;
   /** The constraints this plan was built under, so a screen can explain itself. */
   constraints: { excludes: string[]; requires: string[] };
   allocatedItems: {
@@ -115,6 +120,8 @@ export interface AllocationPlan {
   }[];
   packingChecklist: {
     category: keyof BoxRules;
+    /** Set for a specific item: its name, shown instead of the category. */
+    label?: string;
     neededPerBox: number;
     totalNeeded: number;
     allocatedCount: number;
@@ -146,6 +153,8 @@ export function computeAllocation(
     /** This box's dietary rules. See buildStockUnits. */
     excludes?: string[];
     requires?: string[];
+    /** Particular products this box must hold, on top of the category amounts. */
+    items?: { name: string; category: keyof BoxRules; count: number }[];
   } = {},
 ): AllocationPlan {
   const warningDays = options.warningDays ?? DEFAULT_WARNING_DAYS;
@@ -155,7 +164,13 @@ export function computeAllocation(
 
   // Damaged and out-of-date stock is excluded and weighed lots are folded in
   // before any maths.
-  const inventory = buildStockUnits(rawInventory, bulkLots, today, { excludes, requires });
+  const allStock = buildStockUnits(rawInventory, bulkLots, today, { excludes, requires });
+  const specific = (options.items ?? []).filter(i => i.name.trim() && i.count > 0);
+  const nameKey = (n: string) => n.trim().toLowerCase();
+  const specificNames = new Set(specific.map(i => nameKey(i.name)));
+  // A product the box names is kept for its own slot, so the category maths
+  // can't hand it out as "any protein" as well.
+  const inventory = allStock.filter(i => !specificNames.has(nameKey(i.name)));
 
   const tally = (rows: InventoryItem[]): ExcludedStock => ({
     items: rows.length,
@@ -222,6 +237,24 @@ export function computeAllocation(
     }
   });
 
+  // Each named product limits the box count the same way a category does.
+  const itemNeeds = specific.map(rule => {
+    const perBox = Math.max(1, Math.round(rule.count * familyScale));
+    const rows = allStock.filter(i => nameKey(i.name) === nameKey(rule.name));
+    const stock = rows.reduce((sum, i) => sum + i.count, 0);
+    return { rule, perBox, rows, stock, max: Math.floor(stock / perBox) };
+  });
+  const tightestItem = itemNeeds.reduce<(typeof itemNeeds)[number] | null>(
+    (worst, n) => (!worst || n.max < worst.max ? n : worst),
+    null,
+  );
+  let limitingItem: AllocationPlan['limitingItem'] = null;
+  if (tightestItem && tightestItem.max < minBoxes) {
+    minBoxes = tightestItem.max;
+    const short = Math.max(0, requestedBoxes * tightestItem.perBox - tightestItem.stock);
+    if (short > 0) limitingItem = { name: tightestItem.rule.name, short };
+  }
+
   const achievableBoxes = Math.min(minBoxes === Infinity ? 0 : minBoxes, requestedBoxes);
 
   // Compute shortfall to reach target requested boxes
@@ -237,6 +270,33 @@ export function computeAllocation(
 
   // The pantry's window, not a number baked in here.
   const warningStr = windowEndISO(warningDays, new Date(`${today}T00:00:00`));
+
+  // Named products first, soonest date first, each as its own pick-list line.
+  for (const need of itemNeeds) {
+    const totalNeeded = achievableBoxes * need.perBox;
+    if (totalNeeded === 0) continue;
+    let left = totalNeeded;
+    const lines: AllocationPlan['packingChecklist'][number]['items'] = [];
+    const rows = [...need.rows].sort((a, b) =>
+      !a.expiration ? 1 : !b.expiration ? -1 : a.expiration.localeCompare(b.expiration),
+    );
+    for (const item of rows) {
+      if (left <= 0) break;
+      const units = Math.min(item.count, left);
+      left -= units;
+      const useFirst = !!item.expiration && item.expiration <= warningStr;
+      allocatedItems.push({ item, countToGrab: units, useFirst });
+      lines.push({ id: item.id, name: item.name, count: units, expiration: item.expiration, useFirst });
+    }
+    packingChecklist.push({
+      category: need.rule.category,
+      label: need.rule.name,
+      neededPerBox: need.perBox,
+      totalNeeded,
+      allocatedCount: totalNeeded - left,
+      items: lines,
+    });
+  }
 
   categories.forEach(cat => {
     const neededPerBox = perBoxNeeds[cat];
@@ -387,6 +447,7 @@ export function computeAllocation(
     perBoxNeeds,
     warningDays,
     excluded,
+    limitingItem,
     constraints: { excludes, requires },
     allocatedItems,
     packingChecklist

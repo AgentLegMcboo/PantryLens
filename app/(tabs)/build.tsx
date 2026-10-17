@@ -13,7 +13,7 @@ import {
   EXCLUSION_CAVEAT,
   type DietTag,
 } from "../../lib/diet";
-import { BOX_PRESETS, describeRules } from "../../lib/box-presets";
+import { BOX_PRESETS, describeRules, type BoxItemRule } from "../../lib/box-presets";
 import { BoxPicker, type BoxSelection } from "../../components/box-picker";
 import {
   AnimatedCounter,
@@ -104,6 +104,7 @@ export default function BuildBoxesScreen() {
           key: `template:${t.id}`,
           name: t.name,
           rules: t.rules,
+          items: t.items ?? [],
           scales: t.scales_with_family,
           excludes: t.excludes_tags,
           requires: t.requires_tags,
@@ -117,6 +118,7 @@ export default function BuildBoxesScreen() {
           key: `preset:${p.key}`,
           name: p.name,
           rules: p.rules,
+          items: [] as BoxItemRule[],
           scales: p.scalesWithFamily,
           excludes: p.excludesTags ?? [],
           requires: p.requiresTags ?? [],
@@ -129,6 +131,7 @@ export default function BuildBoxesScreen() {
           key: `template:${fallback.id}`,
           name: fallback.name,
           rules: fallback.rules,
+          items: fallback.items ?? [],
           scales: fallback.scales_with_family,
           excludes: fallback.excludes_tags,
           requires: fallback.requires_tags,
@@ -137,6 +140,7 @@ export default function BuildBoxesScreen() {
           key: "pantry-default",
           name: "Standard family box",
           rules: boxRules,
+          items: [] as BoxItemRule[],
           scales: true,
           excludes: [] as DietTag[],
           requires: [] as DietTag[],
@@ -160,6 +164,7 @@ export default function BuildBoxesScreen() {
       // using bread would be worse than no figure at all.
       excludes: box.excludes,
       requires: box.requires,
+      items: box.items,
     },
   );
   // Closable; it returns when the held-back stock changes. The same items are
@@ -171,6 +176,10 @@ export default function BuildBoxesScreen() {
 
   const categories = Object.keys(box.rules) as (keyof BoxRules)[];
   const isShort = plan.achievableBoxes < requestedBoxes;
+  // What runs out first: a named item when that's tighter than any category.
+  const shortWhat = plan.limitingItem
+    ? { what: plan.limitingItem.name, n: plan.limitingItem.short }
+    : { what: String(plan.limitingCategory), n: plan.shortfallPerCategory[plan.limitingCategory] };
   const canPack = plan.achievableBoxes > 0;
 
   const detailsTarget = useSpotlightTarget("boxes.details");
@@ -189,6 +198,7 @@ export default function BuildBoxesScreen() {
         targetBoxes: requestedBoxes,
         familySize: packingFamilySize,
         rules: JSON.stringify(box.rules),
+        items: JSON.stringify(box.items),
         boxName: box.name,
         scales: box.scales ? "1" : "0",
         // Carried through, or the pick list would recompute without them and
@@ -279,8 +289,7 @@ export default function BuildBoxesScreen() {
                       <>
                         Need{" "}
                         <Text variant="label" className="font-bold text-ink">
-                          {plan.shortfallPerCategory[plan.limitingCategory]} more{" "}
-                          {plan.limitingCategory}
+                          {shortWhat.n} more {shortWhat.what}
                         </Text>{" "}
                         to pack all {requestedBoxes}
                       </>
