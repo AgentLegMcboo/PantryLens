@@ -22,7 +22,7 @@ import { StackHeader } from '../components/app-header';
 import { StatusBar, View } from 'react-native';
 
 /** Dev only: replay onboarding on every launch, signed in or not. */
-const REPLAY_INTRO_IN_DEV = true;
+const REPLAY_INTRO_IN_DEV = false;
 
 export default function RootLayout() {
   const scheme = useAppAppearance(state => state.scheme);

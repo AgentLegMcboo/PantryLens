@@ -689,19 +689,12 @@ export const usePantryStore = create<AppState>((set, get) => ({
   currentScan: null,
 
   initialize: async () => {
-    if (__DEV__) {
-      // In development the intro replays on every launch while signed out, so it
-      // can be iterated on without wiping app data. It still completes normally
-      // within a session — completeOnboarding() flips this in memory — so the
-      // Get Started button routes onward exactly as it does in production.
-      set({ onboarded: false });
-    } else {
-      // Read before any routing decision, so a returning volunteer is never
-      // flashed the intro.
-      AsyncStorage.getItem(ONBOARDING_KEY)
-        .then(v => set({ onboarded: v === '1' }))
-        .catch(() => set({ onboarded: true }));
-    }
+    // Read before any routing decision, so a returning volunteer is never
+    // flashed the intro. Development behaves the same; to see the intro again,
+    // use Settings → Developer → Replay the intro.
+    AsyncStorage.getItem(ONBOARDING_KEY)
+      .then(v => set({ onboarded: v === '1' }))
+      .catch(() => set({ onboarded: true }));
 
     supabase.auth.getSession().then(({ data: { session } }) => {
       set({ session });
@@ -747,9 +740,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
             dropoffHours: '',
           },
           isLoaded: true,
-          // Signing out in development drops you back at the intro too, so it is
-          // reachable without relaunching.
-          ...(__DEV__ ? { onboarded: false } : null)
         });
       }
     });
@@ -947,7 +937,6 @@ export const usePantryStore = create<AppState>((set, get) => ({
         dropoffHours: '',
       },
       isLoaded: true,
-      ...(__DEV__ ? { onboarded: false } : null),
     });
   },
 

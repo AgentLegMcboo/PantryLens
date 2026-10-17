@@ -1069,8 +1069,8 @@ export default function ReviewVerifyScreen() {
           Pinned at the bottom so the thumb never has to travel, and everything
           needed for the common case is here; the rest is behind "More". */}
       <View
-        className="gap-2 bg-card px-gutter pt-2.5"
-        style={[RULE_ABOVE, { paddingBottom: 10, flexShrink: 0 }]}
+        className="gap-2 bg-card px-gutter"
+        style={[RULE_ABOVE, { paddingTop: 10, paddingBottom: 10, flexShrink: 0 }]}
       >
         {selectedItem ? (
           <>
@@ -1205,7 +1205,9 @@ export default function ReviewVerifyScreen() {
 
       </View>
       </View>
-      <View className="gap-2 bg-card px-gutter pt-2.5" style={[RULE_ABOVE, { paddingBottom: insets.bottom + 8 }]}>
+      {/* Padding set in style, not className: next to RULE_ABOVE the class
+          padding was being dropped, which left the buttons on the rule. */}
+      <View className="gap-2 bg-card px-gutter" style={[RULE_ABOVE, { paddingTop: 14, paddingBottom: insets.bottom + 8 }]}>
         {notice && <Text variant="label" tone="critical" accessibilityRole="alert">{notice}</Text>}
         {/* Confirm and Add, side by side, in fixed positions. Confirm is the wide
             one on the left, where rapid taps land, and it ends as a
