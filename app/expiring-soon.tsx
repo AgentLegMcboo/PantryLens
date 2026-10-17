@@ -83,8 +83,9 @@ export default function ExpiringSoonScreen() {
   useEffect(() => {
     if (!settings.pantryId) return;
     loadRead(settings.pantryId);
-    markRead(notificationKeys(inventory, settings.expirationWarningDays, teamAlerts.map(a => a.id)));
-  }, [settings.pantryId, inventory, settings.expirationWarningDays, loadRead, markRead, teamAlerts]);
+    // Every alert, cleared or not: a cleared one still counts as read.
+    markRead(notificationKeys(inventory, settings.expirationWarningDays, allTeamAlerts.map(a => a.id)));
+  }, [settings.pantryId, inventory, settings.expirationWarningDays, loadRead, markRead, allTeamAlerts]);
 
   const handleDisposition = (reason: ExitReason) => {
     if (!exitItem) return;

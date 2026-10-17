@@ -406,8 +406,8 @@ export function StackHeader({
     <View
       // An iOS sheet sits below the status bar already; adding the inset again
       // left a tall empty band above the title.
-      style={{ paddingTop: modal && Platform.OS === "ios" ? 8 : insets.top }}
-      className="bg-transparent"
+      // Solid like the page under it, so the header slides in as one piece.
+      style={{ paddingTop: modal && Platform.OS === "ios" ? 8 : insets.top, backgroundColor: COLORS.background }}
     >
       <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
         <Tappable

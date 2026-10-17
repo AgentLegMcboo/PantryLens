@@ -101,6 +101,7 @@ export function useUnreadCount(
 ): number {
   const load = useReadNotifications((s) => s.load);
   const read = useReadNotifications((s) => s.read);
+  const cleared = useReadNotifications((s) => s.cleared);
   const loadAlerts = useTeamAlerts((s) => s.load);
   const alerts = useTeamAlerts((s) => s.alerts);
   useEffect(() => {
@@ -113,5 +114,6 @@ export function useUnreadCount(
     () => notificationKeys(inventory, warningDays, alerts.map((a) => a.id)),
     [inventory, warningDays, alerts],
   );
-  return keys.filter((k) => !read.has(k)).length;
+  // Cleared counts as dealt with, whatever the read list says.
+  return keys.filter((k) => !read.has(k) && !cleared.has(k)).length;
 }

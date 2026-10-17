@@ -138,12 +138,15 @@ export default function RootLayout() {
               modal={options.presentation === 'modal'}
             />
           ),
+          // Solid, so a screen sliding in covers the one under it. Transparent
+          // pages let the previous screen show through mid-transition and the
+          // two overlapped. The tabs keep the shared warm background.
           contentStyle: {
-            backgroundColor: 'transparent',
+            backgroundColor: COLORS.background,
           },
         })}
       >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="(tabs)" options={{ headerShown: false, contentStyle: { backgroundColor: 'transparent' } }} />
         {/* Log Donation and Shelf Audit are the first step of a wizard that
             pushes on to Review & Verify, so they are cards, not modals.
             Presented as modals they broke the flow outright: on iOS a modal sits
