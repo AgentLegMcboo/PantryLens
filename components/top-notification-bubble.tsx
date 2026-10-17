@@ -77,7 +77,7 @@ export function TopNotificationBubble({ visible, message, detail, onClose, onPre
   if (!mounted) return null;
   return (
     <View testID="top-notification-host" pointerEvents="box-none" style={{
-      position: 'absolute', top: insets.top + 8, left: 16, right: 16,
+      position: 'absolute', top: insets.top + 8, left: 12, right: 12,
       alignItems: 'center', zIndex: 100, elevation: 20,
     }}>
       <Animated.View
@@ -92,7 +92,7 @@ export function TopNotificationBubble({ visible, message, detail, onClose, onPre
           }
         }}
         style={[{
-          width: '100%', maxWidth: 600, padding: 12, borderRadius: 24,
+          width: '100%', maxWidth: 680, minHeight: 184, padding: 18, borderRadius: 28,
           backgroundColor: COLORS.cardSurface, borderWidth: 1, borderColor: COLORS.borderSoft,
           boxShadow: '0 6px 24px rgba(0, 0, 0, 0.18)', flexDirection: 'row', alignItems: 'flex-start', gap: 10,
         }, animation]}
@@ -106,19 +106,19 @@ export function TopNotificationBubble({ visible, message, detail, onClose, onPre
           accessibilityLabel={`From your team. ${content.current.message}. ${content.current.detail}. See needs.`}
           style={{ flex: 1, minHeight: 48, flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}
         >
-          <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center' }}>
-            <MaterialCommunityIcons name="bullhorn-outline" size={22} color={COLORS.textOnAccent} />
+          <View style={{ width: 52, height: 52, borderRadius: 16, backgroundColor: COLORS.primaryLight, alignItems: 'center', justifyContent: 'center' }}>
+            <MaterialCommunityIcons name="bullhorn-outline" size={28} color={COLORS.textOnAccent} />
           </View>
-          <View style={{ flex: 1, gap: 4 }}>
-            <Text variant="micro" tone="soft" className="font-semibold">From your team</Text>
-            <Text variant="body" className="font-semibold" numberOfLines={3}>{content.current.message}</Text>
-            <Text variant="micro" tone="soft" numberOfLines={2}>{content.current.detail}</Text>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text variant="label" tone="soft" className="font-semibold">From your team</Text>
+            <Text variant="heading" className="font-semibold" numberOfLines={3}>{content.current.message}</Text>
+            <Text variant="label" tone="soft" numberOfLines={2}>{content.current.detail}</Text>
             <Text variant="label" tone="brand" className="font-bold">See needs</Text>
           </View>
         </Tappable>
         <Tappable onPress={onClose} accessibilityRole="button" accessibilityLabel="Dismiss notification"
           style={{ width: 48, height: 48, alignItems: 'center', justifyContent: 'center', borderRadius: 24 }}>
-          <MaterialCommunityIcons name="close" size={20} color={COLORS.textSecondary} />
+          <MaterialCommunityIcons name="close" size={22} color={COLORS.textSecondary} />
         </Tappable>
       </Animated.View>
     </View>
