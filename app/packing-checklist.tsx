@@ -1,3 +1,5 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Crypto from 'expo-crypto';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -6,7 +8,7 @@ import { Alert, View } from 'react-native';
 import { COLORS, RULE_BELOW } from '../constants/theme';
 import { computeAllocation, isBulkUnit } from '../lib/allocation';
 import { DIET_TAG_LABELS, normaliseDietTags } from '../lib/diet';
-import { normaliseRules } from '../lib/box-presets';
+import { normaliseItems, normaliseRules } from '../lib/box-presets';
 import { FadeInUp, PRESS_SCALE_ROW, ProgressBar, Tappable } from '../components/motion';
 import { Badge, Button, Card, CategoryIcon, EmptyState, Screen, Text } from '../components/ui';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
@@ -26,6 +28,7 @@ import { type PackLine, usePantryStore } from '../lib/store';
  * progress you can see is what makes a long pick list bearable.
  */
 export default function PackingChecklistScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const params = useLocalSearchParams();
   const { inventory, bulkLots, boxRules, locations, settings, packBoxes } = usePantryStore();
@@ -57,6 +60,12 @@ export default function PackingChecklistScreen() {
   } catch {
     routeRules = null;
   }
+  let routeItems: ReturnType<typeof normaliseItems> = [];
+  try {
+    routeItems = typeof params.items === 'string' ? normaliseItems(JSON.parse(params.items)) : [];
+  } catch {
+    routeItems = [];
+  }
 
   /**
    * The pick list is a snapshot taken when the screen opens, not a live view.
@@ -72,7 +81,38 @@ export default function PackingChecklistScreen() {
       warningDays: settings.expirationWarningDays,
       excludes,
       requires,
+      items: routeItems,
     }),
+  );
+
+  /**
+   * One line per food per shelf. The plan lists each stock row on its own, so
+   * two deliveries of red potatoes showed as two "Red potatoes" lines. Merged
+   * here for reading only: finishing still uses the plan's per-row picks.
+   */
+  const pickGroups = useMemo(
+    () =>
+      plan.packingChecklist.map(group => {
+        const merged = new Map<string, (typeof group.items)[number]>();
+        for (const item of group.items) {
+          const loc = inventory.find(inv => inv.id === item.id)?.location_id ?? '';
+          const key = `${item.name.trim().toLowerCase()}|${loc}`;
+          const prev = merged.get(key);
+          if (!prev) {
+            merged.set(key, { ...item });
+          } else {
+            prev.count += item.count;
+            prev.useFirst = prev.useFirst || item.useFirst;
+            if (item.expiration && (!prev.expiration || item.expiration < prev.expiration)) {
+              prev.expiration = item.expiration;
+            }
+          }
+        }
+        return { ...group, items: [...merged.values()] };
+      }),
+    // The plan is a snapshot taken once, so this only needs working out once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [plan],
   );
 
   /**
@@ -86,10 +126,10 @@ export default function PackingChecklistScreen() {
 
   const allKeys = useMemo(
     () =>
-      plan.packingChecklist.flatMap(group =>
-        group.items.map((item, i) => `${group.category}-${item.id}-${i}`),
+      pickGroups.flatMap(group =>
+        group.items.map((item, i) => `${group.label ?? group.category}-${item.id}-${i}`),
       ),
-    [plan.packingChecklist],
+    [pickGroups],
   );
 
   const doneCount = allKeys.filter(key => checked[key]).length;
@@ -170,7 +210,7 @@ export default function PackingChecklistScreen() {
 
   if (total === 0) {
     return (
-      <View className="flex-1 justify-center bg-canvas">
+      <View className="flex-1 justify-center bg-transparent">
         <EmptyState
           icon="package-variant"
           title="Nothing to pick yet"
@@ -188,14 +228,14 @@ export default function PackingChecklistScreen() {
           keep telling you while your eyes are on the shelf. */}
       <FadeInUp index={0}>
         <View className="px-1">
-          <View className="flex-row items-baseline justify-between">
+          <ResponsiveRow className="flex-row items-baseline justify-between">
             <Text variant="headline">
               {doneCount} of {total} picked
             </Text>
             <Text variant="label" tone="soft">
               {plan.achievableBoxes} {plan.achievableBoxes === 1 ? 'box' : 'boxes'}
             </Text>
-          </View>
+          </ResponsiveRow>
 
           <View className="mt-3">
             <ProgressBar
@@ -243,18 +283,18 @@ export default function PackingChecklistScreen() {
         </View>
       </FadeInUp>
 
-      {plan.packingChecklist.map((group, groupIndex) => {
-        const groupKeys = group.items.map((item, i) => `${group.category}-${item.id}-${i}`);
+      {pickGroups.map((group, groupIndex) => {
+        const groupKeys = group.items.map((item, i) => `${group.label ?? group.category}-${item.id}-${i}`);
         const groupAllChecked = groupKeys.length > 0 && groupKeys.every(k => !!checked[k]);
 
         return (
-          <FadeInUp key={group.category} index={groupIndex + 1}>
+          <FadeInUp key={group.label ?? group.category} index={groupIndex + 1}>
             <Card className="gap-1">
               <View className="mb-2 flex-row items-center gap-3">
                 <CategoryIcon category={group.category} />
                 <View className="flex-1">
-                  <Text variant="heading" className="capitalize">
-                    {group.category}
+                  <Text variant="heading" className={group.label ? undefined : 'capitalize'}>
+                    {group.label ?? group.category}
                   </Text>
                   <Text variant="micro" tone="soft">
                     {group.allocatedCount} total · {group.neededPerBox} per box
@@ -272,7 +312,7 @@ export default function PackingChecklistScreen() {
                     }}
                     hitSlop={8}
                     accessibilityRole="button"
-                    accessibilityLabel={groupAllChecked ? `Uncheck all ${group.category}` : `Check all ${group.category}`}
+                    accessibilityLabel={groupAllChecked ? `Uncheck all ${group.label ?? group.category}` : `Check all ${group.label ?? group.category}`}
                     className="min-h-[40px] flex-row items-center gap-1 rounded-md bg-subtle px-3 py-1.5"
                   >
                     <MaterialCommunityIcons
@@ -288,7 +328,7 @@ export default function PackingChecklistScreen() {
               </View>
 
               {group.items.map((item, i) => {
-                const key = `${group.category}-${item.id}-${i}`;
+                const key = `${group.label ?? group.category}-${item.id}-${i}`;
                 const isChecked = !!checked[key];
                 // Where to walk. A pick list that says what but not where sends a
                 // volunteer round the room once per line.
@@ -366,7 +406,7 @@ export default function PackingChecklistScreen() {
         );
       })}
 
-      <FadeInUp index={plan.packingChecklist.length + 1}>
+      <FadeInUp index={pickGroups.length + 1}>
         <View className="gap-3">
           {allDone && (
             <View

@@ -3,11 +3,13 @@ import { StyleSheet, View, type ViewProps } from 'react-native';
 import { COLORS } from '../../constants/theme';
 import { useOpaqueGlass } from '../../lib/glass-preferences';
 import { createLensMap } from '../../lib/glass-lens';
+import { useAppAppearance } from '../../lib/appearance';
 
-type Material = 'clear' | 'regular';
+type Material = 'clear' | 'regular' | 'sheet';
 
 /** Real backdrop displacement in Chromium; honest frosted fallback elsewhere. */
 export function GlassBackdrop({ radius = 28, material = 'regular' }: { radius?: number; material?: Material }) {
+  const dark = useAppAppearance(state => state.scheme === 'dark');
   const preferOpaque = useOpaqueGlass();
   const [supportsGlass, setSupportsGlass] = useState(false);
   const opaque = preferOpaque || !supportsGlass;
@@ -27,7 +29,7 @@ export function GlassBackdrop({ radius = 28, material = 'regular' }: { radius?: 
 
   useEffect(() => {
     const node = ref.current;
-    if (!node || opaque || !refracts) { setLens(null); return; }
+    if (!node || opaque || !refracts || material !== 'clear') { setLens(null); return; }
     let frame = 0;
     let previous = '';
     const update = () => {
@@ -56,12 +58,12 @@ export function GlassBackdrop({ radius = 28, material = 'regular' }: { radius?: 
     observer?.observe(node);
     window.addEventListener('resize', onResize);
     return () => { observer?.disconnect(); window.removeEventListener('resize', onResize); cancelAnimationFrame(frame); };
-  }, [opaque, refracts, radius]);
+  }, [opaque, refracts, radius, material]);
 
   const clear = material === 'clear';
-  const filter = opaque ? 'none' : lens
-    ? `url("#${id}") saturate(1.25)`
-    : `blur(${clear ? 12 : 24}px) saturate(1.25)`;
+  const filter = opaque ? 'none' : clear && lens
+    ? `url("#${id}") saturate(1.08)`
+    : `blur(${clear ? 16 : 28}px) saturate(1.08)`;
 
   return (
     <div ref={ref} aria-hidden="true" data-glass-material={opaque ? 'opaque' : lens ? 'refractive' : 'frosted'}
@@ -79,20 +81,22 @@ export function GlassBackdrop({ radius = 28, material = 'regular' }: { radius?: 
       )}
       <div style={{ position: 'absolute', inset: 0, borderRadius: radius,
         backdropFilter: filter, WebkitBackdropFilter: filter,
-        background: opaque ? COLORS.background : clear ? 'rgba(251,246,238,0.68)' : 'rgba(251,246,238,0.80)',
+        background: opaque ? COLORS.cardSurface : dark
+          ? (material === 'sheet' ? 'rgba(35,33,30,0.97)' : 'rgba(35,33,30,0.90)')
+          : (material === 'sheet' ? 'rgba(250,249,247,0.97)' : 'rgba(250,249,247,0.90)'),
         boxShadow: opaque ? `inset 0 0 0 1px ${COLORS.borderStrong}`
-          : 'inset 0 1.5px 1px rgba(255,255,255,0.95), inset 1px 0 1px rgba(255,255,255,0.65), inset 0 -1.5px 1px rgba(107,74,47,0.20), 0 8px 28px rgba(94,36,17,0.16), 0 1px 3px rgba(94,36,17,0.10)',
+          : 'inset 0 1px 1px rgba(255,255,255,0.08), 0 6px 24px rgba(0,0,0,0.10)',
       }} />
       {!opaque && <div style={{ position: 'absolute', inset: 0, borderRadius: radius,
-        background: 'linear-gradient(135deg,rgba(255,255,255,0.55),transparent 28%,transparent 72%,rgba(255,255,255,0.28))',
-        border: '1px solid rgba(255,255,255,0.55)', boxSizing: 'border-box',
+        background: dark ? 'linear-gradient(135deg,rgba(255,255,255,0.04),transparent 45%,rgba(255,255,255,0.01))' : 'linear-gradient(135deg,rgba(255,255,255,0.08),transparent 45%,rgba(255,255,255,0.02))',
+        border: dark ? '1px solid rgba(255,255,255,0.26)' : '1px solid rgba(80,70,60,0.30)', boxSizing: 'border-box',
       }} />}
     </div>
   );
 }
 
 export function GlassSurface({ children, style, ...props }: ViewProps) {
-  return <View {...props} style={[styles.surface, style]}><GlassBackdrop material="clear" />{children}</View>;
+  return <View {...props} style={[styles.surface, style]}><GlassBackdrop material="regular" />{children}</View>;
 }
 
 const styles = StyleSheet.create({ surface: { borderRadius: 28 } });

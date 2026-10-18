@@ -1,3 +1,5 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { useAppAppearance } from '../lib/appearance';
 import { parsePrintedDate } from '../lib/intake';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -59,6 +61,7 @@ const CATEGORIES: Category[] = [
  * silently removes stock from every box the app builds.
  */
 export default function ItemDetailScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const { id } = useLocalSearchParams();
   const { getItem, updateItem, deleteItem, locations, settings } = usePantryStore();
@@ -80,7 +83,7 @@ export default function ItemDetailScreen() {
 
   if (!item) {
     return (
-      <View className="flex-1 justify-center bg-canvas">
+      <View className="flex-1 justify-center bg-transparent">
         <EmptyState
           icon="package-variant"
           title="This item is gone"
@@ -247,12 +250,12 @@ export default function ItemDetailScreen() {
                   look like something you can press. */}
               <View className="absolute -bottom-1 -right-1 h-6 w-6 items-center justify-center rounded-md border-2 border-card bg-brand">
                 {photoBusy ? (
-                  <ActivityIndicator size="small" color={COLORS.textOnPrimary} />
+                  <ActivityIndicator size="small" color={COLORS.textOnAccent} />
                 ) : (
                   <MaterialCommunityIcons
                     name={item.image_url ? 'pencil' : 'camera-plus-outline'}
                     size={12}
-                    color={COLORS.textOnPrimary}
+                    color={COLORS.textOnAccent}
                   />
                 )}
               </View>
@@ -290,7 +293,7 @@ export default function ItemDetailScreen() {
 
       <FadeInUp index={1}>
         <Card className="gap-3.5 p-4">
-          <View className="flex-row items-center justify-between gap-3">
+          <ResponsiveRow className="flex-row items-center justify-between gap-3">
             <View className="flex-1">
               <InfoLabel
                 variant="body"
@@ -299,7 +302,7 @@ export default function ItemDetailScreen() {
               />
             </View>
             <Stepper value={count} min={0} onChange={setCount} />
-          </View>
+          </ResponsiveRow>
 
           <Input
             label="Date printed on it"
@@ -428,14 +431,14 @@ export default function ItemDetailScreen() {
       </FadeInUp>
 
       <FadeInUp index={4}>
-        <View className="flex-row items-center justify-between px-1">
+        <ResponsiveRow className="flex-row items-center justify-between px-1">
           <Text variant="micro" tone="soft">
             Received {item.date_added}
           </Text>
           <Text variant="micro" tone="soft" className="capitalize">
             {item.source.replace('_', ' ')}
           </Text>
-        </View>
+        </ResponsiveRow>
       </FadeInUp>
 
       <FadeInUp index={4}>

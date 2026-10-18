@@ -1,10 +1,10 @@
+import { useAppAppearance } from "../../lib/appearance";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useShallow } from "zustand/react/shallow";
 import React, { useCallback, useDeferredValue, useMemo, useState } from "react";
 import {
   Alert,
-  FlatList,
   SectionList,
   Platform,
   Pressable,
@@ -55,6 +55,16 @@ import {
 import { QuickAddStaplesModal } from "../../components/quick-add-staples";
 import { useTabOverlayInset } from "../../lib/tab-overlay";
 import { Tappable, PRESS_SCALE_ROW } from "../../components/motion";
+import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../components/spotlight";
+
+const INVENTORY_TOUR: TourStep[] = [
+  { target: "inventory.add", title: "Add by hand", body: "No photo? Type an item in here." },
+  { target: "inventory.filter", title: "Find things fast", body: "Show one food group, or sort by date or count." },
+  { target: "inventory.shelf", title: "Your shelves", body: "Add shelves, and shelves inside shelves, to match your pantry." },
+  { target: "inventory.firstRow", title: "Hold and drag", body: "Hold an item, then drag it onto a shelf to move it." },
+  { target: "inventory.firstRow", title: "Swipe right", body: "Swipe an item to the right to take it off the shelf." },
+  { target: "inventory.select", title: "Select many", body: "Move or take off lots of items at once." },
+];
 
 /**
  * The shelf, as a list.
@@ -99,6 +109,14 @@ type GroupBy = (typeof GROUPS)[number]["id"];
 
 /** How far the row travels when the action is fully open. */
 const SWIPE_WIDTH = 96;
+
+/** A sub-shelf, drawn inside its shelf: inset, with a rule down the left. */
+const NESTED = {
+  marginLeft: 8,
+  paddingLeft: 14,
+  borderLeftWidth: 2,
+  borderLeftColor: "rgba(140, 110, 80, 0.25)",
+};
 
 /**
  * What sits in the gap a swipe opens up.
@@ -154,8 +172,11 @@ const SORTS = [
  * the others, so that cost followed the volunteer around the whole app. Now a
  * row only re-renders when its own props change.
  */
-const ROW_EDGE = { borderWidth: 1, borderColor: "rgba(224,205,187,0.7)" } as const;
-const SELECTED_EDGE = { borderWidth: 1.5, borderColor: COLORS.primary } as const;
+// Read at render, not at load: COLORS follows light and dark mode.
+const rowEdge = (selected: boolean) =>
+  selected
+    ? { borderWidth: 1.5, borderColor: COLORS.primary }
+    : { borderWidth: 1, borderColor: COLORS.borderSoft };
 
 const InventoryRow = React.memo(function InventoryRow({
   item,
@@ -198,130 +219,124 @@ const InventoryRow = React.memo(function InventoryRow({
   // what made scrolling this list drag, on Android most of all).
   const row = (
     <GestureDetector gesture={pan}>
-    <Pressable
-      style={({ pressed }) =>
-        isDragging
-          ? { opacity: 0.25 }
-          : pressed
-            ? { transform: [{ scale: PRESS_SCALE_ROW }] }
-            : undefined
-      }
-      // In picking mode a tap picks; otherwise it opens. Holding is handled by
-      // the drag gesture above: hold and drag to move, hold still to pick.
-      onPress={() => {
-        if (drag.suppressPress.current) return;
-        if (picking) onToggle(item.id);
-        else router.push({ pathname: "/item-detail", params: { id: item.id } });
-      }}
-    >
-      {/* One line per product: picture, name with what's worth knowing
+      <Pressable
+        style={({ pressed }) =>
+          isDragging
+            ? { opacity: 0.25 }
+            : pressed
+              ? { transform: [{ scale: PRESS_SCALE_ROW }] }
+              : undefined
+        }
+        // In picking mode a tap picks; otherwise it opens. Holding is handled by
+        // the drag gesture above: hold and drag to move, hold still to pick.
+        onPress={() => {
+          if (drag.suppressPress.current) return;
+          if (picking) onToggle(item.id);
+          else
+            router.push({ pathname: "/item-detail", params: { id: item.id } });
+        }}
+      >
+        {/* One line per product: picture, name with what's worth knowing
           under it, and the count on the right. Expiry only when there is
           one — "No expiry recorded" on every tin of soap was just noise. */}
-      <View
-        className={
+        <View
+          // One line per item: photo, name and status, count on the right.
           // Selected keeps the white card; only the edge changes.
-          "mb-2 rounded-lg bg-card px-3.5 py-3"
-        }
-        // A lighter edge than other cards: in a long list a full-strength
-        // outline on every row adds up to a lot of lines.
-        style={isSelected ? SELECTED_EDGE : ROW_EDGE}
-      >
-        <View className="flex-row items-center gap-3">
-          {picking && (
-            <MaterialCommunityIcons
-              name={isSelected ? "check-circle" : "circle-outline"}
-              size={24}
-              color={isSelected ? COLORS.primaryLight : COLORS.borderStrong}
-            />
-          )}
-          {/* The actual product where we have a picture of it, the category
+          className="mb-2 flex-row items-center gap-3 rounded-lg bg-card px-3 py-2.5"
+          style={rowEdge(isSelected)}
+        >
+          <View className="flex-1 flex-row items-center gap-3">
+            {picking && (
+              <MaterialCommunityIcons
+                name={isSelected ? "check-circle" : "circle-outline"}
+                size={24}
+                color={isSelected ? COLORS.primaryLight : COLORS.borderStrong}
+              />
+            )}
+            {/* The actual product where we have a picture of it, the category
               glyph where we do not. */}
-          <ItemThumb
-            imageUrl={item.image_url}
-            category={item.category}
-            size="md"
-            tone={blocked ? "critical" : "secondary"}
-            className="h-10 w-10"
-          />
+            <ItemThumb
+              imageUrl={item.image_url}
+              category={item.category}
+              size="md"
+              tone={blocked ? "critical" : "secondary"}
+              className="h-10 w-10"
+            />
 
-          <View className="flex-1 gap-1">
-            <Text variant="body" numberOfLines={2} className="font-semibold">
-              {item.name}
-            </Text>
-            {/* At most one status, worst first, then the details that exist. */}
-            {(() => {
-              const status = damaged
-                ? {
-                    text: CONDITION_LABELS[item.condition || "ok"],
-                    tone: "critical" as const,
-                  }
-                : pastDate
-                  ? { text: "Out of date", tone: "critical" as const }
-                  : expiringSoon
-                    ? { text: "Use first", tone: "warn" as const }
-                    : null;
-              const details = [
-                item.expiration ? `Exp ${shortDate(item.expiration)}` : null,
-                showPlace && placeName ? placeName : null,
-              ].filter(Boolean) as string[];
-              if (!status && details.length === 0) return null;
-              return (
-                <Text variant="micro" tone="soft" numberOfLines={1}>
-                  {status ? (
-                    <Text
-                      variant="micro"
-                      tone={status.tone}
-                      className="font-bold"
-                    >
-                      {status.text}
-                      {details.length ? " · " : ""}
-                    </Text>
-                  ) : null}
-                  {details.join(" · ")}
-                </Text>
-              );
-            })()}
+            <View className="flex-1 gap-1">
+              <Text variant="body" className="font-semibold" numberOfLines={2}>
+                {item.name}
+              </Text>
+              {/* At most one status, worst first, then the details that exist. */}
+              {(() => {
+                const status = damaged
+                  ? {
+                      text: CONDITION_LABELS[item.condition || "ok"],
+                      tone: "critical" as const,
+                    }
+                  : pastDate
+                    ? { text: "Out of date", tone: "critical" as const }
+                    : expiringSoon
+                      ? { text: "Use first", tone: "warn" as const }
+                      : null;
+                const details = [
+                  item.expiration ? `Exp ${shortDate(item.expiration)}` : null,
+                  showPlace && placeName ? placeName : null,
+                ].filter(Boolean) as string[];
+                if (!status && details.length === 0) return null;
+                return (
+                  <Text variant="micro" tone="soft" numberOfLines={1}>
+                    {status ? (
+                      <Text
+                        variant="micro"
+                        tone={status.tone}
+                        className="font-bold"
+                      >
+                        {status.text}
+                        {details.length ? " · " : ""}
+                      </Text>
+                    ) : null}
+                    {details.join(" · ")}
+                  </Text>
+                );
+              })()}
+            </View>
           </View>
-
-        </View>
-        <View className="mt-3 flex-row items-center justify-between gap-3">
-          <Text variant="label" tone="soft">Quantity</Text>
           {/* The stepper is meaningless while picking — the row is a checkbox
               then, and a control that also changes stock would fight the tap. */}
-          {picking ? (
-            <Text variant="label" tone="soft" className="font-semibold">
-              {item.count} units
-            </Text>
-          ) : (
-            <Stepper
-              value={item.count}
-              min={0}
-              onChange={(next) => {
-                // Stepping from 1 to 0 must never silently delete the row:
-                // route through the "Where is it going?" sheet so an accidental
-                // double-tap cannot destroy inventory and a real exit records
-                // whether the item was given out, discarded, or a mistake.
-                if (next === 0) {
-                  cueWarn();
-                  onSwipeOut(item.id);
-                  return;
-                }
-                usePantryStore
-                  .getState()
-                  .updateItem(item.id, { count: next })
-                  .catch((err: any) => {
+            {picking ? (
+              <Text variant="label" tone="soft" className="font-semibold">
+                {item.count} units
+              </Text>
+            ) : (
+              <Stepper
+                value={item.count}
+                min={0}
+                onChange={(next) => {
+                  // Stepping from 1 to 0 must never silently delete the row:
+                  // route through the "Where is it going?" sheet so an accidental
+                  // double-tap cannot destroy inventory and a real exit records
+                  // whether the item was given out, discarded, or a mistake.
+                  if (next === 0) {
                     cueWarn();
-                    Alert.alert(
-                      "Could not save that change",
-                      err?.message ?? "Please try again.",
-                    );
-                  });
-              }}
-            />
-          )}
+                    onSwipeOut(item.id);
+                    return;
+                  }
+                  usePantryStore
+                    .getState()
+                    .updateItem(item.id, { count: next })
+                    .catch((err: any) => {
+                      cueWarn();
+                      Alert.alert(
+                        "Could not save that change",
+                        err?.message ?? "Please try again.",
+                      );
+                    });
+                }}
+              />
+            )}
         </View>
-      </View>
-    </Pressable>
+      </Pressable>
     </GestureDetector>
   );
 
@@ -361,6 +376,7 @@ const InventoryRow = React.memo(function InventoryRow({
 });
 
 export default function InventoryScreen() {
+  useAppAppearance((state) => state.scheme);
   const tabOverlayInset = useTabOverlayInset();
   const router = useRouter();
   // Only what this screen uses, compared shallowly, so unrelated store changes
@@ -515,7 +531,15 @@ export default function InventoryScreen() {
    */
   const sections = useMemo(() => {
     if (dGroup === "none") {
-      return [{ id: "all", title: "", depth: 0 as const, units: 0, data: filteredItems }];
+      return [
+        {
+          id: "all",
+          title: "",
+          depth: 0 as const,
+          units: 0,
+          data: filteredItems,
+        },
+      ];
     }
 
     const buckets: {
@@ -576,9 +600,7 @@ export default function InventoryScreen() {
 
   const seniorMode = useAccessibilityStore((s) => s.seniorMode);
   const [selectMode, setSelectMode] = useState(false);
-  const [groupSortSheet, setGroupSortSheet] = useState<"group" | "sort" | null>(
-    null,
-  );
+  const [groupSortSheet, setGroupSortSheet] = useState<"filters" | null>(null);
 
   const selectedIds = Object.keys(selected).filter((id) => selected[id]);
   const picking = selectMode || selectedIds.length > 0;
@@ -659,7 +681,10 @@ export default function InventoryScreen() {
     ]);
   };
 
-  const resolveManualShelfId = (name: string, cat: typeof newCat): string | null => {
+  const resolveManualShelfId = (
+    name: string,
+    cat: typeof newCat,
+  ): string | null => {
     const lower = name.trim().toLowerCase();
     if (lower) {
       const exact = inventory.find(
@@ -714,7 +739,11 @@ export default function InventoryScreen() {
     ],
     [locations],
   );
-  const { api: dragApi, dragging, draggingId } = useInventoryDrag({
+  const {
+    api: dragApi,
+    dragging,
+    draggingId,
+  } = useInventoryDrag({
     items: inventory,
     places: dropPlaces,
     onHold: toggleSelectStable,
@@ -723,7 +752,10 @@ export default function InventoryScreen() {
         .then(() => cueSuccess())
         .catch((err: any) => {
           cueWarn();
-          Alert.alert("Could not move that item", err?.message ?? "Please try again.");
+          Alert.alert(
+            "Could not move that item",
+            err?.message ?? "Please try again.",
+          );
         });
     },
   });
@@ -731,7 +763,26 @@ export default function InventoryScreen() {
   const rootRef = React.useRef<View>(null);
   const rootY = useSharedValue(0);
 
-  const renderItemRow = ({ item }: { item: InventoryItem }) => (
+  const firstRowTarget = useSpotlightTarget("inventory.firstRow");
+  const selectTarget = useSpotlightTarget("inventory.select");
+  const addTarget = useSpotlightTarget("inventory.add");
+  const filterTarget = useSpotlightTarget("inventory.filter");
+  const shelfTarget = useSpotlightTarget("inventory.shelf");
+  const renderItemRow = ({
+    item,
+    index,
+    section,
+  }: {
+    item: InventoryItem;
+    index: number;
+    section: { depth?: 0 | 1 };
+  }) => (
+    // A sub-shelf's items sit inset behind a rule, inside their parent shelf.
+    <View
+      ref={index === 0 && section === sections[0] ? firstRowTarget : undefined}
+      collapsable={false}
+      style={section.depth === 1 && dGroup !== "none" && !picking ? NESTED : undefined}
+    >
     <InventoryRow
       item={item}
       picking={picking}
@@ -744,12 +795,13 @@ export default function InventoryScreen() {
       drag={dragApi}
       isDragging={draggingId === item.id}
     />
+    </View>
   );
 
   return (
     <View
       ref={rootRef}
-      className="flex-1 bg-canvas"
+      className="flex-1 bg-transparent"
       onLayout={() =>
         rootRef.current?.measureInWindow((_x, y) => {
           rootY.value = y;
@@ -762,11 +814,13 @@ export default function InventoryScreen() {
             <View className="flex-1">
               <Text variant="headline">Your shelves</Text>
               <Text variant="label" tone="soft">
-                {inventory.length} {inventory.length === 1 ? 'product' : 'products'} ·{" "}
+                {inventory.length}{" "}
+                {inventory.length === 1 ? "product" : "products"} ·{" "}
                 {inventory.reduce((sum, item) => sum + item.count, 0)} units
               </Text>
             </View>
             {inventory.length > 0 && (
+              <View ref={selectTarget} collapsable={false}>
               <Pressable
                 accessibilityRole="button"
                 accessibilityLabel="Select items to move or take off shelf"
@@ -774,17 +828,18 @@ export default function InventoryScreen() {
                   cueTap();
                   setSelectMode(true);
                 }}
-                className="min-h-[48px] flex-row items-center gap-1.5 rounded-lg border border-hairline bg-card px-3.5 py-2"
+                className="min-h-[44px] flex-row items-center gap-1.5 rounded-md border-[1.5px] border-outline bg-card px-3 py-2"
               >
                 <MaterialCommunityIcons
                   name="checkbox-multiple-marked-outline"
                   size={18}
-                  color={COLORS.primary}
+                  color={COLORS.primaryDark}
                 />
-                <Text variant="label" tone="brand" className="font-bold">
+                <Text variant="label" className="font-bold" style={{ color: COLORS.primaryDark }}>
                   Select
                 </Text>
               </Pressable>
+              </View>
             )}
           </View>
         )}
@@ -930,6 +985,7 @@ export default function InventoryScreen() {
               ) : null}
             </View>
 
+            <View ref={addTarget} collapsable={false}>
             <Pressable
               onPress={() => setModalVisible(true)}
               accessibilityRole="button"
@@ -944,12 +1000,13 @@ export default function InventoryScreen() {
               <MaterialCommunityIcons
                 name="plus"
                 size={20}
-                color={COLORS.textOnPrimary}
+                color={COLORS.textOnAccent}
               />
-              <Text variant="label" tone="on" className="font-bold">
+              <Text variant="label" tone="on" className="font-bold" style={{ color: COLORS.textOnAccent }}>
                 Add
               </Text>
             </Pressable>
+            </View>
           </View>
         )}
 
@@ -997,30 +1054,73 @@ export default function InventoryScreen() {
                 accessibilityLabel="Dismiss. It stays on the Notifications page."
                 className="-mr-1 h-8 w-8 items-center justify-center"
               >
-                <MaterialCommunityIcons name="close" size={18} color={COLORS.textSecondary} />
+                <MaterialCommunityIcons
+                  name="close"
+                  size={18}
+                  color={COLORS.textSecondary}
+                />
               </Tappable>
             )}
           </Tappable>
         )}
 
         {!picking && (
-          <FlatList
-            horizontal
-            data={CATEGORIES}
-            keyExtractor={(c) => c.id}
-            showsHorizontalScrollIndicator={false}
-            contentContainerClassName="gap-2 pr-gutter"
-            renderItem={({ item }) => (
-              <Chip
-                label={item.label}
-                selected={selectedCategory === item.id}
-                // A tad smaller than the default chip: this row scrolls
-                // sideways at the top of the list and was taking up a lot of it.
-                className="min-h-[40px] px-3.5 py-1.5"
-                onPress={() => setSelectedCategory(item.id)}
+          <View className="flex-row gap-3">
+            <View ref={filterTarget} collapsable={false} style={{ flex: 1 }}>
+            <Tappable
+              onPress={() => {
+                cueTap();
+                setGroupSortSheet("filters");
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Filter and sort inventory"
+              className="min-h-[48px] flex-1 flex-row items-center justify-center gap-2 rounded-lg border border-hairline bg-card px-3"
+            >
+              <MaterialCommunityIcons
+                name="tune-variant"
+                size={20}
+                color={COLORS.textSecondary}
               />
-            )}
-          />
+              <Text variant="label" className="shrink font-medium">
+                Filter &amp; sort{selectedCategory !== "all" ? " · 1" : ""}
+              </Text>
+            </Tappable>
+            </View>
+            <Tappable
+              onPress={() => {
+                cueTap();
+                setManagingPlaces(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Shelves: add, rename or nest shelves"
+              className="min-h-[48px] flex-row items-center justify-center gap-2 rounded-lg border border-hairline bg-card px-3"
+            >
+              <MaterialCommunityIcons
+                name="bookshelf"
+                size={20}
+                color={COLORS.textSecondary}
+              />
+              <Text variant="label">Shelves</Text>
+            </Tappable>
+            <View ref={shelfTarget} collapsable={false}>
+            <Tappable
+              onPress={() => {
+                cueTap();
+                setManagingPlaces(true);
+              }}
+              accessibilityRole="button"
+              accessibilityLabel="Add a shelf or sub-shelf"
+              className="min-h-[48px] flex-row items-center justify-center gap-1.5 rounded-lg border border-hairline bg-card px-3"
+            >
+              <MaterialCommunityIcons
+                name="folder-plus-outline"
+                size={20}
+                color={COLORS.textSecondary}
+              />
+              <Text variant="label">Shelf</Text>
+            </Tappable>
+            </View>
+          </View>
         )}
       </View>
 
@@ -1055,24 +1155,19 @@ export default function InventoryScreen() {
               }}
               // Opaque, because it sticks: a translucent header would let rows
               // scroll through the text behind it.
-              className={`mb-3 flex-row items-center gap-2 bg-canvas pb-2 pt-1 ${
-                section.depth === 1 ? "pl-6" : ""
-              }`}
+              className="mb-3 flex-row items-center gap-2 bg-canvas pb-2 pt-1"
+              style={section.depth === 1 ? NESTED : undefined}
             >
               <MaterialCommunityIcons
-                name={
-                  section.depth === 1
-                    ? "subdirectory-arrow-right"
-                    : isCollapsed
-                      ? "chevron-right"
-                      : "chevron-down"
-                }
+                name={isCollapsed ? "chevron-right" : "chevron-down"}
                 size={section.depth === 1 ? 18 : 20}
                 color={COLORS.secondary}
               />
               <Text
                 variant={section.depth === 1 ? "body" : "heading"}
-                className={section.depth === 1 ? "flex-1 font-semibold" : "flex-1"}
+                className={
+                  section.depth === 1 ? "flex-1 font-semibold" : "flex-1"
+                }
               >
                 {section.title}
               </Text>
@@ -1090,67 +1185,6 @@ export default function InventoryScreen() {
             </Pressable>
           );
         }}
-        ListHeaderComponent={
-          picking ? null : (
-            <View className="mb-4 gap-2">
-              {/* Group and sort open a clear picker sheet so the chevron-down
-                  icon behaves as a true dropdown rather than forcing volunteers
-                  to cycle through options in a loop. */}
-              <View className="gap-2">
-                <ListControl
-                  icon="view-agenda-outline"
-                  caption="Group"
-                  value={GROUPS.find((g) => g.id === groupBy)?.label ?? ""}
-                  accessibilityLabel={`Grouped ${GROUPS.find((g) => g.id === groupBy)?.label}. Tap to choose grouping.`}
-                  onPress={() => {
-                    cueTap();
-                    setGroupSortSheet("group");
-                  }}
-                />
-                <ListControl
-                  icon="swap-vertical"
-                  caption="Sort"
-                  value={SORTS.find((x) => x.id === sortBy)?.label ?? ""}
-                  accessibilityLabel={`Sorted by ${SORTS.find((x) => x.id === sortBy)?.label}. Tap to choose sort order.`}
-                  onPress={() => {
-                    cueTap();
-                    setGroupSortSheet("sort");
-                  }}
-                />
-                <Tappable
-                  onPress={() => { cueTap(); setManagingPlaces(true); }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Shelves: add, rename or nest shelves"
-                  className="min-h-[48px] self-start flex-row items-center gap-2 rounded-lg border border-hairline bg-card px-3 py-2"
-                >
-                  <MaterialCommunityIcons name="bookshelf" size={22} color={COLORS.secondaryDark} />
-                  <Text variant="label" className="font-semibold">Manage shelves</Text>
-                </Tappable>
-              </View>
-            </View>
-          )
-        }
-        ListFooterComponent={
-          dGroup === "place" && !picking ? (
-            <Tappable
-              onPress={() => {
-                cueTap();
-                setManagingPlaces(true);
-              }}
-              accessibilityRole="button"
-              className="mt-2 min-h-[52px] flex-row items-center justify-center gap-2 rounded-lg border-[1.5px] border-dashed border-outline"
-            >
-              <MaterialCommunityIcons
-                name="folder-plus-outline"
-                size={20}
-                color={COLORS.secondaryDark}
-              />
-              <Text variant="label" className="font-bold" style={{ color: COLORS.secondaryDark }}>
-                New shelf or sub-shelf
-              </Text>
-            </Tappable>
-          ) : null
-        }
         ListEmptyComponent={
           <EmptyState
             icon="clipboard-text-search-outline"
@@ -1181,61 +1215,75 @@ export default function InventoryScreen() {
       />
 
       <Sheet
-        visible={groupSortSheet === "group"}
+        visible={groupSortSheet === "filters"}
         onClose={() => setGroupSortSheet(null)}
-        title="Group shelves by"
-        subtitle="Choose how your inventory list is organized."
+        title="Filter & sort"
+        subtitle="Choose what to show and how to arrange it."
       >
-        {GROUPS.map((g, idx) => (
-          <Row
-            key={g.id}
-            icon="view-agenda-outline"
-            label={g.label}
-            divider={idx < GROUPS.length - 1}
-            right={
-              groupBy === g.id ? (
-                <MaterialCommunityIcons
-                  name="check-circle"
-                  size={22}
-                  color={COLORS.primary}
-                />
-              ) : undefined
-            }
-            onPress={() => {
-              setGroupBy(g.id);
-              setGroupSortSheet(null);
-            }}
-          />
-        ))}
-      </Sheet>
-
-      <Sheet
-        visible={groupSortSheet === "sort"}
-        onClose={() => setGroupSortSheet(null)}
-        title="Sort items by"
-        subtitle="Choose which items appear at the top of each section."
-      >
-        {SORTS.map((s, idx) => (
-          <Row
-            key={s.id}
-            icon="swap-vertical"
-            label={s.label}
-            divider={idx < SORTS.length - 1}
-            right={
-              sortBy === s.id ? (
-                <MaterialCommunityIcons
-                  name="check-circle"
-                  size={22}
-                  color={COLORS.primary}
-                />
-              ) : undefined
-            }
-            onPress={() => {
-              setSortBy(s.id);
-              setGroupSortSheet(null);
-            }}
-          />
-        ))}
+        <View className="gap-3">
+          <Text variant="heading">Category</Text>
+          <View className="flex-row flex-wrap gap-2">
+            {CATEGORIES.map((category) => (
+              <Chip
+                key={category.id}
+                label={category.label}
+                selected={selectedCategory === category.id}
+                onPress={() => setSelectedCategory(category.id)}
+              />
+            ))}
+          </View>
+        </View>
+        <View>
+          <Text variant="heading" className="mb-2">
+            Group shelves by
+          </Text>
+          {GROUPS.map((group, index) => (
+            <Row
+              key={group.id}
+              label={group.label}
+              selected={groupBy === group.id}
+              divider={index < GROUPS.length - 1}
+              onPress={() => setGroupBy(group.id)}
+              right={
+                groupBy === group.id ? (
+                  <MaterialCommunityIcons
+                    name="check"
+                    size={22}
+                    color={COLORS.primaryDark}
+                  />
+                ) : (
+                  <View style={{ width: 22 }} />
+                )
+              }
+            />
+          ))}
+        </View>
+        <View>
+          <Text variant="heading" className="mb-2">
+            Sort items by
+          </Text>
+          {SORTS.map((sort, index) => (
+            <Row
+              key={sort.id}
+              label={sort.label}
+              selected={sortBy === sort.id}
+              divider={index < SORTS.length - 1}
+              onPress={() => setSortBy(sort.id)}
+              right={
+                sortBy === sort.id ? (
+                  <MaterialCommunityIcons
+                    name="check"
+                    size={22}
+                    color={COLORS.primaryDark}
+                  />
+                ) : (
+                  <View style={{ width: 22 }} />
+                )
+              }
+            />
+          ))}
+        </View>
+        <Button label="Done" block onPress={() => setGroupSortSheet(null)} />
       </Sheet>
 
       <Sheet
@@ -1346,7 +1394,11 @@ export default function InventoryScreen() {
           className="flex-row items-center gap-3 rounded-lg border border-hairline bg-card p-3"
         >
           <View className="h-10 w-10 items-center justify-center rounded-lg bg-secondary-tint">
-            <MaterialCommunityIcons name="lightning-bolt" size={22} color={COLORS.secondaryDark} />
+            <MaterialCommunityIcons
+              name="lightning-bolt"
+              size={22}
+              color={COLORS.secondaryDark}
+            />
           </View>
           <View className="flex-1">
             <Text variant="body" className="font-bold" numberOfLines={1}>
@@ -1356,7 +1408,11 @@ export default function InventoryScreen() {
               Beans, rice, pasta, soup
             </Text>
           </View>
-          <MaterialCommunityIcons name="chevron-right" size={22} color={COLORS.textSecondary} />
+          <MaterialCommunityIcons
+            name="chevron-right"
+            size={22}
+            color={COLORS.textSecondary}
+          />
         </Tappable>
 
         <Input
@@ -1443,10 +1499,18 @@ export default function InventoryScreen() {
           if (!locName) return null;
           return (
             <View className="flex-row items-center gap-2">
-              <MaterialCommunityIcons name="bookshelf" size={18} color={COLORS.secondaryDark} />
+              <MaterialCommunityIcons
+                name="bookshelf"
+                size={18}
+                color={COLORS.secondaryDark}
+              />
               <Text variant="label" tone="soft">
                 Goes on{" "}
-                <Text variant="label" className="font-bold" style={{ color: COLORS.secondaryDark }}>
+                <Text
+                  variant="label"
+                  className="font-bold"
+                  style={{ color: COLORS.secondaryDark }}
+                >
                   {locName}
                 </Text>
               </Text>
@@ -1468,6 +1532,7 @@ export default function InventoryScreen() {
         onClose={() => setStaplesModalVisible(false)}
       />
 
+      <SpotlightTour tourKey="inventory" steps={INVENTORY_TOUR} />
       <InventoryDragLayer
         api={dragApi}
         dragging={dragging}

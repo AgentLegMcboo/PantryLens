@@ -11,17 +11,17 @@
  */
 const COLORS = {
   // Core brand
-  primary: '#9C4226',
-  primaryLight: '#BC5A3C',
-  primaryDark: '#8F3E24',
+  primary: "#DFA06B",
+  primaryLight: "#F8D8BA",
+  primaryDark: "#97501E",
   /** The lip under a pressed-in button. Must be clearly darker than primary. */
-  primaryDeep: '#5E2411',
-  secondary: '#6B8E4E',
+  primaryDeep: "#BD7D46",
+  secondary: "#788573",
   /** Secondary for text and solid fills: 5.4:1 on cream, white on it 5.8:1.
    *  The plain sage is only 3.5:1 — fine for icons, too light for words. */
-  secondaryDark: '#4F6E3A',
+  secondaryDark: "#52664F",
   /** A wash of the secondary, behind icons. */
-  secondaryTint: '#EEF3E8',
+  secondaryTint: "#EDF0EA",
 
   // Surfaces
   //
@@ -32,37 +32,38 @@ const COLORS = {
   //
   // `surfaceContainer` deliberately sits BELOW the page rather than above it.
   // Grouped-but-secondary content should recede; only cards float.
-  background: '#FBF6EE',
-  cardSurface: '#FFFFFF',
-  surfaceContainer: '#F5EADF',
-  surfaceVariant: '#EDE0D9',
-  borderSoft: '#E0CDBB',
+  background: "#FBF6EE",
+  cardSurface: "#FFFFFF",
+  surfaceContainer: "#F0EDE8",
+  surfaceVariant: "#E8E1DA",
+  borderSoft: "#DED6CD",
   /** Outline for controls. Deliberately stronger than borderSoft — a small
    *  chip has too little edge for the card tone to register. */
-  borderStrong: '#CDB498',
+  borderStrong: "#B7A798",
   /** Warm brown, never grey — a grey shadow on a cream ground looks like dirt. */
-  shadow: '#6B4A2F',
+  shadow: "#6B4A2F",
 
   // Typography
-  textPrimary: '#2B2420',
-  textSecondary: '#6B6259',
-  textOnPrimary: '#FFFFFF',
+  textPrimary: "#2B2420",
+  textSecondary: "#6B6259",
+  textOnPrimary: "#FFFFFF",
+  textOnAccent: "#452B19",
 
   // Status (sacred — these three carry meaning, never decoration)
-  statusGood: '#5B8C51',
-  statusWarning: '#E39A3B',
-  statusCritical: '#C0392B',
+  statusGood: "#627A5C",
+  statusWarning: "#A47D3F",
+  statusCritical: "#A4483F",
 
   // Food category hues
   categories: {
-    grain: '#C9A227',
-    vegetable: '#5B9C4E',
-    protein: '#A6432B',
-    breakfast: '#D98A2B',
-    snack: '#8E6FC4',
-    hygiene: '#3AA0A0',
-    baby: '#D46A9F',
-    unknown: '#8A8880',
+    grain: "#9C8A54",
+    vegetable: "#748A69",
+    protein: "#926859",
+    breakfast: "#A8895C",
+    snack: "#8B7D9F",
+    hygiene: "#678D8B",
+    baby: "#A57E90",
+    unknown: "#8A8880",
   },
 };
 

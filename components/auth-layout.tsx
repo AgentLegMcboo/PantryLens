@@ -6,6 +6,7 @@ import { COLORS, fw } from "../constants/theme";
 import { GoogleLogo } from "./google-logo";
 import { KeyboardScreen } from "./keyboard-screen";
 import { Button, Card, cardRing, Text } from "./ui";
+import { AppBackground } from './app-background';
 
 /**
  * The pantry behind the glass.
@@ -17,13 +18,7 @@ import { Button, Card, cardRing, Text } from "./ui";
  * One copy, ending on the real canvas colour.
  */
 export function AuthBackdrop({ blurRadius }: { blurRadius?: number } = {}) {
-  return (
-    <LinearGradient
-      colors={[COLORS.cardSurface, COLORS.surfaceContainer, COLORS.background]}
-      locations={[0, 0.45, 1]}
-      style={StyleSheet.absoluteFill}
-    />
-  );
+  return <AppBackground />;
 }
 
 /** The wordmark, at the size the entry screens use it. */
@@ -42,7 +37,7 @@ export function AuthBrand({
         <MaterialCommunityIcons
           name={icon}
           size={34}
-          color={COLORS.textOnPrimary}
+          color={COLORS.textOnAccent}
         />
       </View>
       {/* The splash's wordmark (components/brand-splash.tsx): system sans at
@@ -101,7 +96,7 @@ export function AuthLayout({
   footer: React.ReactNode;
 }) {
   return (
-    <View className="flex-1 bg-canvas">
+    <View className="flex-1 bg-transparent">
       <AuthBackdrop />
 
       <KeyboardScreen

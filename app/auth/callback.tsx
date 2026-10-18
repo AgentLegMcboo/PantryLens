@@ -1,3 +1,4 @@
+import { useAppAppearance } from '../../lib/appearance';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect } from 'react';
 import { ActivityIndicator, View } from 'react-native';
@@ -20,6 +21,7 @@ import { supabase } from '../../lib/supabase';
  * routes onward on its own.
  */
 export default function AuthCallback() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const { code } = useLocalSearchParams<{ code?: string }>();
   const session = usePantryStore(state => state.session);
@@ -39,7 +41,7 @@ export default function AuthCallback() {
   }, [code, router, session]);
 
   return (
-    <View className="flex-1 items-center justify-center bg-canvas">
+    <View className="flex-1 items-center justify-center bg-transparent">
       <ActivityIndicator color={COLORS.primary} />
     </View>
   );

@@ -10,6 +10,7 @@ import {
   MAX_PER_CATEGORY,
   normaliseRules,
   uniqueBoxName,
+  type BoxItemRule,
   type BoxPreset,
 } from '../lib/box-presets';
 import {
@@ -24,6 +25,7 @@ import { type BoxRules, type BoxTemplate, usePantryStore } from '../lib/store';
 import { FolderChips, FolderManager } from './box-folders';
 import { Button, categoryIcon, Chip, Input, Row, Sheet, Stepper, Text, Toggle } from './ui';
 import { Tappable } from './motion';
+import { BoxItemsEditor } from './box-items-editor';
 
 /** What Build is packing: a saved template, or a preset used as-is. */
 export type BoxSelection = { kind: 'template'; id: string } | { kind: 'preset'; key: string };
@@ -33,6 +35,7 @@ interface Draft {
   id?: string;
   name: string;
   rules: BoxRules;
+  items: BoxItemRule[];
   scalesWithFamily: boolean;
   folderId: string | null;
   excludesTags: DietTag[];
@@ -97,6 +100,7 @@ export function BoxPicker({
       id: template.id,
       name: template.name,
       rules: template.rules,
+      items: template.items ?? [],
       scalesWithFamily: template.scales_with_family,
       folderId: template.folder_id ?? null,
       excludesTags: template.excludes_tags ?? [],
@@ -111,6 +115,7 @@ export function BoxPicker({
         ? {
             name: uniqueBoxName(preset.name, takenNames()),
             rules: { ...preset.rules },
+            items: [],
             scalesWithFamily: preset.scalesWithFamily,
             folderId: null,
             excludesTags: preset.excludesTags ?? [],
@@ -119,6 +124,7 @@ export function BoxPicker({
         : {
             name: '',
             rules: normaliseRules({}),
+            items: [],
             scalesWithFamily: true,
             folderId: null,
             excludesTags: [],
@@ -183,7 +189,7 @@ export function BoxPicker({
   if (draft) {
     const saved = draft.id ? boxTemplates.find(t => t.id === draft.id) : undefined;
     const isDefault = !!saved?.is_default;
-    const total = itemsPerBox(draft.rules);
+    const total = itemsPerBox(draft.rules) + draft.items.reduce((sum, i) => sum + i.count, 0);
 
     return (
       <Sheet
@@ -192,6 +198,40 @@ export function BoxPicker({
         title={draft.id ? 'Edit box' : 'New box'}
         subtitle="Saved boxes are shared with everyone in your pantry."
       >
+        {/* What goes in the box comes first: it is why this screen is open. */}
+        <View>
+          <Text variant="label" className="px-1 font-bold">
+            What goes in each box
+          </Text>
+          {BOX_CATEGORIES.map((category, i) => (
+            <Row
+              key={category}
+              icon={categoryIcon(String(category))}
+              label={title(String(category))}
+              divider={i < BOX_CATEGORIES.length - 1}
+              right={
+                <Stepper
+                  value={draft.rules[category]}
+                  min={0}
+                  max={MAX_PER_CATEGORY}
+                  onChange={value => setCount(category, value)}
+                />
+              }
+            />
+          ))}
+        </View>
+
+        <BoxItemsEditor
+          items={draft.items}
+          onChange={items => setDraft(prev => (prev ? { ...prev, items } : prev))}
+        />
+
+        <Text variant="micro" tone={total === 0 ? 'critical' : 'soft'} className="px-1">
+          {total === 0
+            ? 'Add at least one item.'
+            : `${total} ${total === 1 ? 'item' : 'items'} in each box${draft.scalesWithFamily ? ' (for a family of 4)' : ''}.`}
+        </Text>
+
         <Input
           label="Name"
           value={draft.name}
@@ -207,11 +247,11 @@ export function BoxPicker({
 
         <Row
           icon="account-group-outline"
-          label="Scale with family size"
+          label="Change amounts by family size"
           hint={
             draft.scalesWithFamily
-              ? 'The amounts below are for a family of 4, and grow or shrink with the household.'
-              : 'Every household gets exactly these amounts.'
+              ? 'Bigger families get more, smaller families get less.'
+              : 'Every family gets the same amounts.'
           }
           right={
             <Toggle
@@ -229,11 +269,10 @@ export function BoxPicker({
             amounts can be filled from. */}
         <View className="gap-3 rounded-md bg-subtle p-3">
           <Text variant="label" className="font-bold">
-            Who can eat it
+            Allergies and diets
           </Text>
           <Text variant="micro" tone="soft">
-            Most boxes need none of this. Set it for a household that has told you
-            about an allergy, a diet, or having nowhere to cook.
+            Optional. Only for families who told you about one.
           </Text>
 
           {DIET_TAG_GROUPS.map(group => (
@@ -284,29 +323,6 @@ export function BoxPicker({
             </Text>
           )}
         </View>
-
-        {BOX_CATEGORIES.map((category, i) => (
-          <Row
-            key={category}
-            icon={categoryIcon(String(category))}
-            label={title(String(category))}
-            divider={i < BOX_CATEGORIES.length - 1}
-            right={
-              <Stepper
-                value={draft.rules[category]}
-                min={0}
-                max={MAX_PER_CATEGORY}
-                onChange={value => setCount(category, value)}
-              />
-            }
-          />
-        ))}
-
-        <Text variant="micro" tone={total === 0 ? 'critical' : 'soft'} className="px-1">
-          {total === 0
-            ? 'A box needs at least one item in it.'
-            : `${total} ${total === 1 ? 'item' : 'items'} per box${draft.scalesWithFamily ? ' for a family of 4' : ''}.`}
-        </Text>
 
         <Button
           label={draft.id ? 'Save changes' : 'Save box'}
@@ -410,7 +426,7 @@ export function BoxPicker({
         // The contents stay on the row whatever folder it's in.
         hint={`${template.is_default ? 'Default · ' : ''}${
           template.scales_with_family ? '' : 'Fixed · '
-        }${describeRules(template.rules)}`}
+        }${describeRules(template.rules, template.items)}`}
         divider={!isLast}
         onPress={() => pick({ kind: 'template', id: template.id })}
         right={

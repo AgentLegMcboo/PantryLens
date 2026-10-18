@@ -1,12 +1,13 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as React from 'react';
-import { Platform, Pressable, Switch, View } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { COLORS, RULE_BELOW } from '../../constants/theme';
-import { PRESS_SCALE_ROW, usePressScale } from '../motion';
-import { cueTap } from '../../lib/feedback';
-import { cn } from '../../lib/cn';
-import { Text } from './text';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as React from "react";
+import { Platform, Pressable, Switch, View } from "react-native";
+import Animated from "react-native-reanimated";
+import { COLORS, RULE_BELOW } from "../../constants/theme";
+import { PRESS_SCALE_ROW, usePressScale } from "../motion";
+import { cueTap } from "../../lib/feedback";
+import { cn } from "../../lib/cn";
+import { Text } from "./text";
+import { useAppAppearance } from "../../lib/appearance";
 
 /**
  * A labelled line with a control on the end.
@@ -25,73 +26,106 @@ import { Text } from './text';
  */
 export function Row({
   icon,
+  leading: leadingContent,
   label,
   hint,
   right,
   onPress,
+  selected,
+  stackControl = false,
   tone,
   divider = true,
   className,
 }: {
   icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  leading?: React.ReactNode;
   label: string;
   hint?: string;
   right?: React.ReactNode;
   onPress?: () => void;
-  tone?: 'critical';
+  /** Selection choices announce their checked state instead of a navigation button. */
+  selected?: boolean;
+  /** Put a wide control below its label rather than squeezing the text. */
+  stackControl?: boolean;
+  tone?: "critical";
   /** Hairline under the row. Turn it off on the last of a group. */
   divider?: boolean;
   className?: string;
 }) {
-  const colour = tone === 'critical' ? COLORS.statusCritical : COLORS.textPrimary;
+  useAppAppearance((state) => state.scheme);
+  const colour =
+    tone === "critical" ? COLORS.statusCritical : COLORS.textPrimary;
   // The glyph is brand-tinted rather than ink, matching the dashboard's activity
   // rows — a disc of dark grey on cream reads as disabled.
-  const glyphColour = tone === 'critical' ? COLORS.statusCritical : COLORS.secondaryDark;
+  const glyphColour =
+    tone === "critical" ? COLORS.statusCritical : COLORS.secondaryDark;
 
+  const leading = leadingContent ?? (icon ? (
+    <View
+      className={cn(
+        "h-10 w-10 items-center justify-center rounded-lg",
+        tone === "critical" ? "bg-subtle" : "bg-secondary-tint",
+      )}
+    >
+      <MaterialCommunityIcons name={icon} size={20} color={glyphColour} />
+    </View>
+  ) : null);
+  const copy = (
+    <View className="flex-1">
+      <Text variant="body" className="font-semibold" style={{ color: colour }}>
+        {label}
+      </Text>
+      {hint ? (
+        <Text variant="label" tone="soft" className="mt-0.5">
+          {hint}
+        </Text>
+      ) : null}
+    </View>
+  );
+  const trailing =
+    right ??
+    (onPress ? (
+      <MaterialCommunityIcons
+        name="chevron-right"
+        size={20}
+        color={COLORS.textSecondary}
+      />
+    ) : null);
   const body = (
     <View
       className={cn(
-        'min-h-[56px] flex-row items-center gap-3 py-2',
+        stackControl
+          ? "min-h-[56px] gap-3 py-3"
+          : "min-h-[56px] flex-row items-center gap-3 py-3",
         className,
       )}
-      // A style prop, not `border-b border-hairline`: on Android that class pair
-      // boxed every row in on all four sides instead of underlining it.
-      style={divider ? RULE_BELOW : undefined}
+      style={divider ? { ...RULE_BELOW } : undefined}
     >
-      {icon ? (
-        <View
-          className={cn(
-            'h-10 w-10 items-center justify-center rounded-lg',
-            // Green wash for an ordinary row; a problem row keeps the neutral
-            // tile so its red glyph isn't sitting on green.
-            tone === 'critical' ? 'bg-subtle' : 'bg-secondary-tint',
-          )}
-        >
-          <MaterialCommunityIcons name={icon} size={20} color={glyphColour} />
-        </View>
-      ) : null}
-
-      <View className="flex-1">
-        <Text variant="body" className="font-semibold" style={{ color: colour }}>
-          {label}
-        </Text>
-        {hint ? (
-          <Text variant="label" tone="soft" className="mt-0.5">
-            {hint}
-          </Text>
-        ) : null}
-      </View>
-
-      {right ??
-        (onPress ? (
-          <MaterialCommunityIcons name="chevron-right" size={20} color={COLORS.textSecondary} />
-        ) : null)}
+      {stackControl ? (
+        <>
+          <View className="flex-row items-center gap-3">
+            {leading}
+            {copy}
+          </View>
+          <View className="self-start">{trailing}</View>
+        </>
+      ) : (
+        <>
+          {leading}
+          {copy}
+          {trailing}
+        </>
+      )}
     </View>
   );
 
   if (!onPress) return body;
 
-  return <PressableRow onPress={onPress}>{body}</PressableRow>;
+  return (
+    <PressableRow onPress={onPress} selected={selected}>
+      {body}
+    </PressableRow>
+  );
 }
 
 /**
@@ -99,12 +133,23 @@ export function Row({
  * many rows that are not tappable — a hook above that return would run for
  * every static row in the app, and one below it would break the rules.
  */
-function PressableRow({ onPress, children }: { onPress: () => void; children: React.ReactNode }) {
+function PressableRow({
+  onPress,
+  children,
+  selected,
+}: {
+  onPress: () => void;
+  children: React.ReactNode;
+  selected?: boolean;
+}) {
   const press = usePressScale(PRESS_SCALE_ROW);
 
   return (
     <Pressable
-      accessibilityRole="button"
+      accessibilityRole={selected === undefined ? "button" : "radio"}
+      accessibilityState={
+        selected === undefined ? undefined : { checked: selected }
+      }
       // 8px of slack around a 56px row. The target should be slightly bigger
       // than the thing you can see, never smaller.
       hitSlop={8}
@@ -140,12 +185,12 @@ export function Toggle({
     <Switch
       value={value}
       accessibilityLabel={accessibilityLabel}
-      onValueChange={next => {
+      onValueChange={(next) => {
         cueTap();
         onValueChange(next);
       }}
       trackColor={{ true: COLORS.secondary, false: COLORS.borderStrong }}
-      thumbColor={Platform.OS === 'android' ? COLORS.cardSurface : undefined}
+      thumbColor={Platform.OS === "android" ? COLORS.cardSurface : undefined}
       ios_backgroundColor={COLORS.borderStrong}
     />
   );

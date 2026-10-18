@@ -1,3 +1,4 @@
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import React, { useEffect, useState } from 'react';
@@ -17,6 +18,8 @@ import {
 } from '../lib/permissions';
 import { usePantryStore, type PantryMember } from '../lib/store';
 import { timeAgo } from '../lib/time';
+import { ProfileAvatar } from '../components/profile-avatar';
+import { loadProfilePhoto } from '../lib/profile-photos';
 
 /**
  * Who is in this pantry, and what each of them may do.
@@ -43,6 +46,7 @@ function displayName(member: PantryMember): string {
 }
 
 export default function TeamScreen() {
+  useAppAppearance(state => state.scheme);
   const { settings, session, members, fetchMembers } = usePantryStore();
 
   const [refreshing, setRefreshing] = useState(false);
@@ -57,6 +61,7 @@ export default function TeamScreen() {
   const load = async () => {
     try {
       await fetchMembers();
+      await Promise.all(usePantryStore.getState().members.map(member => loadProfilePhoto(member.user_id, true)));
     } catch (err: any) {
       Alert.alert('Could not load your team', err?.message ?? 'Please try again.');
     }
@@ -84,7 +89,7 @@ export default function TeamScreen() {
 
   if (loading) {
     return (
-      <View className="flex-1 items-center justify-center bg-canvas">
+      <View className="flex-1 items-center justify-center bg-transparent">
         <ActivityIndicator color={COLORS.primary} />
       </View>
     );
@@ -161,7 +166,7 @@ export default function TeamScreen() {
                 return (
                   <Row
                     key={member.user_id}
-                    icon={ROLE_ICONS[member.role]}
+                    leading={<ProfileAvatar userId={member.user_id} name={displayName(member)} />}
                     label={me ? `${displayName(member)} (you)` : displayName(member)}
                     hint={`${ROLE_LABELS[member.role]} · joined ${timeAgo(member.joined_at)}`}
                     divider={i < members.length - 1}

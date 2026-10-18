@@ -43,14 +43,50 @@ export function normaliseRules(raw: unknown): BoxRules {
   return rules;
 }
 
+/**
+ * One particular product a box must hold, as opposed to "any 2 protein".
+ * Matched to stock by name, ignoring case and surrounding spaces.
+ */
+export interface BoxItemRule {
+  name: string;
+  /** Where it's grouped on the pick list. */
+  category: keyof BoxRules;
+  /** Per box, for a family of 4 when the box scales. */
+  count: number;
+}
+
+/** Same job as normaliseRules, for the specific-items list. */
+export function normaliseItems(raw: unknown): BoxItemRule[] {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set<string>();
+  const out: BoxItemRule[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    const name = typeof e.name === 'string' ? e.name.trim() : '';
+    const key = name.toLowerCase();
+    if (!name || seen.has(key)) continue;
+    const n = Math.floor(Number(e.count));
+    const category = BOX_CATEGORIES.includes(e.category as keyof BoxRules)
+      ? (e.category as keyof BoxRules)
+      : 'snack';
+    seen.add(key);
+    out.push({ name, category, count: Number.isFinite(n) && n > 0 ? Math.min(n, MAX_PER_CATEGORY) : 1 });
+  }
+  return out;
+}
+
 /** How many items one box holds, before any family-size scaling. */
 export function itemsPerBox(rules: BoxRules): number {
   return BOX_CATEGORIES.reduce((sum, category) => sum + (rules[category] || 0), 0);
 }
 
 /** "2 grain · 2 vegetable · 1 hygiene", the one-line summary shown under a box's name. */
-export function describeRules(rules: BoxRules): string {
-  const parts = BOX_CATEGORIES.filter(c => rules[c] > 0).map(c => `${rules[c]} ${c}`);
+export function describeRules(rules: BoxRules, items: BoxItemRule[] = []): string {
+  const parts = [
+    ...items.map(i => `${i.count} ${i.name}`),
+    ...BOX_CATEGORIES.filter(c => rules[c] > 0).map(c => `${rules[c]} ${c}`),
+  ];
   return parts.length > 0 ? parts.join(' · ') : 'Empty. Add at least one item.';
 }
 

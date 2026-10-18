@@ -1,80 +1,72 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import React, { useEffect, useRef, useState } from 'react';
+import { useAppAppearance } from "../lib/appearance";
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import React, { useEffect, useRef, useState } from "react";
 import {
-  Dimensions,
   NativeScrollEvent,
   NativeSyntheticEvent,
   Pressable,
   ScrollView,
-  StyleSheet,
+  useWindowDimensions,
   View,
-} from 'react-native';
+} from "react-native";
 import Animated, {
   Easing,
-  interpolateColor,
   ReduceMotion,
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withTiming,
-} from 'react-native-reanimated';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { AuthBackdrop } from '../components/auth-layout';
-import { BrandMark } from '../components/brand-mark';
-import { BoxesMock, CameraMock, ScanMock } from '../components/onboarding-mocks';
-import { Button, Text } from '../components/ui';
-import { COLORS, fw } from '../constants/theme';
-import { useAccessibilityStore } from '../lib/accessibility';
-import { cueSuccess, cueTap } from '../lib/feedback';
-import { usePantryStore } from '../lib/store';
+} from "react-native-reanimated";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { AuthBackdrop } from "../components/auth-layout";
+import { BrandMark } from "../components/brand-mark";
+import { AppearanceControl } from "../components/appearance-control";
+import { ConfirmDemo, PackDemo, SnapDemo } from "../components/onboarding-demos";
+import { Button, Text } from "../components/ui";
+import { COLORS, fw } from "../constants/theme";
+import { cueSuccess, cueTap } from "../lib/feedback";
+import { usePantryStore } from "../lib/store";
 
-const { width: SCREEN_W } = Dimensions.get('window');
-
-/**
- * Each phase shows a live miniature of the screen it describes, so a volunteer
- * arrives at the real thing already recognising it. Headlines lead with the
- * verb — what they will actually do — not with the technology.
- *
- * The chrome is the app's: the same photograph and scrim as Log In, and the same
- * physical button with a lip that every other screen commits with. Before this
- * the intro had its own pill-shaped CTA and its own copy of the background, so
- * the very first tap a volunteer made felt nothing like the second.
- */
+// One outcome per slide. Illustrations are explanatory, not working controls.
+// One moment of the app per slide, and each one can be tried, not just read:
+// snap a shelf, confirm what was found, see how many boxes that packs.
 const PHASES = [
   {
-    key: 'camera',
-    Mock: CameraMock,
-    lead: 'Point',
-    title: 'the camera at the pantry.',
-    body: 'A donation pile or a whole shelf. Take as many photos as it needs without leaving the camera.',
-    tint: '#F6ECE2',
+    key: "snap",
+    Demo: SnapDemo,
+    title: "Take a picture",
+    body: "PantryLens finds the food in it for you.",
+    demoDescription: "Try it: tap the shutter to take a picture of a pantry shelf.",
   },
   {
-    key: 'scan',
-    Mock: ScanMock,
-    lead: 'Every label',
-    title: 'read for you.',
-    body: 'PantryLens turns the photos into an item list, so nobody writes counts on paper.',
-    tint: '#F7EBDF',
+    key: "confirm",
+    Demo: ConfirmDemo,
+    title: "Confirm each item",
+    body: "Check it's right, then save it to your inventory.",
+    demoDescription: "Try it: tap Confirm for each item, then Save.",
   },
   {
-    key: 'boxes',
-    Mock: BoxesMock,
-    lead: 'Know',
-    title: "what's holding you back.",
-    body: 'See how many balanced boxes you can really pack, which category is blocking the rest, and exactly what to ask donors for.',
-    tint: '#F7E9E4',
+    key: "pack",
+    Demo: PackDemo,
+    title: "Pack boxes for families",
+    body: "Pick a family size. See how many boxes you can make.",
+    demoDescription: "Try it: pick a family size to see how many boxes you can pack.",
   },
 ] as const;
 
 export default function OnboardingScreen() {
+  useAppAppearance((state) => state.scheme);
+  const { width, height } = useWindowDimensions();
+  const [viewportHeight, setViewportHeight] = useState(height * 0.7);
+  const [copyHeights, setCopyHeights] = useState<Record<string, number>>({});
   const router = useRouter();
   const scrollRef = useRef<ScrollView>(null);
-  const completeOnboarding = usePantryStore(state => state.completeOnboarding);
+  const completeOnboarding = usePantryStore(
+    (state) => state.completeOnboarding,
+  );
   // Signed in only when the intro is replayed in development.
-  const signedIn = usePantryStore(state => !!state.session);
-  const seniorMode = useAccessibilityStore(s => s.seniorMode);
+  const signedIn = usePantryStore((state) => !!state.session);
   const [page, setPage] = useState(0);
 
   const isLast = page === PHASES.length - 1;
@@ -84,22 +76,34 @@ export default function OnboardingScreen() {
     // Must land before the navigation, or the root gate still sees the intro
     // as incomplete and sends us straight back here.
     await completeOnboarding();
-    router.replace(signedIn ? '/(tabs)' : '/login');
+    router.replace(signedIn ? "/(tabs)" : "/login");
+  };
+
+  const pageRef = useRef(0);
+  pageRef.current = page;
+  const goTo = (target: number) => {
+    scrollRef.current?.scrollTo({ x: target * width, animated: true });
+    setPage(target);
+  };
+  // A demo finished by hand: move on by itself, unless they already swiped.
+  const advanceFrom = (from: number) => {
+    if (from !== pageRef.current || from >= PHASES.length - 1) return;
+    goTo(from + 1);
   };
 
   const next = () => {
     if (isLast) return finish();
-    scrollRef.current?.scrollTo({ x: (page + 1) * SCREEN_W, animated: true });
+    scrollRef.current?.scrollTo({ x: (page + 1) * width, animated: true });
   };
 
   const skip = async () => {
     cueTap();
     await completeOnboarding();
-    router.replace(signedIn ? '/(tabs)' : '/login');
+    router.replace(signedIn ? "/(tabs)" : "/login");
   };
 
   const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const nextPage = Math.round(e.nativeEvent.contentOffset.x / SCREEN_W);
+    const nextPage = Math.round(e.nativeEvent.contentOffset.x / width);
     if (nextPage !== page) {
       setPage(nextPage);
       cueTap();
@@ -107,16 +111,17 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <View className="flex-1 bg-canvas">
+    <View className="flex-1 bg-transparent">
       {/* The pantry photo sits far back — enough to feel like a place, not
           enough to compete with the mocks in front of it. */}
       <AuthBackdrop blurRadius={3} />
-      <PhaseTint page={page} />
 
-      <SafeAreaView style={{ flex: 1 }} edges={['top', 'bottom']}>
+      <SafeAreaView style={{ flex: 1 }} edges={["top", "bottom"]}>
         <View className="flex-row items-center justify-between px-gutter pt-2">
           <BrandMark />
 
+          <View className="flex-row items-center gap-1">
+          <AppearanceControl compact />
           {!isLast && (
             <Pressable
               onPress={skip}
@@ -125,11 +130,12 @@ export default function OnboardingScreen() {
               accessibilityLabel="Skip introduction"
               className="h-12 items-center justify-center px-3"
             >
-              <Text variant="label" tone="soft" className="font-semibold">
+              <Text variant="micro" tone="soft" className="font-semibold">
                 Skip
               </Text>
             </Pressable>
           )}
+          </View>
         </View>
 
         <ScrollView
@@ -138,59 +144,90 @@ export default function OnboardingScreen() {
           pagingEnabled
           showsHorizontalScrollIndicator={false}
           onMomentumScrollEnd={onScroll}
+          onLayout={event => setViewportHeight(event.nativeEvent.layout.height)}
           className="flex-1"
         >
-          {PHASES.map(phase => {
-            const Mock = phase.Mock;
+          {PHASES.map((phase, index) => {
+            const Demo = phase.Demo;
+            // Use the space left by the actual text, not a fixed picture size.
+            // On compact screens or with larger text, the page can still scroll.
+            const copyHeight = copyHeights[phase.key] ?? 220;
+            const demoHeight = Math.min(620, Math.max(340, viewportHeight - copyHeight - 40));
+            const demoWidth = Math.min(width - 40, 460);
             return (
-              <View key={phase.key} style={{ width: SCREEN_W }} className="flex-1 px-gutter">
-                <View className="min-h-[260px] flex-1 items-center justify-center">
-                  <View className="absolute h-[268px] w-[268px] rounded-2xl border border-hairline/40 bg-card opacity-70" />
-                  <Mock />
+              <ScrollView
+                key={phase.key}
+                style={{ width }}
+                contentContainerStyle={{
+                  flexGrow: 1,
+                  justifyContent: "center",
+                  paddingHorizontal: 20,
+                  paddingTop: 12,
+                  paddingBottom: 16,
+                }}
+                showsVerticalScrollIndicator={false}
+              >
+                <View
+                  accessibilityLabel={phase.demoDescription}
+                  style={{
+                    height: demoHeight,
+                    flexShrink: 0,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    marginBottom: 16,
+                  }}
+                >
+                  <Demo
+                    active={index === page}
+                    w={demoWidth}
+                    h={demoHeight}
+                    onDone={() => advanceFrom(index)}
+                  />
                 </View>
 
-                <View className="pb-3">
+                <View style={{ gap: 6 }} onLayout={event => {
+                  const measuredHeight = event.nativeEvent.layout.height;
+                  setCopyHeights(previous => Math.abs((previous[phase.key] ?? 0) - measuredHeight) < 1
+                    ? previous : { ...previous, [phase.key]: measuredHeight });
+                }}>
                   <Text
                     variant="display"
                     style={{
-                      fontSize: seniorMode ? 33 : 30,
-                      lineHeight: seniorMode ? 40 : 37,
-                      fontWeight: fw('700'),
+                      fontSize: 34,
+                      lineHeight: 40,
+                      fontWeight: fw("700"),
                       letterSpacing: -0.5,
                       color: COLORS.textPrimary,
                     }}
                   >
-                    <Text
-                      variant="display"
-                      style={{
-                        fontSize: seniorMode ? 33 : 30,
-                        lineHeight: seniorMode ? 40 : 37,
-                        fontWeight: fw('700'),
-                        color: COLORS.primaryLight,
-                      }}
-                    >
-                      {phase.lead}{' '}
-                    </Text>
                     {phase.title}
                   </Text>
-                  <Text variant="body" tone="soft" className="mt-2.5 pr-2">
+                  <Text
+                    variant="body"
+                    tone="soft"
+                    style={{ fontSize: 19, lineHeight: 27 }}
+                  >
                     {phase.body}
                   </Text>
                 </View>
-              </View>
+              </ScrollView>
             );
           })}
         </ScrollView>
 
-        <View className="gap-3.5 px-gutter pb-2">
-          <View className="flex-row items-center gap-1.5">
+        <View className="gap-6 px-gutter pb-2">
+          <View
+            className="flex-row items-center gap-1.5"
+            accessible
+            accessibilityLabel={`Page ${page + 1} of ${PHASES.length}`}
+          >
             {PHASES.map((p, i) => (
               <Dot key={p.key} active={i === page} />
             ))}
           </View>
 
           <Button
-            label={isLast ? 'Get started' : 'Next'}
+            label={isLast ? "Get started" : "Next"}
             block
             icon={
               <MaterialCommunityIcons
@@ -201,38 +238,10 @@ export default function OnboardingScreen() {
             }
             onPress={next}
           />
-
-          <Text variant="micro" tone="soft" className="text-center">
-            Built for community food pantries &amp; volunteer teams.
-          </Text>
         </View>
       </SafeAreaView>
     </View>
   );
-}
-
-/** Wash of colour that cross-fades per phase, so swiping visibly changes mood. */
-function PhaseTint({ page }: { page: number }) {
-  const progress = useSharedValue(0);
-
-  useEffect(() => {
-    // A colour cross-fade, not movement, so it plays with reduced motion too.
-    progress.value = withTiming(page, {
-      duration: 420,
-      easing: Easing.out(Easing.quad),
-      reduceMotion: ReduceMotion.Never,
-    });
-  }, [page, progress]);
-
-  const style = useAnimatedStyle(() => ({
-    backgroundColor: interpolateColor(
-      progress.value,
-      PHASES.map((_, i) => i),
-      PHASES.map(p => p.tint),
-    ),
-  }));
-
-  return <Animated.View pointerEvents="none" style={[StyleSheet.absoluteFill, style, { opacity: 0.3 }]} />;
 }
 
 function Dot({ active }: { active: boolean }) {
@@ -252,12 +261,15 @@ function Dot({ active }: { active: boolean }) {
   // only the brightness fades.
   const style = useAnimatedStyle(() => ({
     width: reduceMotion ? (active ? 26 : 7) : 7 + progress.value * 19,
-    opacity: 0.3 + progress.value * 0.7,
+    opacity: 0.4 + progress.value * 0.6,
   }));
 
   return (
     <Animated.View
-      style={[{ height: 7, borderRadius: 4, backgroundColor: COLORS.primaryLight }, style]}
+      style={[
+        { height: 7, borderRadius: 4, backgroundColor: COLORS.primaryDark },
+        style,
+      ]}
     />
   );
 }

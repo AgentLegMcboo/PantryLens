@@ -47,7 +47,7 @@ export function Chip({
       )}
       {...props}
     >
-      <Text variant="label" tone={selected ? 'on' : 'soft'} className="font-semibold">
+      <Text variant="label" tone={selected ? 'on' : 'soft'} style={selected && tone === 'brand' ? { color: COLORS.textOnAccent } : undefined} className="font-semibold">
         {label}
       </Text>
     </Tappable>
@@ -69,7 +69,7 @@ export function Badge({
     good: { background: '#EEF4E9', foreground: '#3C6534' },
     warn: { background: '#FFF2DB', foreground: '#80500E' },
     critical: { background: '#FCEBE8', foreground: '#982E26' },
-    brand: { background: '#F8E8DF', foreground: COLORS.primary },
+    brand: { background: '#F8E8DF', foreground: COLORS.textOnAccent },
   } as const;
   const icon =
     tone === 'good'

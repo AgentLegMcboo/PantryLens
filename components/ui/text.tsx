@@ -1,8 +1,10 @@
 import * as React from 'react';
-import { StyleSheet, Text as RNText, type TextProps } from 'react-native';
+import { Platform, StyleSheet, Text as RNText, type TextProps } from 'react-native';
 import { cva, type VariantProps } from 'class-variance-authority';
 import { cn } from '../../lib/cn';
 import { getSeniorTextStyle, useAccessibilityStore } from '../../lib/accessibility';
+import { COLORS } from '../../constants/theme';
+import { useAppAppearance } from '../../lib/appearance';
 
 /**
  * Every piece of text in the app, at one of six sizes.
@@ -20,9 +22,9 @@ const textVariants = cva('text-ink', {
       title: 'text-title font-bold tracking-tight',
       headline: 'text-headline font-bold tracking-tight',
       heading: 'text-heading font-semibold',
-      body: 'text-body',
+      body: 'text-body font-normal',
       label: 'text-label font-medium',
-      micro: 'text-micro',
+      micro: 'text-micro font-normal',
     },
     tone: {
       default: 'text-ink',
@@ -47,9 +49,11 @@ export function Text({
   ...props
 }: TextProps & TextVariant) {
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
+  const scheme = useAppAppearance(state => state.scheme);
   const resolvedStyle = React.useMemo(() => {
     if (!seniorMode) return style;
     const seniorStyle = getSeniorTextStyle(variant, tone);
+    if (tone === 'soft') seniorStyle.color = COLORS.textPrimary;
     if (!style) return seniorStyle;
     const flat = StyleSheet.flatten(style) || {};
     if (typeof flat.fontSize === 'number') {
@@ -65,13 +69,13 @@ export function Text({
       ];
     }
     return [flat, seniorStyle, flat.color && tone !== 'soft' ? { color: flat.color } : null];
-  }, [seniorMode, variant, tone, style]);
+  }, [seniorMode, variant, tone, style, scheme]);
 
   return (
     <RNText
       maxFontSizeMultiplier={2.2}
       className={cn(textVariants({ variant, tone }), className)}
-      style={resolvedStyle}
+      style={[{ fontFamily: Platform.OS === 'ios' ? 'System' : undefined }, resolvedStyle]}
       {...props}
     />
   );

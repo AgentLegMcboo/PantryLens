@@ -1,7 +1,8 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
-import React, { useCallback, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { StyleSheet, View, useWindowDimensions } from "react-native";
 import { Gesture } from "react-native-gesture-handler";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Animated, {
   FadeIn,
   FadeOut,
@@ -14,6 +15,7 @@ import Animated, {
 import { COLORS } from "../constants/theme";
 import { cuePress, cueTap } from "../lib/feedback";
 import type { InventoryItem } from "../lib/store";
+import { useTabBarHidden } from "../lib/tab-overlay";
 import { ItemThumb, Text } from "./ui";
 
 /**
@@ -108,6 +110,13 @@ export function useInventoryDrag({
     [x, y, grabX, grabY, hover, active, moved, rects, begin, end],
   );
 
+  // The tray sits where the floating tab bar is, so the bar steps aside.
+  const setTabBarHidden = useTabBarHidden((s) => s.setHidden);
+  useEffect(() => {
+    setTabBarHidden(!!draggingId);
+    return () => setTabBarHidden(false);
+  }, [draggingId, setTabBarHidden]);
+
   const dragging = draggingId ? (items.find((i) => i.id === draggingId) ?? null) : null;
   return { api, dragging, draggingId };
 }
@@ -200,7 +209,7 @@ export function InventoryDragLayer({
       <Tray api={api} places={places} currentPlace={dragging.location_id ?? null} />
 
       {/* The item, lifted */}
-      <Animated.View style={[styles.float, { width: cardW }, floatStyle]}>
+      <Animated.View style={[styles.float, surfaceColors().float, { width: cardW }, floatStyle]}>
         <ItemThumb imageUrl={dragging.image_url} category={dragging.category} size="sm" />
         <Text variant="body" numberOfLines={1} className="flex-1 font-semibold">
           {dragging.name}
@@ -223,6 +232,8 @@ function Tray({
   currentPlace: string | null;
 }) {
   const [hover, setHover] = useState(-1);
+  const insets = useSafeAreaInsets();
+  const colors = surfaceColors();
   const refs = useRef<(View | null)[]>([]);
 
   // Hover lives on the UI thread; mirror changes here for the highlight and a
@@ -256,7 +267,7 @@ function Tray({
   };
 
   return (
-    <Animated.View entering={FadeIn.duration(150)} style={styles.tray} onLayout={measureAll}>
+    <Animated.View entering={FadeIn.duration(150)} style={[styles.tray, { bottom: 12 + insets.bottom }]} onLayout={measureAll}>
       <Text variant="label" className="mb-2 font-bold" style={{ color: COLORS.textOnPrimary }}>
         Drop on a shelf to move it
       </Text>
@@ -272,8 +283,10 @@ function Tray({
               }}
               style={[
                 styles.place,
+                colors.place,
                 on && styles.placeOn,
-                here && styles.placeHere,
+                on && colors.placeOn,
+                here && colors.placeHere,
               ]}
             >
               <MaterialCommunityIcons
@@ -334,9 +347,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 10,
     borderRadius: 14,
-    backgroundColor: COLORS.cardSurface,
     borderWidth: 2,
-    borderColor: COLORS.primary,
     boxShadow: "0 12px 28px 0 rgba(26, 18, 14, 0.35)",
   },
   tray: {
@@ -359,19 +370,25 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 12,
     borderRadius: 12,
-    backgroundColor: COLORS.cardSurface,
     borderWidth: 2,
-    borderColor: "transparent",
   },
-  // The shelf under the finger: the brand's warm tint with an orange edge,
-  // not a solid fill, so it reads as "here" without shouting.
   placeOn: {
-    backgroundColor: "#F6E6DC",
-    borderColor: COLORS.primary,
     transform: [{ scale: 1.04 }],
   },
-  // Solid grey, not see-through: the dimmed page shouldn't show through it.
-  placeHere: {
-    backgroundColor: "#D9D1C8",
-  },
 });
+
+/**
+ * Colours read at render, not in StyleSheet.create: COLORS follows light and
+ * dark mode, and a module-level read froze whichever mode the app loaded in.
+ */
+function surfaceColors() {
+  return {
+    float: { backgroundColor: COLORS.cardSurface, borderColor: COLORS.primary },
+    place: { backgroundColor: COLORS.cardSurface, borderColor: COLORS.borderSoft },
+    // The shelf under the finger: the brand's warm tint with an orange edge,
+    // not a solid fill, so it reads as "here" without shouting.
+    placeOn: { backgroundColor: COLORS.primaryLight, borderColor: COLORS.primary },
+    // Solid, not see-through: the dimmed page shouldn't show through it.
+    placeHere: { backgroundColor: COLORS.surfaceVariant, borderColor: COLORS.surfaceVariant },
+  };
+}

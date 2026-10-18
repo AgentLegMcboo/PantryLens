@@ -43,7 +43,7 @@ export function Stepper({
   return (
     <View
       className={cn(
-        'flex-row items-center rounded-lg border border-hairline bg-canvas',
+        'self-start flex-row items-center rounded-lg border border-hairline bg-canvas',
         className,
       )}
     >

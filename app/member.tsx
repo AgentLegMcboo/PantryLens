@@ -1,3 +1,7 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { ProfileAvatar } from '../components/profile-avatar';
+import { loadProfilePhoto } from '../lib/profile-photos';
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
@@ -60,6 +64,7 @@ const VERDICT: Record<ScanItemRow['verdict'], { label: string; color: string }> 
 };
 
 export default function MemberScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const { settings, session, members, fetchMembers, setMemberRole, transferOwnership, removeMember } =
@@ -139,7 +144,7 @@ export default function MemberScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([load(), fetchMembers().catch(() => {})]);
+    await Promise.all([load(), fetchMembers().catch(() => {}), id ? loadProfilePhoto(id, true) : Promise.resolve()]);
     setRefreshing(false);
   };
 
@@ -223,13 +228,9 @@ export default function MemberScreen() {
       {/* Who */}
       <FadeInUp index={0}>
         <View className="flex-row items-center gap-3.5">
-          <View className="h-14 w-14 items-center justify-center rounded-lg bg-brand">
-            <Text variant="title" tone="on" className="font-bold">
-              {name.charAt(0).toUpperCase()}
-            </Text>
-          </View>
+          <ProfileAvatar userId={member.user_id} name={name} size={56} />
           <View className="flex-1">
-            <Text variant="heading" numberOfLines={1} className="font-bold">
+            <Text variant="heading" className="font-bold">
               {name}
               {isMe ? ' (you)' : ''}
             </Text>
@@ -239,6 +240,9 @@ export default function MemberScreen() {
             </Text>
           </View>
         </View>
+        {isMe ? (
+          <Button label="Edit profile photo" variant="ghost" onPress={() => router.push({ pathname: '/(tabs)/settings', params: { section: 'profile' } })} />
+        ) : null}
       </FadeInUp>
 
       {!canView ? (
@@ -345,8 +349,8 @@ export default function MemberScreen() {
                             </Text>
                           ) : (
                             scanItems[scan.id].map((it) => (
-                              <View key={it.id} className="flex-row items-center gap-2">
-                                <Text variant="label" className="flex-1" numberOfLines={1}>
+                              <ResponsiveRow key={it.id} className="flex-row items-center gap-2">
+                                <Text variant="label" className="flex-1">
                                   {it.final_count ?? it.detected_count}× {it.final_name || it.detected_name}
                                 </Text>
                                 <Text
@@ -356,7 +360,7 @@ export default function MemberScreen() {
                                 >
                                   {VERDICT[it.verdict].label}
                                 </Text>
-                              </View>
+                              </ResponsiveRow>
                             ))
                           )}
                         </View>

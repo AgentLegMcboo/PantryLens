@@ -1,8 +1,10 @@
 import React from 'react';
 import { Platform, StyleSheet, View, type ViewProps } from 'react-native';
 import { GlassView, isGlassEffectAPIAvailable, isLiquidGlassAvailable } from 'expo-glass-effect';
+import { LinearGradient } from 'expo-linear-gradient';
 import { COLORS } from '../../constants/theme';
 import { useOpaqueGlass } from '../../lib/glass-preferences';
+import { useAppAppearance } from '../../lib/appearance';
 
 function nativeGlassAvailable() {
   if (Platform.OS !== 'ios') return false;
@@ -11,19 +13,32 @@ function nativeGlassAvailable() {
 }
 
 /** Decorative material only. Content and interaction stay in ordinary native views. */
-export function GlassBackdrop({ radius = 28, material = 'regular' }: { radius?: number; material?: 'clear' | 'regular' }) {
+export function GlassBackdrop({ radius = 28, material = 'regular' }: { radius?: number; material?: 'clear' | 'regular' | 'sheet' }) {
+  const scheme = useAppAppearance(state => state.scheme);
   const opaque = useOpaqueGlass();
   const nativeGlass = !opaque && nativeGlassAvailable();
 
   return (
     <View pointerEvents="none" accessible={false} style={[StyleSheet.absoluteFill, { borderRadius: radius, overflow: 'hidden' }]}>
       {nativeGlass ? (
-        <GlassView style={StyleSheet.absoluteFill} glassEffectStyle={material} colorScheme="light" tintColor="rgba(245,234,223,0.10)" />
-      ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.background }]} />}
+        <GlassView style={StyleSheet.absoluteFill} glassEffectStyle={material === 'sheet' ? 'regular' : material} colorScheme={scheme}
+          tintColor={scheme === 'dark' ? 'rgba(24,25,28,0.42)' : 'rgba(250,249,247,0.40)'} />
+      ) : <View style={[StyleSheet.absoluteFill, { backgroundColor: COLORS.cardSurface }]} />}
+      {nativeGlass && <View style={[StyleSheet.absoluteFill, {
+        backgroundColor: scheme === 'dark'
+          ? (material === 'sheet' ? 'rgba(35,33,30,0.97)' : 'rgba(35,33,30,0.82)')
+          : (material === 'sheet' ? 'rgba(250,249,247,0.97)' : 'rgba(250,249,247,0.82)'),
+      }]} />}
+      {nativeGlass && <LinearGradient
+        colors={scheme === 'dark'
+          ? ['rgba(255,255,255,0.04)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0.01)']
+          : ['rgba(255,255,255,0.08)', 'rgba(255,255,255,0)', 'rgba(255,255,255,0.02)']}
+        locations={[0, 0.45, 1]} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }}
+        style={StyleSheet.absoluteFill} />}
       <View style={[StyleSheet.absoluteFill, {
         borderRadius: radius, borderWidth: 1,
-        borderColor: nativeGlass ? 'rgba(205,180,152,0.35)' : COLORS.borderStrong,
-        borderTopColor: nativeGlass ? 'rgba(255,255,255,0.65)' : COLORS.borderStrong,
+        borderColor: nativeGlass ? (scheme === 'dark' ? 'rgba(255,255,255,0.26)' : 'rgba(80,70,60,0.30)') : COLORS.borderStrong,
+        borderTopColor: nativeGlass ? (scheme === 'dark' ? 'rgba(255,255,255,0.30)' : 'rgba(80,70,60,0.30)') : COLORS.borderStrong,
       }]} />
     </View>
   );
@@ -31,7 +46,7 @@ export function GlassBackdrop({ radius = 28, material = 'regular' }: { radius?: 
 
 export function GlassSurface({ children, style, ...props }: ViewProps) {
   return <View {...props} style={[styles.surface, style]}>
-      <GlassBackdrop material="clear" />
+      <GlassBackdrop material="regular" />
     {children}
   </View>;
 }
@@ -39,10 +54,10 @@ export function GlassSurface({ children, style, ...props }: ViewProps) {
 const styles = StyleSheet.create({
   surface: {
     borderRadius: 28,
-    shadowColor: COLORS.shadow,
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 5 },
+    shadowColor: '#000000',
+    shadowOpacity: 0.10,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 6 },
     elevation: 5,
   },
 });

@@ -83,6 +83,7 @@ export function Sheet({
   title,
   subtitle,
   onClose,
+  onDismiss,
   children,
   className,
 }: {
@@ -90,6 +91,7 @@ export function Sheet({
   title: string;
   subtitle?: string;
   onClose: () => void;
+  onDismiss?: () => void;
   children: React.ReactNode;
   className?: string;
 }) {
@@ -105,6 +107,35 @@ export function Sheet({
    * until the closing spring reports back.
    */
   const [mounted, setMounted] = React.useState(visible);
+  const visibleRef = React.useRef(visible);
+  visibleRef.current = visible;
+  const onDismissRef = React.useRef(onDismiss);
+  onDismissRef.current = onDismiss;
+  const awaitingDismiss = React.useRef(false);
+  const hasEntered = React.useRef(false);
+  // A parent often clears its selected section when closing. Hold its last
+  // content through the exit so the sheet doesn't collapse under the animation.
+  const presentation = React.useRef({ title, subtitle, children });
+  if (visible) presentation.current = { title, subtitle, children };
+
+  const notifyDismiss = React.useCallback(() => {
+    if (visibleRef.current || !awaitingDismiss.current) return;
+    awaitingDismiss.current = false;
+    onDismissRef.current?.();
+  }, []);
+
+  React.useEffect(() => {
+    // iOS must wait for UIKit's actual dismissal event. Other platforms don't
+    // supply that event, so notify after the hidden modal has committed.
+    if (!mounted && Platform.OS !== 'ios') notifyDismiss();
+  }, [mounted, notifyDismiss]);
+
+  const finishClose = React.useCallback(() => {
+    // A queued animation callback may arrive after the sheet was reopened.
+    if (visibleRef.current) return;
+    hasEntered.current = false;
+    setMounted(false);
+  }, []);
 
   /** Distance below resting position, in px. 0 is open, `height` is gone. */
   const translateY = useSharedValue(screenHeight);
@@ -138,7 +169,15 @@ export function Sheet({
 
   React.useEffect(() => {
     if (visible) {
+      awaitingDismiss.current = true;
       setMounted(true);
+      scrollOffset.value = 0;
+      // Reverse an interrupted close instead of letting its callback hide us.
+      if (hasEntered.current) {
+        translateY.value = reduceMotion
+          ? withTiming(0, { duration: 200, reduceMotion: ReduceMotion.Never })
+          : withSpring(0, SPRING_SHEET);
+      }
       return;
     }
     // Closed from outside (a Save handler, the hardware back button): play the
@@ -151,13 +190,13 @@ export function Sheet({
           height.value,
           { duration: 150, reduceMotion: ReduceMotion.Never },
           finished => {
-            if (finished) runOnJS(setMounted)(false);
+            if (finished) runOnJS(finishClose)();
           },
         );
         return;
       }
       translateY.value = withSpring(height.value, SPRING_SHEET, finished => {
-        if (finished) runOnJS(setMounted)(false);
+        if (finished) runOnJS(finishClose)();
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -166,18 +205,16 @@ export function Sheet({
   /** Entry, once the real height is known. */
   const onSheetLayout = (measured: number) => {
     if (measured <= 0) return;
-    const first = height.value !== measured;
     height.value = measured;
-    if (!visible) return;
-    if (first || translateY.value >= measured) {
-      translateY.value = measured;
-      // Under reduced motion this travel only drives opacity (see sheetStyle),
-      // so it is a 200ms fade in — forced to run, since Reanimated's default
-      // would snap it and the sheet would pop up instead.
-      translateY.value = reduceMotion
-        ? withTiming(0, { duration: 200, reduceMotion: ReduceMotion.Never })
-        : withSpring(0, SPRING_SHEET);
-    }
+    if (!visible || hasEntered.current) return;
+    hasEntered.current = true;
+    translateY.value = measured;
+    // Under reduced motion this travel only drives opacity (see sheetStyle),
+    // so it is a 200ms fade in — forced to run, since Reanimated's default
+    // would snap it and the sheet would pop up instead.
+    translateY.value = reduceMotion
+      ? withTiming(0, { duration: 200, reduceMotion: ReduceMotion.Never })
+      : withSpring(0, SPRING_SHEET);
   };
 
   const scrollHandler = useAnimatedScrollHandler(event => {
@@ -242,15 +279,16 @@ export function Sheet({
     opacity: interpolate(translateY.value, [0, height.value], [1, 0], 'clamp'),
   }));
 
-  if (!mounted) return null;
+  if (!mounted && Platform.OS !== 'ios') return null;
 
   return (
     <Modal
-      visible
+      visible={mounted}
       transparent
       // We animate this ourselves now, and two animations on one surface fight.
       animationType="none"
       onRequestClose={onClose}
+      onDismiss={notifyDismiss}
       statusBarTranslucent
       navigationBarTranslucent
     >
@@ -282,10 +320,10 @@ export function Sheet({
                 so its header never gets pushed off the top of the screen. */}
             <Animated.View
               onLayout={e => onSheetLayout(e.nativeEvent.layout.height)}
-              style={[{ width: '100%', maxWidth: 640, alignSelf: 'center', maxHeight: screenHeight * 0.85, flexShrink: 1, backgroundColor: 'transparent', borderTopLeftRadius: 16, borderTopRightRadius: 16, overflow: 'hidden' }, sheetStyle]}
+              style={[{ width: '100%', maxWidth: 640, alignSelf: 'center', maxHeight: screenHeight * 0.85, flexShrink: 1, backgroundColor: 'transparent', borderTopLeftRadius: 28, borderTopRightRadius: 28, overflow: 'hidden' }, sheetStyle]}
               className={cn('max-h-[85%] shrink rounded-t-lg', className)}
             >
-              <GlassBackdrop radius={16} />
+              <GlassBackdrop radius={28} material="sheet" />
               {/* The grabber. It means what it looks like now. Generously
                   padded, because the thing you grab should be bigger than the
                   thing you see. */}
@@ -305,10 +343,10 @@ export function Sheet({
 
               <View className="flex-row items-start gap-3 px-gutter pb-3 pt-2">
                 <View className="flex-1">
-                  <Text variant="title">{title}</Text>
-                  {subtitle ? (
+                  <Text variant="title">{presentation.current.title}</Text>
+                  {presentation.current.subtitle ? (
                     <Text variant="label" tone="soft" className="mt-1">
-                      {subtitle}
+                      {presentation.current.subtitle}
                     </Text>
                   ) : null}
                 </View>
@@ -334,7 +372,7 @@ export function Sheet({
                 contentContainerClassName="px-gutter gap-3"
                 contentContainerStyle={{ paddingHorizontal: 20, gap: 12, paddingBottom: Math.max(insets.bottom, 12) + 4 }}
               >
-                {children}
+                {presentation.current.children}
               </Animated.ScrollView>
             </Animated.View>
           </GestureDetector>

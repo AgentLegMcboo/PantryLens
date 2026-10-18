@@ -1,3 +1,5 @@
+import { ResponsiveRow } from '../components/ui/responsive-row';
+import { useAppAppearance } from '../lib/appearance';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import React, { useMemo, useState } from 'react';
@@ -60,6 +62,7 @@ function parseLooseDate(input: string): string | null {
  * the order the volunteer finds it out.
  */
 export default function BulkIntakeScreen() {
+  useAppAppearance(state => state.scheme);
   const router = useRouter();
   const { lbsPerUnit, bulkLots, addBulkLot } = usePantryStore();
 
@@ -283,7 +286,7 @@ export default function BulkIntakeScreen() {
 
           {/* One row: Done small on the left, Save wide on the right. They were
               two full-width, heavily rounded slabs stacked on top of each other. */}
-          <View className="flex-row gap-2.5">
+          <ResponsiveRow className="flex-row gap-2.5">
             <Button
               label="Done"
               variant="secondary"
@@ -307,7 +310,7 @@ export default function BulkIntakeScreen() {
               }
               onPress={handleSave}
             />
-          </View>
+          </ResponsiveRow>
         </View>
       </FadeInUp>
 

@@ -1,6 +1,6 @@
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Alert, Platform, View } from 'react-native';
 import Animated, {
   Easing,
@@ -21,13 +21,24 @@ import { PRESS_SCALE_ROW, Tappable } from './motion';
 import { Row } from './ui/row';
 import { Sheet } from './ui/sheet';
 import { Text } from './ui/text';
+import { AppMap } from './app-map';
+import { useSpotlightTarget } from './spotlight';
+import { AppearanceControl } from './appearance-control';
+import { useAppAppearance } from '../lib/appearance';
+import { ProfileAvatar } from './profile-avatar';
 
 /**
  * The app's top bar.
  */
 export function AppHeader({ title }: { title: string }) {
+  useAppAppearance(state => state.scheme);
+  const [mapOpen, setMapOpen] = useState(false);
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const bellTarget = useSpotlightTarget(`header.${title}.bell`);
+  const menuTarget = useSpotlightTarget(`header.${title}.menu`);
+  const pantryTarget = useSpotlightTarget(`header.${title}.pantry`);
+  const themeTarget = useSpotlightTarget(`header.${title}.theme`);
   const [menuOpen, setMenuOpen] = useState(false);
   const [pendingCount, setPendingCount] = useState(0);
   const seniorMode = useAccessibilityStore((state) => state.seniorMode);
@@ -36,6 +47,7 @@ export function AppHeader({ title }: { title: string }) {
   );
 
   const {
+    session,
     settings,
     inventory,
     signOut,
@@ -44,6 +56,7 @@ export function AppHeader({ title }: { title: string }) {
     setAddingPantry,
   } = usePantryStore();
   const [switchOpen, setSwitchOpen] = useState(false);
+  const pendingMenuAction = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     return offlineQueue.subscribe((count) => setPendingCount(count));
@@ -61,6 +74,19 @@ export function AppHeader({ title }: { title: string }) {
     setSwitchOpen(false);
   };
 
+  const afterMenuDismiss = (action: () => void) => {
+    // Ignore a second tap while the selected action is waiting for UIKit.
+    if (pendingMenuAction.current) return;
+    pendingMenuAction.current = action;
+    close();
+  };
+
+  const handleMenuDismiss = useCallback(() => {
+    const action = pendingMenuAction.current;
+    pendingMenuAction.current = null;
+    action?.();
+  }, []);
+
   const handleSignOut = () => {
     close();
     Alert.alert(
@@ -74,7 +100,7 @@ export function AppHeader({ title }: { title: string }) {
   };
 
   return (
-    <View style={{ paddingTop: insets.top }} className="bg-canvas">
+    <View style={{ paddingTop: insets.top }} className="bg-transparent">
       {pendingCount > 0 && (
         <Tappable
           scaleTo={PRESS_SCALE_ROW}
@@ -118,8 +144,9 @@ export function AppHeader({ title }: { title: string }) {
           accessibilityLabel={`${settings.pantryName || 'PantryLens'}, ${title}. Opens pantry menu.`}
           className="min-h-[48px] flex-1 flex-row items-center gap-2.5 py-1"
         >
+          <View ref={pantryTarget} collapsable={false} className="flex-1 flex-row items-center gap-2.5">
           <View className="h-11 w-11 items-center justify-center rounded-lg bg-brand">
-            <Text variant="body" tone="on" className="font-bold">
+            <Text variant="body" tone="on" className="font-bold" style={{ color: COLORS.textOnAccent }}>
               {(settings.pantryName || 'P').trim().charAt(0).toUpperCase()}
             </Text>
           </View>
@@ -131,66 +158,53 @@ export function AppHeader({ title }: { title: string }) {
               {settings.pantryName || 'PantryLens'}
             </Text>
           </View>
+          </View>
         </Tappable>
 
         {/* Grouped and pushed right as one block, so the buttons sit on the
             right edge whatever the title beside them does. */}
-        <View className="ml-auto flex-row items-center gap-2.5">
-          {/* Explicit "Aa" text-size toggle so older volunteers immediately recognize
-              what it does and whether Large Text Mode is currently active. */}
-          <Tappable
-            accessibilityRole="button"
-            accessibilityState={{ selected: seniorMode }}
-            accessibilityLabel={
-              seniorMode
-                ? 'Large text mode is on. Tap for standard text size.'
-                : 'Turn on large text and high contrast mode'
-            }
-            onPress={() => {
-              cueTap();
-              toggleSeniorMode();
-            }}
-            className={`h-12 flex-row items-center justify-center gap-1 rounded-lg border px-3 ${
-              seniorMode ? 'border-brand bg-brand' : 'border-hairline bg-card'
-            }`}
-          >
-            <Text
-              variant="label"
-              tone={seniorMode ? 'on' : 'default'}
-              className="font-extrabold"
-            >
-              Aa
-            </Text>
-            <MaterialCommunityIcons
-              name={seniorMode ? 'check' : 'plus'}
-              size={15}
-              color={seniorMode ? COLORS.textOnPrimary : COLORS.primary}
-            />
-          </Tappable>
+        <View className="ml-auto flex-row items-center gap-2">
+          <View ref={themeTarget} collapsable={false}>
+            <AppearanceControl />
+          </View>
 
-          <HeaderButton
-            icon="bell-outline"
-            label="Notifications"
-            badge={unreadCount}
-            onPress={() => router.push('/expiring-soon')}
-          />
-          <HeaderButton
-            icon="dots-vertical"
-            label="More options"
-            onPress={() => setMenuOpen(true)}
-          />
+          <View ref={bellTarget} collapsable={false}>
+            <HeaderButton
+              icon="bell-outline"
+              label="Notifications"
+              badge={unreadCount}
+              onPress={() => router.push('/expiring-soon')}
+            />
+          </View>
+          <View ref={menuTarget} collapsable={false}>
+            <HeaderButton
+              icon="dots-vertical"
+              label="Full app map"
+              onPress={() => setMapOpen(true)}
+            />
+          </View>
         </View>
       </View>
+      <AppMap visible={mapOpen} onClose={() => setMapOpen(false)} />
 
       <Sheet
         visible={menuOpen}
         onClose={close}
+        onDismiss={handleMenuDismiss}
         title={settings.pantryName || 'Pantry Menu'}
       >
         <View>
           <Row
+            leading={<ProfileAvatar userId={session?.user.id} name={session?.user.email || 'You'} />}
+            label="Your profile"
+            hint="Your profile photo"
+            onPress={() => afterMenuDismiss(() => {
+              router.push({ pathname: '/(tabs)/settings', params: { section: 'profile' } });
+            })}
+          />
+          <Row
             icon="format-size"
-            label={seniorMode ? 'Large Text Mode: ON' : 'Large Text Mode: OFF'}
+            label={seniorMode ? 'Larger text: On' : 'Larger text: Off'}
             hint="Large text and high contrast"
             onPress={() => {
               cueTap();
@@ -201,28 +215,25 @@ export function AppHeader({ title }: { title: string }) {
             icon="chart-box-outline"
             label="Reports & Activity"
             hint="Given out, wasted, CSV export"
-            onPress={() => {
-              close();
+            onPress={() => afterMenuDismiss(() => {
               router.push('/reports');
-            }}
+            })}
           />
           <Row
             icon="cog-outline"
             label="Pantry settings"
             hint="Box rules, thresholds, sound"
-            onPress={() => {
-              close();
+            onPress={() => afterMenuDismiss(() => {
               router.push('/(tabs)/settings');
-            }}
+            })}
           />
           <Row
             icon="account-multiple-outline"
-            label="Team"
-            hint="Members and their activity"
-            onPress={() => {
-              close();
+            label="Volunteers & team"
+            hint="Members, roles and admins"
+            onPress={() => afterMenuDismiss(() => {
               router.push('/team');
-            }}
+            })}
           />
           <Row
             icon="swap-horizontal"
@@ -282,11 +293,10 @@ export function AppHeader({ title }: { title: string }) {
             icon="plus-circle-outline"
             label="Add or create pantry"
             hint="Join with a code or start one"
-            onPress={() => {
-              close();
+            onPress={() => afterMenuDismiss(() => {
               setAddingPantry(true);
               router.push('/pantry-selection');
-            }}
+            })}
           />
           <Row
             icon="logout"
@@ -320,7 +330,7 @@ function HeaderButton({
         cueTap();
         onPress();
       }}
-      className="h-12 w-12 items-center justify-center rounded-lg border border-hairline bg-card"
+      className="h-12 w-12 items-center justify-center rounded-full border border-outline bg-canvas"
     >
       <MaterialCommunityIcons
         name={icon}
@@ -388,14 +398,16 @@ export function StackHeader({
   /** Presented as a sheet — on iOS that already starts below the status bar. */
   modal?: boolean;
 }) {
+  useAppAppearance(state => state.scheme);
+  const [mapOpen, setMapOpen] = useState(false);
   const insets = useSafeAreaInsets();
 
   return (
     <View
       // An iOS sheet sits below the status bar already; adding the inset again
       // left a tall empty band above the title.
-      style={{ paddingTop: modal && Platform.OS === "ios" ? 8 : insets.top }}
-      className="bg-canvas"
+      // Solid like the page under it, so the header slides in as one piece.
+      style={{ paddingTop: modal && Platform.OS === "ios" ? 8 : insets.top, backgroundColor: COLORS.background }}
     >
       <View className="flex-row items-center gap-2.5 px-gutter pb-0 pt-3">
         <Tappable
@@ -405,7 +417,7 @@ export function StackHeader({
             cueTap();
             onBack();
           }}
-          className="h-12 w-12 items-center justify-center rounded-lg border border-hairline bg-card"
+      className="h-12 w-12 items-center justify-center rounded-full border border-outline bg-canvas"
         >
           <MaterialCommunityIcons
             name="chevron-left"
@@ -416,16 +428,16 @@ export function StackHeader({
 
         <Text
           variant="headline"
-          numberOfLines={1}
-          adjustsFontSizeToFit
-          minimumFontScale={0.75}
+          numberOfLines={2}
           className="flex-1"
         >
           {title}
         </Text>
 
         {right}
+        <HeaderButton icon="dots-vertical" label="Full app map" onPress={() => setMapOpen(true)} />
       </View>
+      <AppMap visible={mapOpen} onClose={() => setMapOpen(false)} />
     </View>
   );
 }

@@ -1,12 +1,12 @@
-import { MaterialCommunityIcons } from '@expo/vector-icons';
-import * as React from 'react';
-import { Pressable, View } from 'react-native';
-import Animated from 'react-native-reanimated';
-import { COLORS } from '../../constants/theme';
-import { usePressScale } from '../motion';
-import { cueTap } from '../../lib/feedback';
-import { cn } from '../../lib/cn';
-import { Text } from './text';
+import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as React from "react";
+import { Pressable, View } from "react-native";
+import Animated from "react-native-reanimated";
+import { COLORS } from "../../constants/theme";
+import { usePressScale } from "../motion";
+import { cueTap } from "../../lib/feedback";
+import { cn } from "../../lib/cn";
+import { Text } from "./text";
 
 /**
  * One question, two or three answers, all visible at once.
@@ -23,7 +23,11 @@ export function Segmented<T extends string | number>({
   disabled,
   className,
 }: {
-  options: { value: T; label: string; icon?: keyof typeof MaterialCommunityIcons.glyphMap }[];
+  options: {
+    value: T;
+    label: string;
+    icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  }[];
   value: T;
   onChange: (next: T) => void;
   /**
@@ -36,8 +40,10 @@ export function Segmented<T extends string | number>({
   className?: string;
 }) {
   return (
-    <View className={cn('flex-row gap-1 rounded-[12px] bg-subtle p-1', className)}>
-      {options.map(option => (
+    <View
+      className={cn("flex-row gap-1 rounded-[12px] bg-muted p-1", className)}
+    >
+      {options.map((option) => (
         <Tab
           key={String(option.value)}
           option={option}
@@ -63,7 +69,11 @@ function Tab<T extends string | number>({
   disabled,
   onPress,
 }: {
-  option: { value: T; label: string; icon?: keyof typeof MaterialCommunityIcons.glyphMap };
+  option: {
+    value: T;
+    label: string;
+    icon?: keyof typeof MaterialCommunityIcons.glyphMap;
+  };
   active: boolean;
   disabled?: boolean;
   onPress: () => void;
@@ -87,27 +97,41 @@ function Tab<T extends string | number>({
       className="min-h-[48px] flex-1"
     >
       <Animated.View
-        style={[{
-          minHeight: 48, flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-          gap: 6, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 8,
-          backgroundColor: active ? COLORS.primary : 'transparent',
-          borderBottomWidth: active ? 3 : 0, borderBottomColor: COLORS.primaryDeep,
-        }, press.style]}
+        style={[
+          {
+            minHeight: 48,
+            flex: 1,
+            flexDirection: "row",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 6,
+            borderRadius: 8,
+            paddingHorizontal: 12,
+            paddingVertical: 8,
+            backgroundColor: active ? COLORS.cardSurface : "transparent",
+            boxShadow: active ? "0 1px 3px rgba(0,0,0,0.10)" : "none",
+          },
+          press.style,
+        ]}
         className={cn(
-          'min-h-[48px] flex-1 flex-row items-center justify-center gap-1.5 rounded-md px-3',
+          "min-h-[48px] flex-1 flex-row items-center justify-center gap-1.5 rounded-md px-3",
           // The lip again, so the selected tab reads as raised out of the
           // trough rather than merely tinted.
-          active && 'bg-brand',
+          active && "bg-card",
         )}
       >
         {option.icon ? (
           <MaterialCommunityIcons
             name={option.icon}
             size={16}
-            color={active ? COLORS.textOnPrimary : COLORS.textSecondary}
+            color={active ? COLORS.textPrimary : COLORS.textSecondary}
           />
         ) : null}
-        <Text variant="label" tone={active ? 'on' : 'soft'} className="shrink text-center font-bold">
+        <Text
+          variant="label"
+          tone={active ? "default" : "soft"}
+          className="shrink text-center font-semibold"
+        >
           {option.label}
         </Text>
       </Animated.View>
