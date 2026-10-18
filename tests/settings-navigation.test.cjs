@@ -8,7 +8,7 @@ const ts = require('typescript');
 // Execute the real components with deterministic native animation callbacks.
 // Layout changes and UIKit dismissal are separate events, just as on a phone.
 function mount(file, exportName, initialProps = {}, platform = 'ios', options = {}) {
-  const slots = [], animations = [], pushes = [];
+  const slots = [], animations = [], pushes = [], tourResets = [];
   let cursor = 0, dirty = false, effects = [], props = initialProps, tree;
   const changed = (a, b) => !a || !b || a.length !== b.length || a.some((value, i) => !Object.is(value, b[i]));
   const React = {
@@ -49,7 +49,7 @@ function mount(file, exportName, initialProps = {}, platform = 'ios', options = 
   };
   const teamAlerts = { alerts: [{ id: 'alert', message: 'We need grains and protein', created_at: '2026-10-17T12:00:00Z', created_by: 'someone-else' }], load() {} };
   const animate = (to, config, callback) => { animations.push({ to, config, callback }); return to; };
-  const router = { push: route => pushes.push(route) };
+  const router = { push: route => pushes.push(route), replace: route => pushes.push(route) };
   const compiled = ts.transpileModule(fs.readFileSync(path.join(__dirname, '..', file), 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true },
   }).outputText;
@@ -86,7 +86,10 @@ function mount(file, exportName, initialProps = {}, platform = 'ios', options = 
       if (name.endsWith('/feedback')) return { cueTap() {} };
       if (name.endsWith('/motion-physics')) return { SPRING_SHEET: {}, SPRING_NOTIFICATION: { dampingRatio: 1, duration: 300 }, DRAG_SLOP: 10, projectDecay: () => 0, rubberband: x => x };
       if (name.endsWith('/cn')) return { cn: (...args) => args.filter(Boolean).join(' ') };
-      if (name.endsWith('/spotlight')) return { useSpotlightTarget: () => () => {} };
+      if (name.endsWith('/spotlight')) return {
+        useSpotlightTarget: () => () => {},
+        resetTours: async () => { tourResets.push('reset'); },
+      };
       return new Proxy({}, { get: (_target, key) => key === '__esModule' ? true : String(key) });
     },
   });
@@ -111,8 +114,35 @@ function mount(file, exportName, initialProps = {}, platform = 'ios', options = 
     return typeof node === 'object' && node.props?.children != null ? find(type, predicate, node.props.children) : null;
   }
   render();
-  return { render, find, animations, pushes, layout: height => find('Animated.View', props => !!props.onLayout).props.onLayout({ nativeEvent: { layout: { height } } }) };
+  return { render, find, animations, pushes, tourResets, layout: height => find('Animated.View', props => !!props.onLayout).props.onLayout({ nativeEvent: { layout: { height } } }) };
 }
+
+test('replay onboarding waits for the app map to dismiss before resetting tips and opening Home', async () => {
+  let closes = 0;
+  const h = mount('components/app-map.tsx', 'AppMap', { visible: true, onClose: () => closes++ });
+  const replay = h.find('Row', props => props.label === 'Replay onboarding');
+  replay.props.onPress();
+  replay.props.onPress();
+  assert.equal(closes, 1);
+  assert.equal(h.tourResets.length, 0);
+  assert.equal(h.pushes.length, 0);
+  h.find('Sheet').props.onDismiss();
+  await Promise.resolve();
+  assert.equal(h.tourResets.length, 1);
+  assert.equal(h.pushes[0], '/(tabs)');
+  h.find('Sheet').props.onDismiss();
+  await Promise.resolve();
+  assert.equal(h.tourResets.length, 1);
+});
+
+test('the opening introduction remains separately replayable from the app map', () => {
+  const h = mount('components/app-map.tsx', 'AppMap', { visible: true, onClose() {} });
+  h.find('Row', props => props.label === 'Replay introduction').props.onPress();
+  assert.equal(h.pushes.length, 0);
+  h.find('Sheet').props.onDismiss();
+  assert.equal(h.pushes[0], '/onboarding?replay=1');
+  assert.equal(h.tourResets.length, 0);
+});
 
 test('Pantry settings navigation waits for the pantry menu to finish dismissing', () => {
   const h = mount('components/app-header.tsx', 'AppHeader', { title: 'Home' });

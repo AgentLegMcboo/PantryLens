@@ -2,9 +2,9 @@ import { useAppAppearance } from "../../lib/appearance";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
-import React, { useMemo, useState } from "react";
-import { Pressable, StyleSheet, View } from "react-native";
-import { COLORS, fw } from "../../constants/theme";
+import React, { useCallback, useMemo, useRef, useState } from "react";
+import { Pressable, ScrollView, StyleSheet, View } from "react-native";
+import { COLORS } from "../../constants/theme";
 import { Card, cardShadow, Row, Screen, Text } from "../../components/ui";
 import { buildStockUnits, computeAllocation } from "../../lib/allocation";
 import { windowEndISO } from "../../lib/expiry";
@@ -17,7 +17,7 @@ import { SpotlightTour, useSpotlightTarget, type TourStep } from "../../componen
 const HOME_TOUR: TourStep[] = [
   { target: "header.Home.pantry", title: "Your pantry", body: "Tap here for settings, your team, reports, or to switch pantries." },
   { target: "header.Home.bell", title: "Notifications", body: "A red number means food is expiring soon. Check here every visit." },
-  { target: "header.Home.theme", title: "Light or dark", body: "Change how the app looks." },
+  { target: "header.Home.theme", title: "Light or dark", body: "Change the color scheme of the app." },
   { target: "header.Home.menu", title: "Every screen", body: "Lost? Find any page in the app from here." },
   { target: "home.scan", title: "Scan donations", body: "Start here when food comes in. Take a picture, PantryLens finds the items." },
   { target: "home.tools", title: "Other ways in", body: "Add by hand, weigh a big delivery, or fix a shelf's count." },
@@ -44,6 +44,30 @@ export default function DashboardScreen() {
   const scanTarget = useSpotlightTarget("home.scan");
   const toolsTarget = useSpotlightTarget("home.tools");
   const reportsTarget = useSpotlightTarget("home.reports");
+  const scrollRef = useRef<ScrollView>(null);
+  const scrollOffset = useRef(0);
+  const reportsRef = useRef<View>(null);
+  const setReportsRef = useCallback((node: View | null) => {
+    reportsRef.current = node;
+    reportsTarget(node);
+  }, [reportsTarget]);
+  const revealReports = useCallback(() => new Promise<void>(resolve => {
+    const scroll = scrollRef.current;
+    const viewport = scroll?.getNativeScrollRef();
+    const reports = reportsRef.current;
+    if (!scroll || !viewport || !reports) return resolve();
+    viewport.measureInWindow((_x, viewportY) => {
+      reports.measureInWindow((_rx, reportsY) => {
+        // Align the card near the top, clear of the floating tab bar. Scroll
+        // first, then let native layout settle before the tour measures it.
+        scroll.scrollTo({ y: Math.max(0, scrollOffset.current + reportsY - viewportY - 24), animated: false });
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()));
+      });
+    });
+  }), []);
+  const homeTour = useMemo(() => HOME_TOUR.map(step => step.target === "home.reports"
+    ? { ...step, beforeShow: revealReports }
+    : step), [revealReports]);
 
   const readyCount = readyBoxes.reduce(
     (sum, r) => sum + (r.boxes - r.boxes_collected),
@@ -124,7 +148,12 @@ export default function DashboardScreen() {
   }, [thresholds, plan, targetBoxes]);
 
   return (
-    <Screen contentContainerClassName="gap-6">
+    <Screen
+      scrollRef={scrollRef}
+      onScroll={event => { scrollOffset.current = event.nativeEvent.contentOffset.y; }}
+      scrollEventThrottle={16}
+      contentContainerClassName="gap-6"
+    >
       {/* ZONE 1: Unified Intake & Shelf Tools — everything a volunteer does when food arrives */}
       <View>
         <View className="gap-3">
@@ -232,7 +261,7 @@ export default function DashboardScreen() {
             onPress={() => router.push("/(tabs)/build")}
           />
         </Card>
-        <View ref={reportsTarget} collapsable={false}>
+        <View ref={setReportsRef} collapsable={false}>
         <Card className="py-0">
           <Row
             icon="chart-box-outline"
@@ -290,7 +319,7 @@ export default function DashboardScreen() {
       )}
 
 
-      <SpotlightTour tourKey="home" steps={HOME_TOUR} />
+      <SpotlightTour tourKey="home" steps={homeTour} />
       <ShelfCheckSheet
         visible={shelfCheckOpen}
         onClose={() => setShelfCheckOpen(false)}
@@ -324,10 +353,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
     fontSize: 20,
     lineHeight: 26,
-    fontWeight: fw("500"),
-    // Lifts the line off the light end of the gradient.
-    textShadowColor: "rgba(80, 40, 10, 0.25)",
-    textShadowRadius: 2,
+    fontWeight: "400",
   },
   pressed: { opacity: 0.85 },
   scanRow: {

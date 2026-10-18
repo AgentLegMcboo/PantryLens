@@ -7,7 +7,8 @@ import { Alert, Pressable, Share, View } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
 import { FadeInUp, ProgressBar, Tappable } from "../../components/motion";
-import { Button, Card, CategoryIcon, Panel, Screen, Sheet, Text } from "../../components/ui";
+import { Button, Card, Panel, Screen, Sheet, Text } from "../../components/ui";
+import { categoryIcon } from "../../components/ui/category-icon";
 import { cueSuccess, cueTap } from "../../lib/feedback";
 import { usePantryStore } from "../../lib/store";
 import { useTeamAlerts } from "../../lib/team-alerts";
@@ -42,7 +43,7 @@ const EXAMPLES: Record<string, string> = {
 };
 
 export default function NeedsScreen() {
-  useAppAppearance((state) => state.scheme);
+  const scheme = useAppAppearance((state) => state.scheme);
   const router = useRouter();
   const { inventory, bulkLots, boxRules, thresholds, settings } =
     usePantryStore();
@@ -238,17 +239,16 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
         <FadeInUp index={0}>
           <View ref={summaryTarget} collapsable={false}>
           <Card className="gap-4">
-            <View className="flex-row items-start justify-between gap-3">
-              <View className="flex-1">
-                <Text variant="title" className="font-bold" style={{ lineHeight: 28 }}>
+            <View className="gap-1.5">
+                <Text variant="title" className="font-bold" style={{ lineHeight: 30 }}>
                   {boxesShort > 0
                     ? `${boxesShort} ${boxesShort === 1 ? "box" : "boxes"} short of your goal`
                     : "Your box goal is covered"}
                 </Text>
-                <Text variant="label" tone="soft" className="mt-2">
+              <View className="flex-row flex-wrap items-center justify-between gap-x-3 gap-y-2">
+                <Text variant="label" tone="soft">
                   You can pack {plan.achievableBoxes} of {settings.boxTarget}
                 </Text>
-              </View>
               <Tappable
                 onPress={() => {
                   cueTap();
@@ -257,13 +257,14 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                 hitSlop={8}
                 accessibilityRole="button"
                 accessibilityLabel={`Edit box default. Goal: ${settings.boxTarget} boxes for families of ${settings.defaultFamilySize}.`}
-                className="mt-0.5 min-h-[36px] flex-row items-center gap-1 self-start rounded-md border border-hairline px-2.5"
+                className="min-h-[36px] flex-row items-center gap-1.5 rounded-md px-1"
               >
                 <MaterialCommunityIcons name="pencil-outline" size={15} color={COLORS.textSecondary} />
                 <Text variant="micro" tone="soft" className="font-semibold">
-                  Edit box default
+                  Edit goal
                 </Text>
               </Tappable>
+              </View>
             </View>
             <ProgressBar
               progress={settings.boxTarget > 0 ? Math.min(1, plan.achievableBoxes / settings.boxTarget) : 1}
@@ -300,7 +301,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
           <Text variant="heading" className="px-1">
             Most needed
           </Text>
-          <Card className="px-4 py-0">
+          <View className="gap-3">
             {deficits.map((item, index) => {
               const expanded = expandedCategory === item.category;
               const limiting = item.reason === "Stopping boxes going out";
@@ -310,14 +311,10 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                   ref={index === 0 ? firstRowTarget : undefined}
                   collapsable={false}
                   key={item.category}
-                  style={
-                    index < deficits.length - 1
-                      ? {
-                          borderBottomWidth: 1,
-                          borderBottomColor: COLORS.borderSoft,
-                        }
-                      : undefined
-                  }
+                >
+                <Card
+                  className="p-0 overflow-hidden"
+                  style={limiting ? { backgroundColor: scheme === "dark" ? "#E7AC7A" : "#EDBC94", boxShadow: "none" } : undefined}
                 >
                   <Pressable
                     accessibilityRole="button"
@@ -327,73 +324,64 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                       cueTap();
                       setExpandedCategory(expanded ? null : item.category);
                     }}
-                    style={({ pressed }) => ({ opacity: pressed ? 0.6 : 1 })}
-                    className="min-h-[68px] flex-row items-center gap-3 py-3"
+                    style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
+                    className="min-h-[88px] flex-row items-center gap-3 px-4 py-4"
                   >
-                    <CategoryIcon
-                      category={item.category}
-                      tone="secondary"
-                    />
-                    <View className="flex-1 gap-1.5">
-                      <Text variant="body" className="font-bold">
+                    <View
+                      className="h-11 w-11 items-center justify-center rounded-xl"
+                      style={{ backgroundColor: limiting ? "rgba(69, 43, 25, 0.08)" : COLORS.secondaryTint }}
+                    >
+                      <MaterialCommunityIcons
+                        name={categoryIcon(item.category)}
+                        size={24}
+                        color={limiting ? COLORS.textOnAccent : COLORS.secondaryDark}
+                      />
+                    </View>
+                    <View className="flex-1 gap-1">
+                      <Text variant="body" className="font-bold" style={limiting ? { color: COLORS.textOnAccent } : undefined}>
                         {label}
                       </Text>
-                      <ProgressBar
-                        progress={item.goal > 0 ? Math.min(1, item.current / item.goal) : 0}
-                        color={limiting ? COLORS.primary : COLORS.statusWarning}
-                        height={4}
-                      />
-                      {limiting ? (
-                        <View
-                          className="self-start rounded-sm px-1.5 py-0.5"
-                          style={{ backgroundColor: COLORS.primaryLight }}
-                        >
-                          <Text variant="micro" className="font-bold" style={{ color: COLORS.textOnAccent }}>
-                            Runs out first
-                          </Text>
-                        </View>
-                      ) : (
-                        <Text variant="micro" tone="soft">
-                          {`${item.current} of ${item.goal} on hand`}
-                        </Text>
-                      )}
+                      <Text variant="micro" style={{ color: limiting ? COLORS.textOnAccent : COLORS.textSecondary }}>
+                        {limiting ? "Runs out first" : `${item.current} of ${item.goal} on hand`}
+                      </Text>
                     </View>
-                    <View className="items-end">
+                    <View className="flex-row items-baseline gap-2">
                       <Text
                         variant="heading"
-                        style={{ fontVariant: ["tabular-nums"] }}
+                        style={{ fontSize: 20, lineHeight: 26, fontVariant: ["tabular-nums"], color: limiting ? COLORS.textOnAccent : COLORS.textPrimary }}
                       >
                         {item.deficit}
                       </Text>
-                      <Text variant="micro" tone="soft">
+                      <Text variant="micro" style={{ fontSize: 14, lineHeight: 20, color: limiting ? COLORS.textOnAccent : COLORS.textSecondary }}>
                         needed
                       </Text>
                     </View>
                     <MaterialCommunityIcons
                       name={expanded ? "chevron-up" : "chevron-down"}
                       size={19}
-                      color={COLORS.textSecondary}
+                      color={limiting ? COLORS.textOnAccent : COLORS.textSecondary}
                     />
                   </Pressable>
                   {expanded && (
-                    <View className="mb-3 gap-1.5 rounded-md bg-subtle px-3 py-3">
-                      <Text variant="micro" tone="soft" className="font-bold uppercase" style={{ letterSpacing: 0.6 }}>
+                    <View className="mx-4 mb-4 gap-1.5 pt-3" style={{ borderTopWidth: 1, borderTopColor: limiting ? "rgba(69, 43, 25, 0.18)" : COLORS.borderSoft }}>
+                      <Text variant="micro" className="font-bold uppercase" style={{ letterSpacing: 0.6, color: limiting ? COLORS.textOnAccent : COLORS.textSecondary }}>
                         Ask for
                       </Text>
-                      <Text variant="body">
+                      <Text variant="body" style={limiting ? { color: COLORS.textOnAccent } : undefined}>
                         {EXAMPLES[item.category] ?? "Any shelf-stable items"}
                       </Text>
-                      <Text variant="label" tone="soft">
+                      <Text variant="label" style={{ color: limiting ? COLORS.textOnAccent : COLORS.textSecondary }}>
                         {limiting
                           ? "Runs out first, so it sets how many boxes you can pack."
                           : "Below your low-stock level."}
                       </Text>
                     </View>
                   )}
+                </Card>
                 </View>
               );
             })}
-          </Card>
+          </View>
         </View>
 
       </Screen>

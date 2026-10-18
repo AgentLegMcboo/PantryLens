@@ -1,10 +1,11 @@
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useRouter, type Href } from "expo-router";
 import React, { useCallback, useRef } from "react";
-import { View } from "react-native";
+import { Alert, View } from "react-native";
 import { Sheet } from "./ui/sheet";
 import { Row } from "./ui/row";
 import { Text } from "./ui/text";
+import { resetTours } from "./spotlight";
 
 type Entry = {
   label: string;
@@ -109,7 +110,7 @@ const GROUPS: { title: string; entries: Entry[] }[] = [
         href: "/(tabs)/settings",
       },
       {
-        label: "Introduction",
+        label: "Replay introduction",
         hint: "Replay the three-step guide",
         icon: "information-outline",
         href: "/onboarding?replay=1",
@@ -127,7 +128,16 @@ export function AppMap({
 }) {
   const router = useRouter();
   const pendingRoute = useRef<Href | null>(null);
+  const pendingReplay = useRef(false);
   const navigateAfterDismiss = useCallback(() => {
+    if (pendingReplay.current) {
+      pendingReplay.current = false;
+      pendingRoute.current = null;
+      void resetTours().then(() => router.replace("/(tabs)")).catch(() => {
+        Alert.alert("Could not replay onboarding", "Please try again.");
+      });
+      return;
+    }
     const route = pendingRoute.current;
     pendingRoute.current = null;
     if (route) router.push(route);
@@ -140,6 +150,18 @@ export function AppMap({
       title="Full app map"
       subtitle="Find a task or explore your pantry tools."
     >
+      <View className="mb-4 rounded-lg border border-hairline bg-card px-3">
+        <Row
+          icon="restart"
+          label="Replay onboarding"
+          hint="Restart the guided tips from Home"
+          onPress={() => {
+            if (pendingReplay.current || pendingRoute.current) return;
+            pendingReplay.current = true;
+            onClose();
+          }}
+        />
+      </View>
       {GROUPS.map((group) => (
         <View key={group.title} style={{ gap: 6, marginBottom: 14 }}>
           <Text
@@ -157,6 +179,7 @@ export function AppMap({
                 label={entry.label}
                 hint={entry.hint}
                 onPress={() => {
+                  if (pendingReplay.current || pendingRoute.current) return;
                   pendingRoute.current = entry.href;
                   onClose();
                 }}

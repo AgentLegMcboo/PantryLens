@@ -11,6 +11,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { create } from 'zustand';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { COLORS } from '../constants/theme';
 import { cueTap } from '../lib/feedback';
 import { useTabBarHidden } from '../lib/tab-overlay';
@@ -29,7 +30,13 @@ import { Text } from './ui';
  */
 
 type Rect = { x: number; y: number; w: number; h: number };
-export type TourStep = { target: string; title: string; body: string };
+export type TourStep = {
+  target: string;
+  title: string;
+  body: string;
+  /** Reveal a scrolled-away control before measuring and showing its tip. */
+  beforeShow?: () => void | Promise<void>;
+};
 
 /** The live view behind each target id. Not state: read only when a tip opens. */
 const targets = new Map<string, View>();
@@ -55,12 +62,16 @@ function measure(id: string): Promise<Rect | null> {
 type ActiveTour = { key: string; steps: TourStep[]; onFinish: () => void };
 const useTourStore = create<{
   active: ActiveTour | null;
+  generation: number;
   start: (tour: ActiveTour) => void;
   stop: (key: string) => void;
+  reset: () => void;
 }>(set => ({
   active: null,
+  generation: 0,
   start: tour => set(s => (s.active ? s : { active: tour })),
   stop: key => set(s => (s.active?.key === key ? { active: null } : s)),
+  reset: () => set(s => ({ active: null, generation: s.generation + 1 })),
 }));
 
 const storageKey = (key: string) => `pantrylens.tour.${key}`;
@@ -69,6 +80,7 @@ const storageKey = (key: string) => `pantrylens.tour.${key}`;
 export async function resetTours() {
   const keys = await AsyncStorage.getAllKeys();
   await AsyncStorage.multiRemove(keys.filter(k => k.startsWith('pantrylens.tour.')));
+  useTourStore.getState().reset();
 }
 
 /** Asks the host to run this screen's tips, once, when the screen is in view. */
@@ -76,14 +88,18 @@ export function SpotlightTour({ tourKey, steps }: { tourKey: string; steps: Tour
   const dragging = useTabBarHidden(s => s.hidden);
   const start = useTourStore(s => s.start);
   const stop = useTourStore(s => s.stop);
+  const generation = useTourStore(s => s.generation);
   const [seen, setSeen] = useState<boolean | null>(null);
   const [focused, setFocused] = useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    setSeen(null);
     AsyncStorage.getItem(storageKey(tourKey))
-      .then(v => setSeen(v === '1'))
-      .catch(() => setSeen(false));
-  }, [tourKey]);
+      .then(v => { if (!cancelled) setSeen(v === '1'); })
+      .catch(() => { if (!cancelled) setSeen(false); });
+    return () => { cancelled = true; };
+  }, [tourKey, generation]);
 
   useFocusEffect(
     useCallback(() => {
@@ -128,9 +144,11 @@ export function SpotlightHost() {
   const active = useTourStore(s => s.active);
   const stop = useTourStore(s => s.stop);
   const { width: W, height: H } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const hostRef = useRef<View>(null);
   const [index, setIndex] = useState(0);
   const [rect, setRect] = useState<Rect | null>(null);
+  const [measuredIndex, setMeasuredIndex] = useState<number | null>(null);
 
   const x = useSharedValue(0);
   const y = useSharedValue(0);
@@ -141,6 +159,7 @@ export function SpotlightHost() {
   useEffect(() => {
     setIndex(0);
     setRect(null);
+    setMeasuredIndex(null);
   }, [active]);
 
   // Find this step's control (skipping any not on screen) and move the hole.
@@ -152,6 +171,8 @@ export function SpotlightHost() {
         hostRef.current ? hostRef.current.measureInWindow((ox, oy) => resolve({ x: ox, y: oy })) : resolve({ x: 0, y: 0 }),
       );
       for (let i = index; i < active.steps.length; i++) {
+        await active.steps[i].beforeShow?.();
+        if (cancelled) return;
         const m = await measure(active.steps[i].target);
         if (cancelled) return;
         if (!m) continue;
@@ -172,6 +193,7 @@ export function SpotlightHost() {
         set(h, hole.h);
         set(r, radiusFor(local));
         setRect(hole);
+        setMeasuredIndex(i);
         return;
       }
       active.onFinish();
@@ -193,6 +215,12 @@ export function SpotlightHost() {
 
   if (!active) return null;
 
+  const exit = () => {
+    cueTap();
+    active.onFinish();
+    stop(active.key);
+  };
+
   const next = () => {
     cueTap();
     if (index >= active.steps.length - 1) {
@@ -204,6 +232,7 @@ export function SpotlightHost() {
   };
 
   const step = active.steps[index];
+  const preparing = !!step.beforeShow && measuredIndex !== index;
   const below = rect ? rect.y + rect.h / 2 < H / 2 : true;
   const arrowX = rect ? Math.min(W - 34, Math.max(26, rect.x + rect.w / 2 - 8)) : 0;
 
@@ -216,6 +245,7 @@ export function SpotlightHost() {
         accessibilityLabel={`${step.title}. ${step.body}. Tap to continue.`}
       >
         <Animated.View entering={FadeIn.duration(250)} style={StyleSheet.absoluteFill}>
+          {preparing && <View style={[StyleSheet.absoluteFill, { backgroundColor: SHADE }]} />}
           {/* The lit hole. Its huge spread shadow is the dark over the rest of
               the screen, and it follows the hole's rounded corners. */}
           <Animated.View
@@ -225,13 +255,13 @@ export function SpotlightHost() {
                 borderWidth: 3,
                 borderColor: COLORS.primary,
                 boxShadow: `0 0 0 2400px ${SHADE}`,
-                opacity: rect ? 1 : 0,
+                opacity: rect && !preparing ? 1 : 0,
               },
               holeStyle,
             ]}
           />
 
-          {rect && (
+          {rect && measuredIndex === index && (
             <Animated.View key={index} entering={FadeIn.duration(220)} style={StyleSheet.absoluteFill}>
               <View
                 style={{
@@ -271,6 +301,16 @@ export function SpotlightHost() {
             </Animated.View>
           )}
         </Animated.View>
+      </Pressable>
+      <Pressable
+        onPress={exit}
+        accessibilityRole="button"
+        accessibilityLabel="Exit tour"
+        accessibilityHint="Dismiss these tips and return to the current page."
+        className="items-center justify-center rounded-full border border-hairline bg-card px-5"
+        style={{ position: 'absolute', right: 16, bottom: insets.bottom + 12, minHeight: 48 }}
+      >
+        <Text variant="label" className="font-semibold">Exit tour</Text>
       </Pressable>
     </View>
   );

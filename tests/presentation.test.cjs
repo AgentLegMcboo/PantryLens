@@ -38,27 +38,31 @@ test('orange primary buttons keep readable dark text in both appearances', () =>
   }
 });
 
-test('the Needs limiting-category badge remains readable in light and dark mode', () => {
+test('the Needs priority card keeps readable text in light and dark mode', () => {
   const filename = path.join(__dirname, '../app/(tabs)/needs.tsx');
   const source = ts.createSourceFile(filename, fs.readFileSync(filename, 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
   let label;
   function visit(node) {
-    if (ts.isJsxElement(node) && node.children.some(child => ts.isJsxText(child) && child.text.trim() === 'Runs out first')) label = node;
+    if (ts.isJsxElement(node) && node.openingElement.tagName.getText(source) === 'Text' &&
+        node.children.some(child => ts.isJsxExpression(child) && child.expression?.getText(source).includes('"Runs out first"'))) label = node;
     ts.forEachChild(node, visit);
   }
   visit(source);
-  assert.ok(label, 'limiting-category label must be present');
-  const colorToken = (element, property) => {
+  assert.ok(label, 'priority label must be present');
+  let card = label.parent;
+  while (card && !(ts.isJsxElement(card) && card.openingElement.tagName.getText(source) === 'Card')) card = card.parent;
+  assert.ok(card, 'priority label must be inside its card');
+  const resolveStyle = (element, appearance, colors) => {
     const style = element.openingElement.attributes.properties.find(attribute => attribute.name?.getText(source) === 'style');
-    const value = style.initializer.expression.properties.find(entry => entry.name.getText(source) === property).initializer;
-    assert.equal(value.expression.getText(source), 'COLORS');
-    return value.name.text;
+    return vm.runInNewContext(`(${style.initializer.expression.getText(source)})`, {
+      limiting: true, scheme: appearance, COLORS: colors,
+    });
   };
-  const foreground = colorToken(label, 'color');
-  const background = colorToken(label.parent, 'backgroundColor');
   for (const [appearance, colors] of [['light', LIGHT_COLORS], ['dark', DARK_COLORS]]) {
-    assert.ok(contrast(colors[foreground], colors[background]) >= 4.5,
-      `${appearance} badge text ${colors[foreground]} must contrast with ${colors[background]}`);
+    const foreground = resolveStyle(label, appearance, colors).color;
+    const background = resolveStyle(card, appearance, colors).backgroundColor;
+    assert.ok(contrast(foreground, background) >= 4.5,
+      `${appearance} priority text ${foreground} must contrast with ${background}`);
   }
 });
 

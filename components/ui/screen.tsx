@@ -13,10 +13,12 @@ import { useTabOverlayInset } from '../../lib/tab-overlay';
  * between cards, which is what made everything feel pressed against the glass
  * and against each other. 20px at the edge and 16px between is the whole fix.
  */
-export function Screen({ className, contentContainerClassName, ...props }: ScrollViewProps & {
+export function Screen({ className, contentContainerClassName, scrollRef, ...props }: ScrollViewProps & {
   contentContainerClassName?: string;
+  scrollRef?: React.RefObject<ScrollView | null>;
 }) {
-  const scroll = React.useRef<ScrollView>(null);
+  const internalScroll = React.useRef<ScrollView>(null);
+  const scroll = scrollRef ?? internalScroll;
 
   // A tab opens at its top every time you switch to it. The jump back is made
   // while the tab is out of view (blur), so it's never seen. Tabs only: coming
