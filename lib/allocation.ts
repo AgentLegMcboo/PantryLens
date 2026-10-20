@@ -1,4 +1,5 @@
 import { allowedInBox } from './diet';
+import { normaliseFamilySizes } from './box-families';
 import { DEFAULT_WARNING_DAYS, isPastDate, todayISO, windowEndISO } from './expiry';
 import { BoxRules, BulkLot, InventoryItem, isUsableCondition } from './store';
 
@@ -80,10 +81,22 @@ export function buildStockUnits(
 /** True when this allocated row came from a weighed lot, so the UI can say "estimated". */
 export const isBulkUnit = (item: InventoryItem) => !!item.bulk_lot_id;
 
+export interface IndividualBoxPlan {
+  number: number;
+  familySize: number;
+  perBoxNeeds: BoxRules;
+  itemNeeds: { name: string; category: keyof BoxRules; count: number }[];
+  allocatedItems: AllocationPlan['allocatedItems'];
+}
+
 export interface AllocationPlan {
   requestedBoxes: number;
   familySize: number;
   achievableBoxes: number;
+  /** Requested household sizes in packing order. Only a complete prefix is packed. */
+  familySizes: number[];
+  totalNeededPerCategory: Record<keyof BoxRules, number>;
+  boxes: IndividualBoxPlan[];
   limitingCategory: keyof BoxRules;
   limitingCategoryCount: number;
   shortfallPerCategory: Record<keyof BoxRules, number>;
@@ -148,6 +161,10 @@ export function computeAllocation(
    * every screen except the one that builds the boxes.
    */
   options: {
+    /** One household size per requested box; missing entries use familySize. */
+    familySizes?: number[];
+    /** Fixed-size kits still record household sizes without scaling contents. */
+    scalesWithFamily?: boolean;
     warningDays?: number;
     today?: string;
     /** This box's dietary rules. See buildStockUnits. */
@@ -198,10 +215,28 @@ export function computeAllocation(
   };
 
   // Scale box template by family size factor (standard family size = 4)
-  const familyScale = familySize / 4;
+  const familySizes = normaliseFamilySizes(options.familySizes, requestedBoxes, familySize);
+  const scales = options.scalesWithFamily !== false;
+  const scaleNeed = (base: number, size: number) => base > 0
+    ? Math.max(1, Math.round(base * (scales ? size / 4 : 1))) : 0;
+  const sum = (values: number[], count = values.length) => values.slice(0, count).reduce((n, value) => n + value, 0);
+  // Keep the volunteer's box order. A larger household never silently gets
+  // skipped just to make the headline count higher.
+  const coveredCount = (needs: number[], stock: number) => {
+    let used = 0;
+    let count = 0;
+    for (const need of needs) {
+      if (used + need > stock) break;
+      used += need;
+      count++;
+    }
+    return count;
+  };
   const categories = Object.keys(boxRules) as (keyof BoxRules)[];
 
   const perBoxNeeds: Record<keyof BoxRules, number> = {} as any;
+  const needsByCategory: Record<keyof BoxRules, number[]> = {} as any;
+  const totalNeededPerCategory: Record<keyof BoxRules, number> = {} as any;
   const categoryTotals: Record<keyof BoxRules, number> = {} as any;
   const maxBoxesPossible: Record<keyof BoxRules, number> = {} as any;
   const shortfallPerCategory: Record<keyof BoxRules, number> = {} as any;
@@ -209,7 +244,10 @@ export function computeAllocation(
   categories.forEach(cat => {
     const baseRule = boxRules[cat] || 0;
     // Scale rule per box (min 1 if rule > 0)
-    const scaledNeed = Math.max(0, Math.round(baseRule * familyScale));
+    const needs = familySizes.map(size => scaleNeed(baseRule, size));
+    needsByCategory[cat] = needs;
+    totalNeededPerCategory[cat] = sum(needs);
+    const scaledNeed = needs[0] ?? 0;
     perBoxNeeds[cat] = scaledNeed;
 
     // Calculate current total stock in this category
@@ -218,7 +256,7 @@ export function computeAllocation(
     categoryTotals[cat] = totalStock;
 
     if (scaledNeed > 0) {
-      maxBoxesPossible[cat] = Math.floor(totalStock / scaledNeed);
+      maxBoxesPossible[cat] = coveredCount(needs, totalStock);
     } else {
       maxBoxesPossible[cat] = 999;
     }
@@ -239,10 +277,11 @@ export function computeAllocation(
 
   // Each named product limits the box count the same way a category does.
   const itemNeeds = specific.map(rule => {
-    const perBox = Math.max(1, Math.round(rule.count * familyScale));
+    const needs = familySizes.map(size => scaleNeed(rule.count, size));
+    const perBox = needs[0] ?? 0;
     const rows = allStock.filter(i => nameKey(i.name) === nameKey(rule.name));
     const stock = rows.reduce((sum, i) => sum + i.count, 0);
-    return { rule, perBox, rows, stock, max: Math.floor(stock / perBox) };
+    return { rule, perBox, needs, rows, stock, max: coveredCount(needs, stock) };
   });
   const tightestItem = itemNeeds.reduce<(typeof itemNeeds)[number] | null>(
     (worst, n) => (!worst || n.max < worst.max ? n : worst),
@@ -251,7 +290,7 @@ export function computeAllocation(
   let limitingItem: AllocationPlan['limitingItem'] = null;
   if (tightestItem && tightestItem.max < minBoxes) {
     minBoxes = tightestItem.max;
-    const short = Math.max(0, requestedBoxes * tightestItem.perBox - tightestItem.stock);
+    const short = Math.max(0, sum(tightestItem.needs) - tightestItem.stock);
     if (short > 0) limitingItem = { name: tightestItem.rule.name, short };
   }
 
@@ -259,7 +298,7 @@ export function computeAllocation(
 
   // Compute shortfall to reach target requested boxes
   categories.forEach(cat => {
-    const totalNeededForTarget = requestedBoxes * perBoxNeeds[cat];
+    const totalNeededForTarget = totalNeededPerCategory[cat];
     const deficit = Math.max(0, totalNeededForTarget - categoryTotals[cat]);
     shortfallPerCategory[cat] = deficit;
   });
@@ -273,7 +312,7 @@ export function computeAllocation(
 
   // Named products first, soonest date first, each as its own pick-list line.
   for (const need of itemNeeds) {
-    const totalNeeded = achievableBoxes * need.perBox;
+    const totalNeeded = sum(need.needs, achievableBoxes);
     if (totalNeeded === 0) continue;
     let left = totalNeeded;
     const lines: AllocationPlan['packingChecklist'][number]['items'] = [];
@@ -300,7 +339,7 @@ export function computeAllocation(
 
   categories.forEach(cat => {
     const neededPerBox = perBoxNeeds[cat];
-    const totalNeeded = achievableBoxes * neededPerBox;
+    const totalNeeded = sum(needsByCategory[cat], achievableBoxes);
     if (neededPerBox === 0 || totalNeeded === 0) return;
 
     /**
@@ -436,9 +475,42 @@ export function computeAllocation(
     });
   });
 
+  const boxes: IndividualBoxPlan[] = familySizes.slice(0, achievableBoxes).map((size, index) => ({
+    number: index + 1,
+    familySize: size,
+    perBoxNeeds: Object.fromEntries(categories.map(cat => [cat, needsByCategory[cat][index]])) as unknown as BoxRules,
+    itemNeeds: itemNeeds.map(need => ({ ...need.rule, count: need.needs[index] })),
+    allocatedItems: [],
+  }));
+  const itemById = new Map(allocatedItems.map(pick => [pick.item.id, pick.item]));
+  // Split the combined trolley list back into exact box contents. Stock is
+  // consumed once, including named products and estimated bulk-lot units.
+  for (const group of packingChecklist) {
+    const remaining = group.items.map(item => ({ ...item }));
+    let rowIndex = 0;
+    for (let index = 0; index < boxes.length; index++) {
+      const box = boxes[index];
+      let left = group.label
+        ? box.itemNeeds.find(item => nameKey(item.name) === nameKey(group.label!))?.count ?? 0
+        : box.perBoxNeeds[group.category];
+      while (left > 0 && rowIndex < remaining.length) {
+        const row = remaining[rowIndex];
+        const countToGrab = Math.min(left, row.count);
+        const item = itemById.get(row.id)!;
+        if (countToGrab > 0) box.allocatedItems.push({ item, countToGrab, useFirst: row.useFirst });
+        row.count -= countToGrab;
+        left -= countToGrab;
+        if (row.count === 0) rowIndex++;
+      }
+    }
+  }
+
   return {
     requestedBoxes,
     familySize,
+    familySizes,
+    totalNeededPerCategory,
+    boxes,
     achievableBoxes,
     limitingCategory: limitingCat,
     limitingCategoryCount: categoryTotals[limitingCat],

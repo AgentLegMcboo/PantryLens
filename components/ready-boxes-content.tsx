@@ -197,6 +197,7 @@ export function ReadyBoxesContent({ onPlan }: { onPlan?: () => void } = {}) {
               </View>
             ) : null}
             <Text variant="micro" tone="soft" className="mt-0.5">
+              {run.per_box?.familySize ? `${run.per_box.boxNumber ? `Box ${run.per_box.boxNumber} · ` : ''}Family of ${run.per_box.familySize} · ` : ''}
               Packed {timeAgo(run.created_at)} · {run.units_taken} units in{" "}
               {run.boxes} {run.boxes === 1 ? "box" : "boxes"}
             </Text>
@@ -242,7 +243,7 @@ export function ReadyBoxesContent({ onPlan }: { onPlan?: () => void } = {}) {
 
         {run.per_box ? (
           <Text variant="micro" tone="soft">
-            Each box: {describeRules(run.per_box)}
+            Each box: {describeRules(run.per_box, run.per_box.items)}
           </Text>
         ) : null}
 
@@ -410,7 +411,7 @@ export function ReadyBoxesContent({ onPlan }: { onPlan?: () => void } = {}) {
             </Text>
             <Text variant="micro" tone="soft">
               {editingRun.per_box
-                ? `Each box: ${describeRules(editingRun.per_box)}`
+                ? `${editingRun.per_box.familySize ? `Family of ${editingRun.per_box.familySize}. ` : ''}Each box: ${describeRules(editingRun.per_box, editingRun.per_box.items)}`
                 : "Packed before box contents were recorded."}
             </Text>
           </Panel>

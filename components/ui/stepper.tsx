@@ -26,12 +26,14 @@ export function Stepper({
   min = 0,
   max = 999,
   className,
+  accessibilityLabel,
 }: {
   value: number;
   onChange: (next: number) => void;
   min?: number;
   max?: number;
   className?: string;
+  accessibilityLabel?: string;
 }) {
   const step = (delta: number) => {
     const next = Math.min(max, Math.max(min, value + delta));
@@ -47,13 +49,13 @@ export function Stepper({
         className,
       )}
     >
-      <StepButton icon="minus" label="Decrease" disabled={value <= min} onPress={() => step(-1)} />
+      <StepButton icon="minus" label={accessibilityLabel ? `Decrease ${accessibilityLabel}` : "Decrease"} disabled={value <= min} onPress={() => step(-1)} />
 
       <Text variant="heading" className="min-w-[36px] text-center font-bold">
         {value}
       </Text>
 
-      <StepButton icon="plus" label="Increase" disabled={value >= max} onPress={() => step(1)} />
+      <StepButton icon="plus" label={accessibilityLabel ? `Increase ${accessibilityLabel}` : "Increase"} disabled={value >= max} onPress={() => step(1)} />
     </View>
   );
 }

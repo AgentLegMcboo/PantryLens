@@ -6,7 +6,7 @@ import React, { useCallback, useMemo, useRef, useState } from "react";
 import { Pressable, ScrollView, StyleSheet, View } from "react-native";
 import { COLORS } from "../../constants/theme";
 import { Card, cardShadow, Row, Screen, Text } from "../../components/ui";
-import { buildStockUnits, computeAllocation } from "../../lib/allocation";
+import { computeAllocation } from "../../lib/allocation";
 import { windowEndISO } from "../../lib/expiry";
 import { InventoryItem, usePantryStore } from "../../lib/store";
 import { cuePress, cueTap } from "../../lib/feedback";
@@ -76,13 +76,13 @@ export default function DashboardScreen() {
   const targetBoxes = settings.boxTarget || 12;
   const familySize = settings.defaultFamilySize || 4;
 
-  const givable = useMemo(
-    () => buildStockUnits(inventory, bulkLots),
-    [inventory, bulkLots],
-  );
   const totalStockCount = useMemo(
-    () => givable.reduce((sum: number, i: InventoryItem) => sum + i.count, 0),
-    [givable],
+    () => inventory.reduce((sum, item) => sum + Math.max(0, item.count), 0),
+    [inventory],
+  );
+  const estimatedBulkCount = useMemo(
+    () => bulkLots.reduce((sum, lot) => sum + Math.max(0, lot.est_units), 0),
+    [bulkLots],
   );
 
   const plan = useMemo(
@@ -249,10 +249,18 @@ export default function DashboardScreen() {
         <Card className="py-0">
           <Row
             icon="clipboard-list-outline"
-            label={`${totalStockCount.toLocaleString()} units on your shelves`}
+            label={`${totalStockCount.toLocaleString()} ${totalStockCount === 1 ? "unit" : "units"} on your shelves`}
             hint="View inventory"
             onPress={() => router.push("/(tabs)/inventory")}
           />
+          {estimatedBulkCount > 0 && (
+            <Row
+              icon="scale"
+              label={`${estimatedBulkCount.toLocaleString()} estimated bulk ${estimatedBulkCount === 1 ? "unit" : "units"}`}
+              hint="From weighed deliveries"
+              onPress={() => router.push("/bulk-intake")}
+            />
+          )}
           <Row
             icon="cube-outline"
             label={`${plan.achievableBoxes} boxes you can pack`}

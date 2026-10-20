@@ -9,8 +9,10 @@ import { COLORS, RULE_BELOW } from '../constants/theme';
 import { computeAllocation, isBulkUnit } from '../lib/allocation';
 import { DIET_TAG_LABELS, normaliseDietTags } from '../lib/diet';
 import { normaliseItems, normaliseRules } from '../lib/box-presets';
+import { describeRules } from '../lib/box-presets';
+import { describeFamilySizes, normaliseFamilySizes } from '../lib/box-families';
 import { FadeInUp, PRESS_SCALE_ROW, ProgressBar, Tappable } from '../components/motion';
-import { Badge, Button, Card, CategoryIcon, EmptyState, Screen, Text } from '../components/ui';
+import { Badge, Button, Card, CategoryIcon, EmptyState, Screen, Sheet, Text } from '../components/ui';
 import { cueSuccess, cueTap, cueWarn } from '../lib/feedback';
 import { type PackLine, usePantryStore } from '../lib/store';
 
@@ -31,11 +33,18 @@ export default function PackingChecklistScreen() {
   useAppAppearance(state => state.scheme);
   const router = useRouter();
   const params = useLocalSearchParams();
-  const { inventory, bulkLots, boxRules, locations, settings, packBoxes } = usePantryStore();
+  const { inventory, bulkLots, boxRules, locations, settings, packBoxes, packBoxBatch } = usePantryStore();
   // Build always passes this. The fallback only matters if the screen is opened
   // some other way, and then the pantry's own target beats an invented one.
   const targetBoxes = parseInt(params.targetBoxes as string, 10) || settings.boxTarget;
   const familySize = parseInt(params.familySize as string, 10) || 4;
+  const individualFamilies = params.individualFamilies === '1';
+  let routeFamilySizes: number[];
+  try {
+    routeFamilySizes = normaliseFamilySizes(JSON.parse(String(params.familySizes ?? '[]')), targetBoxes, familySize);
+  } catch {
+    routeFamilySizes = normaliseFamilySizes([], targetBoxes, familySize);
+  }
   /**
    * The box's dietary rules, carried from Build.
    *
@@ -82,6 +91,8 @@ export default function PackingChecklistScreen() {
       excludes,
       requires,
       items: routeItems,
+      familySizes: routeFamilySizes,
+      scalesWithFamily: scales,
     }),
   );
 
@@ -120,6 +131,9 @@ export default function PackingChecklistScreen() {
    * the server recognises the same pack and doesn't deduct the shelf twice.
    */
   const [runId] = useState(() => Crypto.randomUUID());
+  const [individualRunIds] = useState(() => plan.boxes.map(() => Crypto.randomUUID()));
+  const [boxContentsOpen, setBoxContentsOpen] = useState(false);
+  const [contentsIndex, setContentsIndex] = useState(0);
   const [packing, setPacking] = useState(false);
 
   const [checked, setChecked] = useState<Record<string, boolean>>({});
@@ -156,12 +170,22 @@ export default function PackingChecklistScreen() {
     try {
       // Awaited. This used to be fired and forgotten, so the success alert
       // below appeared whether or not the shelf was ever updated.
-      const result = await packBoxes({
+      const result = individualFamilies ? await packBoxBatch(plan.boxes.map((box, index) => ({
+        runId: individualRunIds[index],
+        boxCount: 1,
+        lines: box.allocatedItems.map(pick => ({
+          kind: isBulkUnit(pick.item) ? 'lot' as const : 'item' as const,
+          id: pick.item.id,
+          count: pick.countToGrab,
+        })),
+        boxName: boxName ?? 'Standard family box',
+        perBox: { ...box.perBoxNeeds, familySize: box.familySize, boxNumber: box.number, items: box.itemNeeds },
+      }))) : await packBoxes({
         runId,
         boxCount: plan.achievableBoxes,
         lines,
         boxName: boxName ?? 'Standard family box',
-        perBox: plan.perBoxNeeds,
+        perBox: { ...plan.perBoxNeeds, familySize, items: plan.boxes[0]?.itemNeeds ?? [] },
       });
 
       const boxes = `${plan.achievableBoxes} ${plan.achievableBoxes === 1 ? 'box is' : 'boxes are'}`;
@@ -192,7 +216,7 @@ export default function PackingChecklistScreen() {
       cueWarn();
       Alert.alert(
         'Could not update the shelf',
-        `${err?.message ?? 'The connection dropped.'}\n\nYour boxes are still packed. It's safe to try again: the same pack can't be counted twice.`,
+        `${err?.message ?? 'The connection dropped.'}\n\n${individualFamilies ? 'Some boxes may already be saved in Ready to go. Retry to finish saving this batch; saved boxes will not be counted twice.' : "Your boxes are still packed. It's safe to try again: the same pack can't be counted twice."}`,
         [
           { text: 'Not now', style: 'cancel' },
           { text: 'Try again', onPress: () => handleFinish() },
@@ -203,10 +227,7 @@ export default function PackingChecklistScreen() {
     }
   };
 
-  const recipe = Object.entries(plan.perBoxNeeds)
-    .filter(([, qty]) => qty > 0)
-    .map(([cat, qty]) => `${qty} ${cat}`)
-    .join(' · ');
+  const recipe = describeRules(plan.perBoxNeeds, plan.boxes[0]?.itemNeeds ?? []);
 
   if (total === 0) {
     return (
@@ -223,6 +244,7 @@ export default function PackingChecklistScreen() {
   }
 
   return (
+    <>
     <Screen>
       {/* How far through you are, which is the only thing this screen has to
           keep telling you while your eyes are on the shelf. */}
@@ -246,8 +268,14 @@ export default function PackingChecklistScreen() {
           </View>
 
           <Text variant="micro" tone="soft" className="mt-3 capitalize">
-            {boxName ?? 'Each box'}{scales ? `, family of ${familySize}` : ''}: {recipe}
+            {individualFamilies ? describeFamilySizes(plan.familySizes.slice(0, plan.achievableBoxes)) : `${boxName ?? 'Each box'}${scales ? `, family of ${familySize}` : ''}: ${recipe}`}
           </Text>
+          {individualFamilies && (
+            <Button label="See what goes in each box" variant="secondary" className="mt-3" onPress={() => setBoxContentsOpen(true)} />
+          )}
+          {plan.achievableBoxes < targetBoxes && <Text variant="micro" tone="warn" className="mt-2">
+            Picking for boxes 1–{plan.achievableBoxes}. The remaining {targetBoxes - plan.achievableBoxes} need more stock.
+          </Text>}
 
           {/* Why this list is shorter than the volunteer expects. Said here as
               well as on Build, because this is the screen they walk the room
@@ -297,7 +325,7 @@ export default function PackingChecklistScreen() {
                     {group.label ?? group.category}
                   </Text>
                   <Text variant="micro" tone="soft">
-                    {group.allocatedCount} total · {group.neededPerBox} per box
+                    {group.allocatedCount} total{individualFamilies ? ' · shared pick list for your boxes' : ` · ${group.neededPerBox} per box`}
                   </Text>
                 </View>
                 {groupKeys.length > 1 && (
@@ -442,5 +470,23 @@ export default function PackingChecklistScreen() {
         </View>
       </FadeInUp>
     </Screen>
+    <Sheet visible={boxContentsOpen} onClose={() => setBoxContentsOpen(false)} title="Pack each box"
+      subtitle="Use the box numbers when labeling your packed boxes. Each household has its own quantities.">
+      <View className="flex-row items-center justify-between gap-2">
+        <Button label="Previous" variant="secondary" size="compact" disabled={contentsIndex === 0} onPress={() => setContentsIndex(index => index - 1)} />
+        <Text variant="label">{contentsIndex + 1} of {plan.boxes.length}</Text>
+        <Button label="Next" variant="secondary" size="compact" disabled={contentsIndex >= plan.boxes.length - 1} onPress={() => setContentsIndex(index => index + 1)} />
+      </View>
+      {plan.boxes.slice(contentsIndex, contentsIndex + 1).map(box => (
+        <Card key={box.number} className="gap-2">
+          <Text variant="heading">Box {box.number} · {box.familySize} {box.familySize === 1 ? 'person' : 'people'}</Text>
+          {box.allocatedItems.map((pick, index) => (
+            <Text key={`${pick.item.id}-${index}`} variant="label">{pick.countToGrab} × {pick.item.name}</Text>
+          ))}
+        </Card>
+      ))}
+      <Button label="Back to picking" block onPress={() => setBoxContentsOpen(false)} />
+    </Sheet>
+    </>
   );
 }

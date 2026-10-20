@@ -5,11 +5,13 @@ import type { AuditWrite, CountedRow } from './audit';
 import { normaliseDietTags, type DietTag } from './diet';
 import { SCAN_PHOTO_BUCKET, type StartedScan } from './scan-history';
 import { itemsPerBox, normaliseItems, normaliseRules, type BoxItemRule } from './box-presets';
+import { normalisePackedContents, type PackedBoxContents } from './box-families';
 import { log } from './log';
 import { ADMIN_ONLY_MESSAGE, asRole, canEditPantry, type PantryRole } from './permissions';
 import { supabase } from './supabase';
 import { Session } from '@supabase/supabase-js';
 import { offlineQueue } from './offline-queue';
+import { persistPackBatch } from './pack-batch';
 
 export type Category = 'grain' | 'vegetable' | 'protein' | 'breakfast' | 'snack' | 'hygiene' | 'baby' | 'unknown';
 
@@ -191,6 +193,14 @@ export interface PackResult {
   replayed: boolean;
 }
 
+export interface PackRequest {
+  runId: string;
+  boxCount: number;
+  lines: PackLine[];
+  boxName?: string | null;
+  perBox?: PackedBoxContents | null;
+}
+
 /** A packed batch still waiting, in whole or in part, for families to collect. */
 export interface PackRun {
   id: string;
@@ -199,7 +209,7 @@ export interface PackRun {
   boxes_collected: number;
   units_taken: number;
   /** What one box holds, by category. Null for packs made by an older build. */
-  per_box: BoxRules | null;
+  per_box: PackedBoxContents | null;
   created_at: string;
   /** The batch's own name ("Garcia family"). Null means show the box type. */
   label: string | null;
@@ -579,13 +589,9 @@ interface AppState {
   deleteItems: (ids: string[]) => Promise<void>;
   updateItems: (ids: string[], updates: Partial<InventoryItem>) => Promise<void>;
   getItem: (id: string) => InventoryItem | undefined;
-  packBoxes: (pack: {
-    runId: string;
-    boxCount: number;
-    lines: PackLine[];
-    boxName?: string | null;
-    perBox?: BoxRules | null;
-  }) => Promise<PackResult>;
+  packBoxes: (pack: PackRequest) => Promise<PackResult>;
+  /** Stable run IDs make a partially saved batch safe to retry. */
+  packBoxBatch: (packs: PackRequest[]) => Promise<PackResult>;
   collectBoxes: (runId: string, count: number) => Promise<CollectResult>;
   updatePackRun: (id: string, changes: { label: string | null; folderId: string | null }) => Promise<void>;
   addBoxFolder: (kind: BoxFolderKind, name: string) => Promise<BoxFolder>;
@@ -879,7 +885,7 @@ export const usePantryStore = create<AppState>((set, get) => ({
         const defaultBox = boxTemplates.find(t => t.is_default);
         const readyBoxes = ((runData as any[]) || []).map(r => ({
           ...r,
-          per_box: r.per_box ? normaliseRules(r.per_box) : null,
+          per_box: r.per_box ? normalisePackedContents(r.per_box) : null,
         })) as PackRun[];
 
         set({
@@ -1571,36 +1577,28 @@ export const usePantryStore = create<AppState>((set, get) => ({
    * Throws on failure. Returns shortfalls rather than throwing when stock ran
    * out, because by then the boxes are already packed.
    */
-  packBoxes: async ({ runId, boxCount, lines, boxName, perBox }) => {
+  packBoxes: async (pack) => get().packBoxBatch([pack]),
+
+  packBoxBatch: async (packs) => {
     const { settings } = get();
     if (!settings.pantryId) {
       throw new Error('No pantry is loaded yet. Reopen the app and try again.');
     }
-
-    const { data, error } = await supabase.rpc('pack_boxes', {
-      target_pantry: settings.pantryId,
-      run_id: runId,
-      box_count: boxCount,
-      lines,
-      // What the "Ready to go" list shows for this batch.
-      box_name: boxName ?? null,
-      per_box: perBox ?? null,
-    });
-
-    if (error) {
-      log.error('store', 'pack_boxes was rejected', error);
-      throw error;
-    }
-
-    const result = data as PackResult;
-    log.debug(
-      'store',
-      `packed ${boxCount} box(es): ${result.units_taken} unit(s) taken, ` +
-        `${result.shortfalls.length} shortfall(s)${result.replayed ? ' [replayed]' : ''}`,
-    );
-
-    await get().fetchData();
-    return result;
+    return persistPackBatch(packs, async ({ runId, boxCount, lines, boxName, perBox }) => {
+      const { data, error } = await supabase.rpc('pack_boxes', {
+        target_pantry: settings.pantryId,
+        run_id: runId,
+        box_count: boxCount,
+        lines,
+        box_name: boxName ?? null,
+        per_box: perBox ?? null,
+      });
+      if (error) {
+        log.error('store', 'pack_boxes was rejected', error);
+        throw error;
+      }
+      return data as PackResult;
+    }, () => get().fetchData());
   },
 
   /**

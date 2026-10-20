@@ -7,6 +7,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { View } from "react-native";
 import { COLORS, fw } from "../../constants/theme";
 import { computeAllocation } from "../../lib/allocation";
+import { describeFamilySizes, normaliseFamilySizes } from "../../lib/box-families";
 import { useDismissible } from "../../lib/dismissals";
 import {
   DIET_TAG_LABELS,
@@ -26,7 +27,6 @@ import {
   Button,
   Card,
   CategoryIcon,
-  Chip,
   Panel,
   Screen,
   Segmented,
@@ -43,7 +43,7 @@ const BOXES_TOUR: TourStep[] = [
   { target: "boxes.answer", title: "How many you can pack", body: "Worked out from what's on your shelves right now." },
   { target: "boxes.details", title: "See what's missing", body: "Tap Details to see each food group." },
   { target: "boxes.change", title: "Other box types", body: "Pick a senior box, a no-cook box and more." },
-  { target: "boxes.family", title: "Family size", body: "Bigger families get more food in each box." },
+  { target: "boxes.family", title: "Family sizes", body: "Use one size for everyone, or set a different household size for each box." },
 ];
 
 /**
@@ -85,6 +85,20 @@ export default function BuildBoxesScreen() {
     if (!touchedBoxes.current) setRequestedBoxes(settings.boxTarget);
   }, [settings.boxTarget]);
   const [familySize, setFamilySize] = useState(settings.defaultFamilySize || 4);
+  const [individualFamilies, setIndividualFamilies] = useState(false);
+  const [familySizes, setFamilySizes] = useState<number[]>([]);
+  const [familiesOpen, setFamiliesOpen] = useState(false);
+  const [familyPage, setFamilyPage] = useState(0);
+  const touchedFamilies = useRef(false);
+  useEffect(() => {
+    if (!touchedFamilies.current) setFamilySize(settings.defaultFamilySize || 4);
+  }, [settings.defaultFamilySize]);
+  const requestedFamilySizes = normaliseFamilySizes(
+    individualFamilies ? familySizes : [], requestedBoxes, familySize,
+  );
+  const lastFamilyPage = Math.max(0, Math.ceil(requestedBoxes / 5) - 1);
+  const currentFamilyPage = Math.min(familyPage, lastFamilyPage);
+  const firstFamilyIndex = currentFamilyPage * 5;
   const [breakdownOpen, setBreakdownOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
 
@@ -147,9 +161,8 @@ export default function BuildBoxesScreen() {
         };
   })();
 
-  // A box that doesn't scale is sized for the base family of 4, which the
-  // allocator treats as "use the amounts exactly as written".
-  const packingFamilySize = box.scales ? familySize : 4;
+  // Household sizes stay attached even when a fixed-content kit does not scale.
+  const packingFamilySize = familySize;
 
   const plan = computeAllocation(
     inventory,
@@ -158,6 +171,8 @@ export default function BuildBoxesScreen() {
     packingFamilySize,
     bulkLots,
     {
+      familySizes: requestedFamilySizes,
+      scalesWithFamily: box.scales,
       warningDays: settings.expirationWarningDays,
       // This box's dietary rules, so the headline figure counts only what can
       // actually go in it. A wheat-free box that claimed twelve were possible
@@ -197,6 +212,8 @@ export default function BuildBoxesScreen() {
       params: {
         targetBoxes: requestedBoxes,
         familySize: packingFamilySize,
+        familySizes: JSON.stringify(requestedFamilySizes),
+        individualFamilies: individualFamilies ? "1" : "0",
         rules: JSON.stringify(box.rules),
         items: JSON.stringify(box.items),
         boxName: box.name,
@@ -354,25 +371,6 @@ export default function BuildBoxesScreen() {
                   </Text>
                 </View>
               </Tappable>
-              {box.scales && (
-                <View ref={familyTarget} collapsable={false} className="min-h-[40px] flex-row items-center gap-2">
-                  <Text variant="label" tone="soft" className="w-[96px]">
-                    Family size
-                  </Text>
-                  <View className="flex-1 flex-row gap-2">
-                    {[4, 6, 8].map((size) => (
-                      <Chip
-                        key={size}
-                        label={`${size}`}
-                        selected={familySize === size}
-                        onPress={() => setFamilySize(size)}
-                        accessibilityLabel={`Families of ${size}`}
-                        className="min-h-[36px] flex-1 items-center px-2 py-1.5"
-                      />
-                    ))}
-                  </View>
-                </View>
-              )}
               <View className="min-h-[40px] flex-row items-center gap-2">
                 <Text variant="label" tone="soft" className="flex-1">
                   Boxes you want
@@ -386,6 +384,36 @@ export default function BuildBoxesScreen() {
                     setRequestedBoxes(next);
                   }}
                 />
+              </View>
+              <View ref={familyTarget} collapsable={false} className="gap-3 py-2">
+                <Text variant="label" className="font-semibold">Family sizes</Text>
+                <Segmented
+                  value={individualFamilies ? "individual" : "same"}
+                  options={[{ value: "same", label: "Same size" }, { value: "individual", label: "Set per box" }]}
+                  onChange={(value) => {
+                    if ((value === "individual") === individualFamilies) return;
+                    touchedFamilies.current = true;
+                    if (value === "individual") {
+                      setFamilySizes(normaliseFamilySizes([], requestedBoxes, familySize));
+                    }
+                    setIndividualFamilies(value === "individual");
+                  }}
+                />
+                {individualFamilies ? (
+                  <>
+                    <Text variant="micro" tone="soft">{describeFamilySizes(requestedFamilySizes)}</Text>
+                    <Button label="Edit each box" variant="secondary" onPress={() => { setFamilyPage(0); setFamiliesOpen(true); }} />
+                  </>
+                ) : (
+                  <View className="flex-row items-center justify-between gap-3">
+                    <Text variant="label" tone="soft" className="flex-1">People per family</Text>
+                    <Stepper value={familySize} min={1} max={99} onChange={(size) => {
+                      touchedFamilies.current = true;
+                      setFamilySize(size);
+                    }} />
+                  </View>
+                )}
+                {!box.scales && <Text variant="micro" tone="soft">This kit has fixed contents. Family sizes are recorded; quantities stay the same.</Text>}
               </View>
             </Card>
           </FadeInUp>
@@ -520,15 +548,15 @@ export default function BuildBoxesScreen() {
       <Sheet
         visible={breakdownOpen}
         onClose={() => setBreakdownOpen(false)}
-        title="What's in a box"
-        subtitle={`${box.name}: per box${box.scales ? ` for a family of ${familySize}` : ""}, against ${requestedBoxes} boxes`}
+        title={individualFamilies ? "What your boxes need" : "What's in a box"}
+        subtitle={individualFamilies ? `${box.name} · ${requestedBoxes} boxes with individual family sizes` : `${box.name}: per box${box.scales ? ` for a family of ${familySize}` : ""}, against ${requestedBoxes} boxes`}
       >
         {categories.map((cat) => {
           const perBox = plan.perBoxNeeds[cat];
           if (perBox === 0) return null;
 
           const stock = plan.categoryTotals[cat];
-          const neededTotal = perBox * requestedBoxes;
+          const neededTotal = plan.totalNeededPerCategory[cat];
           const short = plan.shortfallPerCategory[cat];
           const limiting = cat === plan.limitingCategory && short > 0;
 
@@ -553,7 +581,7 @@ export default function BuildBoxesScreen() {
                     {String(cat)}
                   </Text>
                   <Text variant="micro" tone="soft" className="mt-0.5">
-                    {perBox} per box · {stock} of {neededTotal} needed in stock
+                    {individualFamilies ? `${neededTotal} across all boxes` : `${perBox} per box`} · {stock} of {neededTotal} needed in stock
                   </Text>
                 </View>
                 {short > 0 ? (
@@ -588,6 +616,40 @@ export default function BuildBoxesScreen() {
         <Text variant="micro" tone="soft" className="px-1 pt-1">
           Damaged stock and anything past its date is left out of these totals.
         </Text>
+      </Sheet>
+
+      <Sheet visible={familiesOpen} onClose={() => setFamiliesOpen(false)} title="Family size for each box"
+        subtitle="Set the number of people in each household. Boxes are packed in this order.">
+        <View className="flex-row items-center justify-between gap-2">
+          <Tappable disabled={currentFamilyPage === 0} onPress={() => setFamilyPage(currentFamilyPage - 1)}
+            accessibilityRole="button" accessibilityLabel="Previous five boxes" className="h-12 w-12 items-center justify-center">
+            <MaterialCommunityIcons name="chevron-left" size={24} color={currentFamilyPage === 0 ? COLORS.borderSoft : COLORS.textPrimary} />
+          </Tappable>
+          <Text variant="label">Boxes {firstFamilyIndex + 1}–{Math.min(firstFamilyIndex + 5, requestedBoxes)} of {requestedBoxes}</Text>
+          <Tappable disabled={currentFamilyPage === lastFamilyPage} onPress={() => setFamilyPage(currentFamilyPage + 1)}
+            accessibilityRole="button" accessibilityLabel="Next five boxes" className="h-12 w-12 items-center justify-center">
+            <MaterialCommunityIcons name="chevron-right" size={24} color={currentFamilyPage === lastFamilyPage ? COLORS.borderSoft : COLORS.textPrimary} />
+          </Tappable>
+        </View>
+        {requestedFamilySizes.slice(firstFamilyIndex, firstFamilyIndex + 5).map((size, offset) => {
+          const index = firstFamilyIndex + offset;
+          return (
+          <View key={index} className="flex-row items-center justify-between gap-3 rounded-lg border border-hairline bg-card px-3 py-2">
+            <View className="flex-1">
+              <Text variant="label" className="font-semibold">Box {index + 1}</Text>
+              <Text variant="micro" tone="soft">{size} {size === 1 ? "person" : "people"}</Text>
+            </View>
+            <Stepper value={size} min={1} max={99} accessibilityLabel={`Family size for box ${index + 1}`} onChange={(next) => {
+              setFamilySizes(previous => {
+                const updated = normaliseFamilySizes(previous, Math.max(previous.length, requestedBoxes), familySize);
+                updated[index] = next;
+                return updated;
+              });
+            }} />
+          </View>
+          );
+        })}
+        <Button label="Done" block onPress={() => setFamiliesOpen(false)} />
       </Sheet>
 
       {section === "plan" && <SpotlightTour tourKey="boxes" steps={BOXES_TOUR} />}
