@@ -23,3 +23,6 @@ web-build/
 promo-screenshots
 promo-videos
 video-script.html
+# Big local media dropped in for the promo video; never commit.
+*.zip
+*:Zone.Identifier

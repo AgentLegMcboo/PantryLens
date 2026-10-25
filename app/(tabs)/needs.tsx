@@ -301,7 +301,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
           <Text variant="heading" className="px-1">
             Most needed
           </Text>
-          <View className="gap-3">
+          <View className="gap-2">
             {deficits.map((item, index) => {
               const expanded = expandedCategory === item.category;
               const limiting = item.reason === "Stopping boxes going out";
@@ -325,30 +325,30 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                       setExpandedCategory(expanded ? null : item.category);
                     }}
                     style={({ pressed }) => ({ opacity: pressed ? 0.75 : 1 })}
-                    className="min-h-[88px] flex-row items-center gap-3 px-4 py-4"
+                    className="min-h-[66px] flex-row items-center gap-3 px-3.5 py-3"
                   >
                     <View
-                      className="h-11 w-11 items-center justify-center rounded-xl"
+                      className="h-9 w-9 items-center justify-center rounded-lg"
                       style={{ backgroundColor: limiting ? "rgba(69, 43, 25, 0.08)" : COLORS.secondaryTint }}
                     >
                       <MaterialCommunityIcons
                         name={categoryIcon(item.category)}
-                        size={24}
+                        size={20}
                         color={limiting ? COLORS.textOnAccent : COLORS.secondaryDark}
                       />
                     </View>
-                    <View className="flex-1 gap-1">
-                      <Text variant="body" className="font-bold" style={limiting ? { color: COLORS.textOnAccent } : undefined}>
+                    <View className="flex-1">
+                      <Text variant="heading" className="font-bold" style={limiting ? { color: COLORS.textOnAccent } : undefined}>
                         {label}
                       </Text>
-                      <Text variant="micro" style={{ color: limiting ? COLORS.textOnAccent : COLORS.textSecondary }}>
+                      <Text variant="label" style={{ fontSize: 14, lineHeight: 19, color: limiting ? COLORS.textOnAccent : COLORS.textSecondary }}>
                         {limiting ? "Runs out first" : `${item.current} of ${item.goal} on hand`}
                       </Text>
                     </View>
-                    <View className="flex-row items-baseline gap-2">
+                    <View className="flex-row items-baseline gap-1.5">
                       <Text
                         variant="heading"
-                        style={{ fontSize: 20, lineHeight: 26, fontVariant: ["tabular-nums"], color: limiting ? COLORS.textOnAccent : COLORS.textPrimary }}
+                        style={{ fontSize: 22, lineHeight: 27, fontWeight: "700", fontVariant: ["tabular-nums"], color: limiting ? COLORS.textOnAccent : COLORS.textPrimary }}
                       >
                         {item.deficit}
                       </Text>
@@ -363,7 +363,7 @@ ${dropoff ? `Drop-off: ${dropoff}\n` : ""}Thank you for helping feed our neighbo
                     />
                   </Pressable>
                   {expanded && (
-                    <View className="mx-4 mb-4 gap-1.5 pt-3" style={{ borderTopWidth: 1, borderTopColor: limiting ? "rgba(69, 43, 25, 0.18)" : COLORS.borderSoft }}>
+                    <View className="mx-3.5 mb-3.5 gap-1 pt-2.5" style={{ borderTopWidth: 1, borderTopColor: limiting ? "rgba(69, 43, 25, 0.18)" : COLORS.borderSoft }}>
                       <Text variant="micro" className="font-bold uppercase" style={{ letterSpacing: 0.6, color: limiting ? COLORS.textOnAccent : COLORS.textSecondary }}>
                         Ask for
                       </Text>
